@@ -1,0 +1,10 @@
+[package]
+name = "persistence"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusqlite = { workspace = true }
+anyhow = { workspace = true }
+protocol = { path = "../protocol" }
+serde_json = { workspace = true }

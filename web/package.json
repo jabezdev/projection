@@ -1,0 +1,17 @@
+{
+  "name": "magi-web",
+  "private": true,
+  "workspaces": [
+    "app",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:backend": "bun run --cwd backend dev",
+    "dev:app": "bun run --cwd app dev",
+    "build": "bun run --cwd app build",
+    "deploy:backend": "bun run --cwd backend deploy",
+    "test": "bun run --cwd shared test && bun run --cwd backend test",
+    "typecheck": "bun run --cwd shared typecheck && bun run --cwd backend typecheck && bun run --cwd app typecheck"
+  }
+}

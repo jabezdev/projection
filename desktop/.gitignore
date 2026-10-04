@@ -1,0 +1,10 @@
+# Rust build output
+/target
+
+# Tauri generated schemas
+crates/app/gen/
+
+# Runtime state lives in the OS app-data dir, never in the workspace
+*.db
+*.db-journal
+app-config.json

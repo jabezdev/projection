@@ -1,0 +1,20 @@
+[package]
+name = "core_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+protocol = { path = "../protocol" }
+wgpu = { workspace = true }
+winit = { workspace = true }
+rodio = { workspace = true }
+cpal = { workspace = true }
+crossbeam = { workspace = true }
+ffmpeg-next = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+bytemuck = { workspace = true }
+glam = { workspace = true }
+glyphon = { workspace = true }
+image = { workspace = true }
+raw-window-handle = { workspace = true }
