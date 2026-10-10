@@ -1,0 +1,2 @@
+# Vite handles frontend changes; these must not restart the Rust build.
+frontend/

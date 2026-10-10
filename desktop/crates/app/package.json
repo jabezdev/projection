@@ -8,6 +8,6 @@
     "dev": "GDK_BACKEND=x11 bun tauri dev"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.1"
+    "@tauri-apps/cli": "^2.12.2"
   }
 }

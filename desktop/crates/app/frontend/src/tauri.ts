@@ -1,3 +1,5 @@
+import type { Media } from './models';
+import { invoke as nativeInvoke } from '@tauri-apps/api/core';
 export type UnlistenFn = () => void;
 
 // Minimal event shape used by our UI.
@@ -5,14 +7,12 @@ export type TauriEvent<T> = {
   payload: T;
 };
 
-type UiOnlyTransport = 'stopped' | 'playing' | 'paused';
 type UiOnlyBackgroundKind = 'image' | 'video';
 type UiOnlyBackground = { kind: UiOnlyBackgroundKind; path: string };
 
 type UiOnlyProgramState = {
+  display?: 'logo' | 'black' | 'clear' | 'live';
   mode: 'manual' | 'automated' | 'external';
-  transport: UiOnlyTransport;
-  time_ms: number;
   active_item_id: number | null;
   next_item_id: number | null;
   active_step_index: number | null;
@@ -24,12 +24,15 @@ type UiOnlySessionItemKind =
   | { kind: 'text'; data: { steps: string[] } }
   | { kind: 'image'; data: { path: string } }
   | { kind: 'video'; data: { path: string } }
-  | { kind: 'presentation'; data: { path: string } };
+  | { kind: 'audio'; data: { path: string; options?: Record<string, unknown> } }
+  | { kind: 'presentation'; data: { path: string; slides?: string[] } };
 
 type UiOnlySessionItem = {
   id: number;
   title: string | null;
   kind: UiOnlySessionItemKind;
+  song?: string;
+  background?: string;
 };
 
 type UiOnlyProjectModel = {
@@ -52,6 +55,8 @@ type UiOnlyEngineEvent =
   | { type: 'error'; payload: { source: string; message: string; recoverable: boolean } };
 
 type UiOnlyStore = {
+  media?: Media[];
+  songs?: Record<string, { id: number; title: string; lyrics: string }>;
   version: number;
   active_project_id: number | null;
   program_state: UiOnlyProgramState;
@@ -64,8 +69,6 @@ const UI_ONLY_STORAGE_KEY = 'magi.projection.ui_only.v1';
 function defaultProgramState(): UiOnlyProgramState {
   return {
     mode: 'manual',
-    transport: 'stopped',
-    time_ms: 0,
     active_item_id: null,
     next_item_id: null,
     active_step_index: null,
@@ -93,6 +96,8 @@ function loadUiOnlyStore(): UiOnlyStore {
       version: typeof parsed.version === 'number' ? parsed.version : 1,
       active_project_id: typeof parsed.active_project_id === 'number' ? parsed.active_project_id : null,
       program_state: (parsed.program_state as UiOnlyProgramState) || defaultProgramState(),
+      media: parsed.media || [],
+      songs: parsed.songs || {},
       projects: (parsed.projects as UiOnlyStore['projects']) || {},
       project_updated_at: (parsed.project_updated_at as UiOnlyStore['project_updated_at']) || {},
     };
@@ -124,6 +129,12 @@ class UiOnlyEngine {
 
   constructor() {
     this.store = loadUiOnlyStore();
+    window.addEventListener('storage', event => {
+      if (event.key === UI_ONLY_STORAGE_KEY) {
+        this.store = loadUiOnlyStore();
+        for (const update of this.syncEvents()) this.emit(update);
+      }
+    });
   }
 
   private bumpVersion(): number {
@@ -137,11 +148,11 @@ class UiOnlyEngine {
   }
 
   private snapshot(): UiOnlyEngineSnapshot {
-    return {
+    return structuredClone({
       program_state: this.store.program_state,
       version: this.store.version,
       project: this.activeProject(),
-    };
+    });
   }
 
   private emit(event: UiOnlyEngineEvent): void {
@@ -196,12 +207,15 @@ class UiOnlyEngine {
       project && itemId != null ? project.session.items.find((it) => it.id === itemId) || null : null;
 
     if (item?.kind.kind === 'text') {
+      if (item.background) this.store.program_state.background = { kind: /\.(mp4|mov|webm|mkv)$/i.test(item.background) ? 'video' : 'image', path: item.background };
       const steps = item.kind.data.steps || [];
       const idx = steps.length > 0 ? 0 : null;
       this.store.program_state.active_step_index = idx;
       this.store.program_state.active_text = idx != null ? steps[idx] || '' : '';
     } else {
-      this.store.program_state.active_step_index = null;
+      if (item?.kind.kind === 'image' || item?.kind.kind === 'video') this.store.program_state.background = { kind: item.kind.kind, path: item.kind.data.path };
+      if (item?.kind.kind === 'presentation') this.store.program_state.background = { kind: 'image', path: item.kind.data.slides?.[0] || item.kind.data.path };
+      this.store.program_state.active_step_index = item?.kind.kind === 'presentation' ? 0 : null;
       this.store.program_state.active_text = '';
     }
   }
@@ -211,6 +225,35 @@ class UiOnlyEngine {
 
     try {
       switch (command) {
+        case 'list_media': return (this.store.media || []) as T;
+        case 'create_media': {
+          const media = { id: now, title: String(args?.title || ''), kind: args?.kind, path: String(args?.path || '') } as Media;
+          this.store.media = [...(this.store.media || []), media]; saveUiOnlyStore(this.store); return media as T;
+        }
+        case 'list_songs': return Object.values(this.store.songs || {}).map(({ id, title }) => ({ id, title })) as T;
+        case 'get_song': {
+          const song = this.store.songs?.[String(args?.id)];
+          if (!song) throw new Error('Song not found');
+          return song as T;
+        }
+        case 'update_song': {
+          const song = args?.song as { id: number; title: string; lyrics: string };
+          if (!song || !this.store.songs?.[song.id]) throw new Error('Song not found');
+          this.store.songs[song.id] = song; saveUiOnlyStore(this.store); return undefined as T;
+        }
+        case 'create_song': {
+          const song = { id: now, title: String(args?.title || ''), lyrics: String(args?.lyrics || '') };
+          this.store.songs = { ...this.store.songs, [song.id]: song };
+          saveUiOnlyStore(this.store);
+          return song as T;
+        }
+        case 'set_display': {
+          const display = args?.display as UiOnlyProgramState['display'];
+          if (!display || !['logo', 'black', 'clear', 'live'].includes(display)) throw new Error('Invalid display mode');
+          this.store.program_state.display = display;
+          this.bumpVersion(); this.persistAndBroadcast(); return undefined as T;
+        }
+
         case 'get_engine_snapshot': {
           return this.snapshot() as T;
         }
@@ -246,14 +289,23 @@ class UiOnlyEngine {
           this.bumpVersion();
           saveUiOnlyStore(this.store);
           if (this.store.active_project_id === project.id) {
+            const step = this.store.program_state.active_step_index;
+            this.setActiveItem(this.store.program_state.active_item_id);
+            const item = project.session.items.find(item => item.id === this.store.program_state.active_item_id);
+            if (item?.kind.kind === 'presentation' && step != null) { const paths = item.kind.data.slides || [item.kind.data.path]; const index = Math.min(step, paths.length - 1); this.store.program_state.active_step_index = index; this.store.program_state.background = { kind: 'image', path: paths[index] }; }
+            if (item?.kind.kind === 'text' && step != null && item.kind.data.steps.length) {
+              const index = Math.min(step, item.kind.data.steps.length - 1);
+              this.store.program_state.active_step_index = index;
+              this.store.program_state.active_text = item.kind.data.steps[index];
+            }
             this.persistAndBroadcast();
           }
           return undefined as T;
         }
 
         case 'load_project': {
-          const projectId = Number(args?.project_id);
-          if (!Number.isFinite(projectId)) throw new Error('load_project requires { project_id }');
+          const projectId = Number(args?.projectId);
+          if (!Number.isFinite(projectId)) throw new Error('load_project requires { projectId }');
           this.store.active_project_id = projectId;
           const project = this.activeProject();
           if (project && project.session.items.length > 0) {
@@ -266,9 +318,17 @@ class UiOnlyEngine {
           return undefined as T;
         }
 
+        case 'cue': {
+          this.setActiveItem(Number(args?.itemId));
+          const item = this.activeProject()?.session.items.find(item => item.id === Number(args?.itemId));
+          const index = Number(args?.index ?? 0);
+          if (item?.kind.kind === 'text' && index < item.kind.data.steps.length) { this.store.program_state.active_step_index = index; this.store.program_state.active_text = item.kind.data.steps[index]; }
+          if (item?.kind.kind === 'presentation') { const paths = item.kind.data.slides || [item.kind.data.path]; if (paths[index]) { this.store.program_state.active_step_index = index; this.store.program_state.background = { kind: 'image', path: paths[index] }; } }
+          this.bumpVersion(); this.persistAndBroadcast(); return undefined as T;
+        }
         case 'go_to_item': {
-          const itemId = Number(args?.item_id);
-          if (!Number.isFinite(itemId)) throw new Error('go_to_item requires { item_id }');
+          const itemId = Number(args?.itemId);
+          if (!Number.isFinite(itemId)) throw new Error('go_to_item requires { itemId }');
           this.setActiveItem(itemId);
           this.bumpVersion();
           this.persistAndBroadcast();
@@ -283,6 +343,13 @@ class UiOnlyEngine {
           const item =
             project && activeId != null ? project.session.items.find((it) => it.id === activeId) || null : null;
 
+          if (item?.kind.kind === 'presentation') {
+            const images = item.kind.data.slides || [item.kind.data.path];
+            const indexClamped = Math.max(0, Math.min(index, images.length - 1));
+            this.store.program_state.active_step_index = indexClamped;
+            this.store.program_state.background = { kind: 'image', path: images[indexClamped] };
+            this.bumpVersion(); this.persistAndBroadcast();
+          }
           if (item?.kind.kind === 'text') {
             const steps = item.kind.data.steps || [];
             const clamped = Math.max(0, Math.min(index, Math.max(0, steps.length - 1)));
@@ -328,19 +395,7 @@ class UiOnlyEngine {
           return undefined as T;
         }
 
-        case 'play': {
-          this.store.program_state.transport = 'playing';
-          this.bumpVersion();
-          this.persistAndBroadcast();
-          return undefined as T;
-        }
-
-        case 'pause': {
-          this.store.program_state.transport = 'paused';
-          this.bumpVersion();
-          this.persistAndBroadcast();
-          return undefined as T;
-        }
+        // Media playback needs the desktop engine; the browser-only mode has none.
 
         default: {
           console.debug('[ui-only] unhandled invoke', command, args);
@@ -354,7 +409,7 @@ class UiOnlyEngine {
         type: 'error',
         payload: { source: command, message, recoverable: true },
       });
-      return undefined as T;
+      throw e;
     }
   }
 }
@@ -381,8 +436,7 @@ export async function invoke<T = unknown>(
     return uiOnlyEngine().invoke<T>(command, args);
   }
 
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
+  return nativeInvoke<T>(command, args);
 }
 
 export async function listen<T>(

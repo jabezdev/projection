@@ -15,16 +15,19 @@ core_engine = { path = "../core_engine" }
 network_server = { path = "../network_server" }
 persistence = { path = "../persistence" }
 protocol = { path = "../protocol" }
+render_engine = { path = "../render_engine" }
+media_engine = { path = "../media_engine" }
 tokio = { workspace = true }
 crossbeam = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
-winit = { workspace = true }
-pollster = { workspace = true }
-wgpu = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tauri = { workspace = true }
-tauri-plugin-log = { workspace = true }
-glyphon = { workspace = true }
+tauri = { workspace = true, features = ["protocol-asset", "unstable"] }
+tauri-plugin-dialog = "2"
+uuid = { version = "1", features = ["v4"] }
+image = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

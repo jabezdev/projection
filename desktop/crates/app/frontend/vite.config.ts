@@ -8,7 +8,7 @@ export default defineConfig({
   appType: 'spa',
   // Tauri expects a fixed port, fail if it's already in use
   server: {
-    port: 5173,
+    port: 5174,
     strictPort: true,
   },
   // Tries to prevent Vite from obscuring Rust errors
