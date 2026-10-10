@@ -148,23 +148,26 @@ fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle, dom
     app.emit("output:changed", event).map_err(|e| e.to_string())
 }
 
-fn monitor_label(index: usize, monitor: &tauri::Monitor) -> String {
-    format!("{}: {} ({}×{})", index + 1, monitor.name().map(String::as_str).unwrap_or("Display"), monitor.size().width, monitor.size().height)
-}
-
-#[tauri::command]
-fn list_output_monitors(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
-    Ok(window.available_monitors().map_err(|e| e.to_string())?.iter().enumerate().map(|(i, m)| monitor_label(i, m)).collect())
-}
-
+/// Where and how an output window appears. Saved routes from before the
+/// enable, size and aspect choices load with the defaults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OutputRoute {
-    name: Option<String>, x: i32, y: i32, width: u32, height: u32, fullscreen: bool,
+    name: Option<String>, x: i32, y: i32, width: u32, height: u32,
+    #[serde(default = "yes")] fullscreen: bool,
+    #[serde(default = "yes")] enabled: bool,
+    /// Window size when not fullscreen.
+    #[serde(default)] size: Option<(u32, u32)>,
+    /// Content aspect ratio, letterboxed; `None` fills the screen.
+    #[serde(default)] aspect: Option<(u32, u32)>,
 }
+fn yes() -> bool { true }
+const OUTPUTS: [(&str, &str); 2] = [("projection", "Projection Output"), ("confidence", "Confidence")];
+const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 struct OutputRoutes {
     values: Mutex<std::collections::BTreeMap<String, OutputRoute>>,
     path: std::path::PathBuf,
+    /// The global switch; outputs always start hidden.
+    shown: AtomicBool,
 }
 fn matching_route(route: &OutputRoute, candidates: &[OutputRoute]) -> Option<usize> {
     candidates.iter().position(|m| m.name == route.name && m.x == route.x && m.y == route.y)
@@ -176,42 +179,116 @@ fn matching_route(route: &OutputRoute, candidates: &[OutputRoute]) -> Option<usi
             }
         })
 }
+fn monitor_route(monitor: &tauri::Monitor) -> OutputRoute {
+    OutputRoute { name: monitor.name().cloned(), x: monitor.position().x, y: monitor.position().y, width: monitor.size().width, height: monitor.size().height, fullscreen: true, enabled: true, size: None, aspect: None }
+}
 fn matching_monitor(route: &OutputRoute, monitors: &[tauri::Monitor]) -> Option<usize> {
-    let candidates: Vec<_> = monitors.iter().map(|m| OutputRoute { name: m.name().cloned(), x: m.position().x, y: m.position().y, width: m.size().width, height: m.size().height, fullscreen: false }).collect();
+    let candidates: Vec<_> = monitors.iter().map(monitor_route).collect();
     matching_route(route, &candidates)
 }
-fn apply_output_route(window: &tauri::Window, target: &tauri::Monitor, fullscreen: bool) -> Result<(), String> {
-    window.set_fullscreen(false).map_err(|e| e.to_string())?;
+/// Unconfigured outputs take the displays the operator window is not on, in
+/// order, and share the operator's display when there are too few.
+fn default_monitor(output: &str, operator: Option<usize>, count: usize) -> usize {
+    let others: Vec<_> = (0..count).filter(|&i| Some(i) != operator).collect();
+    let rank = if output == "projection" { 0 } else { 1 };
+    others.get(rank).copied().or(operator).unwrap_or(0)
+}
+/// The saved route, or the default one, and its display's index (`None`
+/// when the saved display is disconnected).
+fn resolve_route(app: &tauri::AppHandle, saved: &std::collections::BTreeMap<String, OutputRoute>, output: &str, monitors: &[tauri::Monitor]) -> (OutputRoute, Option<usize>) {
+    if let Some(route) = saved.get(output) {
+        return (route.clone(), matching_monitor(route, monitors));
+    }
+    let operator = app.get_webview_window("main").and_then(|w| w.current_monitor().ok().flatten()).and_then(|m| matching_monitor(&monitor_route(&m), monitors));
+    let index = default_monitor(output, operator, monitors.len());
+    match monitors.get(index) {
+        Some(monitor) => (monitor_route(monitor), Some(index)),
+        None => (OutputRoute { name: None, x: 0, y: 0, width: 0, height: 0, fullscreen: true, enabled: true, size: None, aspect: None }, None),
+    }
+}
+/// The size previews draw at: the window's, letterboxed to the aspect.
+fn content_size(window: &tauri::Window, size: tauri::PhysicalSize<u32>) -> serde_json::Value {
+    let aspect = window.app_handle().try_state::<OutputRoutes>().and_then(|routes| routes.values.lock().ok()?.get(window.label())?.aspect);
+    let [_, _, width, height] = render_engine::fit_aspect((size.width, size.height), aspect);
+    serde_json::json!({ "label": window.label(), "width": width, "height": height })
+}
+/// Shows `output` on its display as a borderless window, or hides it.
+fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
+    let window = app.get_window(output).ok_or("Output window unavailable")?;
+    let role = native_output::role_for_label(output).ok_or("Unknown output")?;
+    let routes = app.state::<OutputRoutes>();
+    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
+    let (route, index) = resolve_route(app, &*routes.values.lock().map_err(|e| e.to_string())?, output, &monitors);
+    let outputs = app.state::<NativeOutputs>();
+    // A disconnected saved display keeps its output hidden rather than
+    // unexpectedly covering another screen.
+    let target = index.and_then(|i| monitors.get(i)).filter(|_| route.enabled && routes.shown.load(Ordering::Acquire));
+    let Some(target) = target else {
+        outputs.set_shown(role, false);
+        return window.hide().map_err(|e| e.to_string());
+    };
+    outputs.set_aspect(role, route.aspect);
+    window.set_decorations(false).map_err(|e| e.to_string())?;
+    if !route.fullscreen {
+        let (width, height) = route.size.unwrap_or(WINDOWED_SIZE);
+        window.set_size(tauri::PhysicalSize::new(width, height)).map_err(|e| e.to_string())?;
+    }
     window.set_position(*target.position()).map_err(|e| e.to_string())?;
-    window.set_decorations(!fullscreen).map_err(|e| e.to_string())?;
-    window.set_fullscreen(fullscreen).map_err(|e| e.to_string())?;
-    window.show().map_err(|e| e.to_string())
+    // Requested before mapping, fullscreen is the window's initial state;
+    // requested after, some window managers miss it.
+    window.set_fullscreen(route.fullscreen).map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    outputs.set_shown(role, true);
+    if let Ok(size) = window.inner_size() {
+        let _ = app.emit_to("main", "output:resized", content_size(&window, size));
+    }
+    Ok(())
+}
+#[derive(Serialize)]
+struct OutputDisplay { monitor: Option<usize>, enabled: bool, fullscreen: bool, size: Option<(u32, u32)>, aspect: Option<(u32, u32)> }
+#[derive(Serialize)]
+struct OutputDisplays { monitors: Vec<String>, shown: bool, outputs: std::collections::BTreeMap<String, OutputDisplay> }
+fn monitor_label(index: usize, monitor: &tauri::Monitor) -> String {
+    format!("{}: {} ({}×{})", index + 1, monitor.name().map(String::as_str).unwrap_or("Display"), monitor.size().width, monitor.size().height)
 }
 #[tauri::command]
-fn get_output_routes(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>) -> Result<serde_json::Value, String> {
+fn get_output_displays(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>) -> Result<OutputDisplays, String> {
     let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     let saved = routes.values.lock().map_err(|e| e.to_string())?;
-    let mut result = serde_json::Map::new();
-    for (output, route) in saved.iter() {
-        result.insert(output.clone(), serde_json::json!({ "monitor": matching_monitor(route, &monitors), "fullscreen": route.fullscreen, "name": route.name }));
-    }
-    Ok(serde_json::Value::Object(result))
+    let outputs = OUTPUTS.iter().map(|(output, _)| {
+        let (route, monitor) = resolve_route(&app, &saved, output, &monitors);
+        (output.to_string(), OutputDisplay { monitor, enabled: route.enabled, fullscreen: route.fullscreen, size: route.size, aspect: route.aspect })
+    }).collect();
+    Ok(OutputDisplays { monitors: monitors.iter().enumerate().map(|(i, m)| monitor_label(i, m)).collect(), shown: routes.shown.load(Ordering::Acquire), outputs })
 }
 #[tauri::command]
-fn place_output(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, output: String, monitor: usize, label: Option<String>, fullscreen: bool) -> Result<(), String> {
-    if output != "projection" && output != "confidence" { return Err("Unknown output".into()); }
-    let window = app.get_window(&output).ok_or("Output window unavailable")?;
+#[allow(clippy::too_many_arguments)]
+fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, output: String, monitor: usize, label: String, enabled: bool, fullscreen: bool, size: Option<(u32, u32)>, aspect: Option<(u32, u32)>) -> Result<OutputDisplays, String> {
+    if !OUTPUTS.iter().any(|(name, _)| *name == output) { return Err("Unknown output".into()); }
+    if size.is_some_and(|(w, h)| w == 0 || h == 0) || aspect.is_some_and(|(w, h)| w == 0 || h == 0) { return Err("Sizes and aspect ratios must not be zero".into()); }
+    let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     let target = monitors.get(monitor).ok_or("Display is no longer connected")?;
     // The list may have changed since the operator chose from it.
-    if label.is_some_and(|label| label != monitor_label(monitor, target)) {
-        return Err("The connected displays changed. Close and reopen settings to choose again.".into());
+    if label != monitor_label(monitor, target) {
+        return Err("The connected displays changed. Choose the display again.".into());
     }
-    apply_output_route(&window, target, fullscreen)?;
-    let mut saved = routes.values.lock().map_err(|e| e.to_string())?;
-    saved.insert(output, OutputRoute { name: target.name().cloned(), x: target.position().x, y: target.position().y, width: target.size().width, height: target.size().height, fullscreen });
-    settings::write_atomic(&routes.path, &*saved).map_err(|e| e.to_string())
+    {
+        let mut saved = routes.values.lock().map_err(|e| e.to_string())?;
+        saved.insert(output.clone(), OutputRoute { fullscreen, enabled, size, aspect, ..monitor_route(target) });
+        settings::write_atomic(&routes.path, &*saved).map_err(|e| e.to_string())?;
+    }
+    present_output(&app, &output)?;
+    get_output_displays(app, routes)
+}
+#[tauri::command]
+fn set_outputs_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, shown: bool) -> Result<OutputDisplays, String> {
+    routes.shown.store(shown, Ordering::Release);
+    for (output, _) in OUTPUTS {
+        present_output(&app, output)?;
+    }
+    get_output_displays(app, routes)
 }
 
 /// The latest native preview still of an output ("projection", "confidence")
@@ -430,9 +507,9 @@ fn create_media(state: tauri::State<AppState>, app: tauri::AppHandle, title: Str
 #[tauri::command]
 fn get_output_sizes(app: tauri::AppHandle) -> serde_json::Value {
     let mut sizes = serde_json::Map::new();
-    for label in ["projection", "confidence"] {
+    for (label, _) in OUTPUTS {
         if let Some(window) = app.get_window(label) {
-            if let Ok(size) = window.inner_size() { sizes.insert(label.into(), serde_json::json!({ "width": size.width, "height": size.height })); }
+            if let Ok(size) = window.inner_size() { sizes.insert(label.into(), content_size(&window, size)); }
         }
     }
     serde_json::Value::Object(sizes)
@@ -466,9 +543,9 @@ fn main() -> anyhow::Result<()> {
             get_output_sizes,
             get_output_preview,
             preview_output_style,
-            list_output_monitors,
-            place_output,
-            get_output_routes,
+            get_output_displays,
+            set_output_display,
+            set_outputs_shown,
             get_startup_warnings,
             get_output_state,
             set_output_state,
@@ -516,7 +593,7 @@ fn main() -> anyhow::Result<()> {
                 .collect();
             app.manage(StartupWarnings(warnings));
             app.manage(OutputState { config: Mutex::new(output_config.value), path: output_path });
-            app.manage(OutputRoutes { values: Mutex::new(saved_routes.value), path: routes_path });
+            app.manage(OutputRoutes { values: Mutex::new(saved_routes.value), path: routes_path, shown: AtomicBool::new(false) });
             let config_path = app_data_dir.join(CONFIG_FILENAME);
             let config = Arc::new(RwLock::new(load_config(&config_path)));
             let db = Db(Arc::new(Mutex::new(Repository::new(
@@ -600,37 +677,30 @@ fn main() -> anyhow::Result<()> {
                 });
             }
 
-            // A disconnected saved display leaves an ordinary window rather than
-            // unexpectedly taking over the operator's current monitor.
-            let has_saved_projection = app.state::<OutputRoutes>().values.lock().expect("output route lock poisoned").contains_key("projection");
-            // Create Projection Window
+            // Outputs start hidden; the operator shows them from the
+            // operator window.
             let (width, height) = config
                 .read()
                 .expect("config lock poisoned")
                 .projection_size
-                .unwrap_or((1280, 720));
-            let projection_window = native_output::build_projection_window(app, has_saved_projection, (width, height))?;
-            let confidence_window = native_output::build_confidence_window(app)?;
-
-            {
-                let routes = app.state::<OutputRoutes>();
-                let saved = routes.values.lock().expect("output route lock poisoned");
-                for window in [&projection_window, &confidence_window] {
-                    if let Some(route) = saved.get(window.label()) {
-                        if let Ok(monitors) = window.available_monitors() {
-                            if let Some(index) = matching_monitor(route, &monitors) {
-                                if let Err(error) = apply_output_route(window, &monitors[index], route.fullscreen) { error!("Restoring {} display: {}", window.label(), error); }
-                            }
-                        }
-                    }
-                }
+                .unwrap_or(WINDOWED_SIZE);
+            let projection_window = native_output::build_output_window(app, OUTPUTS[0].0, OUTPUTS[0].1, (width, height))?;
+            let confidence_window = native_output::build_output_window(app, OUTPUTS[1].0, OUTPUTS[1].1, WINDOWED_SIZE)?;
+            #[cfg(target_os = "linux")]
+            for window in [&projection_window, &confidence_window] {
+                let (handle, label) = (app.handle().clone(), window.label().to_string());
+                native_output::refullscreen_on_map(window, move || {
+                    let routes = handle.state::<OutputRoutes>();
+                    let wants = routes.values.lock().ok().map(|saved| saved.get(&label).is_none_or(|route| route.fullscreen));
+                    wants.unwrap_or(false)
+                })?;
             }
             for window in [&projection_window, &confidence_window] {
                 let handle = app.handle().clone();
-                let label = window.label().to_string();
+                let output = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Resized(size) = event {
-                        let _ = handle.emit_to("main", "output:resized", serde_json::json!({ "label": label, "width": size.width, "height": size.height }));
+                        let _ = handle.emit_to("main", "output:resized", content_size(&output, *size));
                     }
                 });
             }
@@ -743,7 +813,7 @@ mod config_tests {
 #[cfg(test)]
 mod output_route_tests {
     use super::*;
-    fn display(name: &str, x: i32) -> OutputRoute { OutputRoute { name: Some(name.into()), x, y: 0, width: 1920, height: 1080, fullscreen: true } }
+    fn display(name: &str, x: i32) -> OutputRoute { OutputRoute { name: Some(name.into()), x, y: 0, width: 1920, height: 1080, fullscreen: true, enabled: true, size: None, aspect: None } }
     #[test]
     fn restores_named_display_after_enumeration_or_position_changes() {
         let audience = display("HDMI-A-1", 1920);
@@ -766,5 +836,17 @@ mod output_route_tests {
         assert!(loaded["projection"].fullscreen);
         assert!(!loaded["confidence"].fullscreen);
         assert_eq!(loaded["confidence"].name.as_deref(), Some("DP-1"));
+    }
+    #[test]
+    fn routes_saved_before_display_options_enable_both_outputs() {
+        let route: OutputRoute = serde_json::from_str(r#"{"name":"HDMI-A-1","x":0,"y":0,"width":1920,"height":1080,"fullscreen":false}"#).unwrap();
+        assert!(route.enabled && !route.fullscreen);
+        assert_eq!((route.size, route.aspect), (None, None));
+    }
+    #[test]
+    fn default_displays_avoid_the_operator_screen() {
+        assert_eq!((default_monitor("projection", Some(0), 3), default_monitor("confidence", Some(0), 3)), (1, 2));
+        assert_eq!((default_monitor("projection", Some(1), 2), default_monitor("confidence", Some(1), 2)), (0, 1));
+        assert_eq!((default_monitor("projection", Some(0), 1), default_monitor("confidence", None, 1)), (0, 0));
     }
 }

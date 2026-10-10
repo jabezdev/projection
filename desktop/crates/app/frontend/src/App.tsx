@@ -1,6 +1,7 @@
 import ScheduleVideo from './ScheduleVideo';
 import LyricStream from './LyricStream';
 import OutputSettings from './OutputSettings';
+import OutputScreens from './OutputScreens';
 import { NativePreview } from './NativePreview';
 import { useOutputSizes } from './useOutputSizes';
 import PresentationEditor, { PresentationCues } from './PresentationEditor';
@@ -267,6 +268,7 @@ function App() {
       </div></section>
       {resizeDivider(1)}
       <aside className="operator-controls" aria-label="Output controls and previews">
+        <OutputScreens onError={setError}/>
         <div className="display-controls">{(['logo', 'black', 'clear', 'live'] as const).map(value => <button key={value} aria-pressed={display === value} onClick={() => void run(() => invoke('set_display', { display: value }))}><Icon name={value}/><span>{value.charAt(0).toUpperCase() + value.slice(1)}</span></button>)}</div>
         <div className="preview-stack">
           <section aria-label="Projection preview"><div className="preview-label">Projection</div><div className="preview-viewport"><div className="output-preview-frame" style={{ '--output-aspect': outputSizes.projection } as CSSProperties}><NativePreview target="projection" label="Projection output"/></div></div></section>

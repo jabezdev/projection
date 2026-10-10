@@ -40,6 +40,22 @@ impl NativeOutputs {
         }
     }
 
+    pub fn set_shown(&self, role: OutputRole, shown: bool) {
+        if let Ok(guard) = self.0.lock() {
+            if let Some(engine) = guard.as_ref() {
+                engine.set_shown(role, shown);
+            }
+        }
+    }
+
+    pub fn set_aspect(&self, role: OutputRole, aspect: Option<(u32, u32)>) {
+        if let Ok(guard) = self.0.lock() {
+            if let Some(engine) = guard.as_ref() {
+                engine.set_aspect(role, aspect);
+            }
+        }
+    }
+
     pub fn set_scene(&self, role: OutputRole, scene: Scene) {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {
@@ -105,6 +121,20 @@ fn keep_gtk_from_painting<R: Runtime>(window: &Window<R>, role: OutputRole, hand
     Ok(())
 }
 
+/// XWayland window managers (Hyprland) can miss a fullscreen request made
+/// while the window maps, so it is repeated once the window is mapped.
+#[cfg(target_os = "linux")]
+pub fn refullscreen_on_map<R: Runtime>(window: &Window<R>, wants_fullscreen: impl Fn() -> bool + 'static) -> anyhow::Result<()> {
+    use gtk::prelude::{GtkWindowExt, WidgetExtManual};
+    window.gtk_window()?.connect_map_event(move |window, _| {
+        if wants_fullscreen() {
+            window.fullscreen();
+        }
+        gtk::glib::Propagation::Proceed
+    });
+    Ok(())
+}
+
 pub fn role_for_label(label: &str) -> Option<OutputRole> {
     match label {
         "projection" => Some(OutputRole::Projection),
@@ -113,25 +143,14 @@ pub fn role_for_label(label: &str) -> Option<OutputRole> {
     }
 }
 
-pub fn build_projection_window<R: Runtime, M: Manager<R>>(
-    manager: &M,
-    has_saved_route: bool,
-    (width, height): (u32, u32),
-) -> tauri::Result<Window<R>> {
-    tauri::window::WindowBuilder::new(manager, "projection")
-        .title("Projection Output")
-        .decorations(has_saved_route) // Restored fullscreen placement removes decorations
+/// Output windows start hidden and borderless; the operator shows them.
+pub fn build_output_window<R: Runtime, M: Manager<R>>(manager: &M, label: &str, title: &str, (width, height): (u32, u32)) -> tauri::Result<Window<R>> {
+    tauri::window::WindowBuilder::new(manager, label)
+        .title(title)
+        .visible(false)
+        .decorations(false)
         .shadow(false)
-        .fullscreen(!has_saved_route)
         .inner_size(width as f64, height as f64)
-        .build()
-}
-
-pub fn build_confidence_window<R: Runtime, M: Manager<R>>(manager: &M) -> tauri::Result<Window<R>> {
-    tauri::window::WindowBuilder::new(manager, "confidence")
-        .title("Confidence")
-        .inner_size(540.0, 360.0)
-        .resizable(true)
         .build()
 }
 
@@ -153,6 +172,10 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
 
     let mut specs = Vec::new();
     for window in windows {
+        // A GTK window gets its native handle only once realized, which
+        // showing would otherwise do.
+        #[cfg(target_os = "linux")]
+        gtk::prelude::WidgetExt::realize(&window.gtk_window()?);
         let role = role_for_label(window.label()).expect("native output label");
         let size = window.inner_size()?;
         specs.push(OutputSpec {

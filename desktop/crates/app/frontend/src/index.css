@@ -306,3 +306,12 @@ fieldset:disabled { opacity:.35; }
 .confidence-header-toggle[aria-checked=true] .confidence-toggle-check { color:#102622; border-color:#66cfc2; background:#66cfc2; }
 .confidence-header-toggle:focus-visible { outline:2px solid #8de6dc; outline-offset:-2px; }
 .video-poster-placeholder { font:8px monospace; letter-spacing:.04em; color:#91a4b3; }
+.output-screens { flex-shrink:0; border-bottom:1px solid #353c45; padding:0 0 8px; }
+.output-screens-heading { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#a3adba; }
+.output-screens-toggle { padding:5px 12px; font-size:11px; letter-spacing:0; text-transform:none; background:#263640; color:#c7d3dc; }
+.output-screens-toggle[aria-pressed=true] { background:#24514d; color:#98f2e7; }
+.output-screen { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px; padding:4px 10px; }
+.output-screen select { min-width:0; padding:5px; font-size:11px; background:#0e171e; border:1px solid #344957; }
+.output-screen-enable { display:flex; align-items:center; gap:7px; padding:5px 8px; font-size:11px; background:#21262c; color:#94a5b2; }
+.output-screen-enable[aria-checked=true] { color:#8de6dc; background:#1b3735; }
+.output-screen-enable[aria-checked=true] .confidence-toggle-check { color:#102622; border-color:#66cfc2; background:#66cfc2; }
