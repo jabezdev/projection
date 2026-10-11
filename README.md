@@ -82,7 +82,7 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments. Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library. Imported media references its original file; keep those files in place.
+`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments. Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library. Imported media references its original file; keep those files in place. There is no built-in backup yet: copy this folder to back up. One-click export, weekly automatic backups and copying media into the library are planned (roadmap phases 2–3).
 
 ### Folder layout
 
@@ -114,6 +114,8 @@ desktop/
 **Displays.** Output display assignments and fullscreen/windowed choices are saved and restored by display identity. A missing display stays saved and shows as disconnected. If the connected displays change while Settings is open, reopen Settings before placing an output.
 
 **Audio device.** Choose the venue output in the OS sound settings. If it disappears, the media card shows a reconnecting message and playback resumes on the new default device.
+
+**Not there yet.** There are no keyboard shortcuts for cueing (the mouse runs the service), no undo, and output styling is shared by both screens except the confidence text size. Configurable shortcuts and outside devices (clickers, MIDI, Stream Deck, OSC), an edit history with undo, operator-designed service templates and per-screen settings are planned; see [ROADMAP.md](ROADMAP.md).
 
 ### MVP rehearsal
 
@@ -158,13 +160,13 @@ Bundles appear under `desktop/target/release/bundle/`. Platform settings: [tauri
    ```
 4. `cd crates\app; bun install; bun install --cwd frontend; bun tauri build`.
 
-Install on a machine without FFmpeg or developer tools, then run the rehearsal. Remaining Windows checks are in [WINDOWS.md](WINDOWS.md).
+Install on a machine without FFmpeg or developer tools, then run the rehearsal. Remaining Windows checks are in [WINDOWS.md](WINDOWS.md). Updates are installed by hand for now; an auto-updater that downloads in the background, asks before installing and can roll back is planned (roadmap phase 11).
 
 ---
 
 ## Song library (`web/`)
 
-A phone-friendly site (installable as an app) where the week's prep happens: the lyric team adds songs, the song leader arranges the service, singers read the arrangement. Data lives in [Convex](https://convex.dev) and sign-in uses [Clerk](https://clerk.com). Data model: [ARCHITECTURE.md](ARCHITECTURE.md#cloud-data-model). Syncing with the projection app is next on the [roadmap](ROADMAP.md#2-cloud-sync-offline-first).
+A phone-friendly site (installable as an app) where the week's prep happens: the lyric team adds songs, the song leader arranges the service, singers read the arrangement. Data lives in [Convex](https://convex.dev) and sign-in uses [Clerk](https://clerk.com). Data model: [ARCHITECTURE.md](ARCHITECTURE.md#cloud-data-model). Today the web app and the projection app are separate: services are entered on the desktop by hand. Next, the library is reworked so library songs stay untouched references (fixes reach upcoming services only), then the projection app syncs offline-first with Convex, including media up to 100 MB ([roadmap](ROADMAP.md#3-library-revamp-and-data-model), phases 3–4).
 
 All commands run from `web/`. Needs Bun.
 

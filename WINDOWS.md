@@ -11,6 +11,9 @@ End users run Windows 10/11; Windows is the acceptance platform. Builds are cros
 
 ## Fix before a live service
 
+These are also roadmap phase 1, together with crash recovery and an "Open logs folder" button.
+
+
 - [ ] **Log file.** Without the console, `env_logger` output is lost on Windows, so a failure at church leaves nothing to inspect. Write logs to `%APPDATA%\com.magi.projection\logs\`, rotated by size or date.
 - [ ] **Keep the display awake.** Nothing stops Windows from blanking the display, starting the screensaver or sleeping during a long stretch without input. While any output is shown, call `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)`; clear it when outputs are hidden.
 
@@ -23,9 +26,10 @@ End users run Windows 10/11; Windows is the acceptance platform. Builds are cros
 - [ ] **Fonts.** Windows ships different fonts from Linux. Check the font list in Output Settings, fonts saved on Linux (fallback behavior), and how lyrics wrap.
 - [ ] **Basics.** The app opens; a video plays with sound (proves the FFmpeg DLLs load); outputs go fullscreen on the right displays; closing the operator window exits the app.
 
-## Later
+## Later (tracked in the roadmap)
 
-- [ ] **Media paths.** Services refer to media by absolute path, so a library copied from Linux cannot find its files on Windows. Re-add media on the church PC, or add a "relink missing media" feature.
-- [ ] **Installer polish.** Give the product a friendly name (the Start menu currently shows "projection-rust"); bump the version with each build so the installer upgrades in place.
-- [ ] **Code signing.** The installer is unsigned: SmartScreen warns (More info → Run anyway) and Defender occasionally flags unsigned installers.
-- [ ] **Remote over the network.** The WebSocket server binds `127.0.0.1` by default, so no firewall prompt appears. Binding to the network makes Windows Firewall prompt; the installer could add the rule instead.
+- **Media paths.** Services refer to media by absolute path, so a library copied from Linux cannot find its files on Windows. Until then, re-add media on the church PC. Planned: media copied into the library folder and "relink missing media" ([ROADMAP.md](ROADMAP.md) phase 3).
+- **Installer name and version.** The Start menu shows "projection-rust" and the version stays 0.1.0. Planned: a product name and a version bump every build (phase 2).
+- **Updates.** Installed by hand. Planned: auto-update with confirmation and rollback (phase 11).
+- **Code signing.** Decided to skip for now: SmartScreen warns (More info → Run anyway) and Defender occasionally flags unsigned installers.
+- **Remote over the network.** The WebSocket server binds `127.0.0.1`, so no firewall prompt appears. Planned: a LAN setting, with the installer adding the firewall rule, pairing codes and mDNS names (phase 10).

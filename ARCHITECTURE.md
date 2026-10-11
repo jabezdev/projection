@@ -1,6 +1,6 @@
 # Architecture
 
-Two apps share one repository: a **projection app** the operator runs at the venue, and a **song library web app** the team uses during the week. The system is **offline-first**: the projection app runs a whole service from its own local library, and syncs with the cloud when a connection is available. The internet is never on the live path.
+Two apps share one repository: a **projection app** the operator runs at the venue, and a **song library web app** the team uses during the week. The system is **offline-first**: the projection app runs a whole service from its own local library, and syncs with the cloud when a connection is available (planned). The internet is never on the live path.
 
 ## Principles
 
@@ -13,7 +13,7 @@ Two apps share one repository: a **projection app** the operator runs at the ven
 | What is on screen right now | The desktop engine | Next/Prev must never wait on the internet |
 | The local library and services the operator runs | Desktop SQLite | The service must run with no connection |
 | The shared song library, service plans, team roles | Convex (cloud) | Several people edit during the week and it must sync instantly |
-| Media files | The projection computer | Large files, played locally |
+| Media files | The projection computer, synced to Convex storage (planned, up to 100 MB per file) | Played locally; the cloud copy is for sharing and backup |
 
 ## The projection app (`desktop/`)
 
@@ -41,7 +41,7 @@ flowchart LR
 | media_engine | `desktop/crates/media_engine` | Video/audio decoding, playback clocks, the single audio output, thumbnails. |
 | render_engine | `desktop/crates/render_engine` | Draws the projection and confidence screens and the operator preview stills. |
 | persistence | `desktop/crates/persistence` | SQLite: songs, media records, services (each service stored as one JSON document). |
-| network_server | `desktop/crates/network_server` | WebSocket remote control; same machine only for now. |
+| network_server | `desktop/crates/network_server` | WebSocket remote control; same machine only for now. LAN access with pairing codes, a phone remote and OSC/Companion control are planned (roadmap phases 6 and 9). |
 
 ### One click, end to end
 
@@ -76,15 +76,19 @@ The song leader on a phone and the operator at the desk may arrange the same ser
 
 ## Sync (planned)
 
-Not built yet; the steps are in [ROADMAP.md](ROADMAP.md). The intended design:
+Not built yet; the items and decisions are in [ROADMAP.md](ROADMAP.md#4-cloud-sync-offline-first). The intended design:
 
 1. **Pair** the projection computer once with a code from the web app.
-2. **Pull** the week's services and their songs into the local SQLite library whenever online. The local copy is complete enough to run the service with no connection.
-3. **Run locally.** Cues, media and outputs only ever read local data.
-4. **Push** operator edits back as the same small Convex operations the web app uses, queued while offline and sent when the connection returns. Conflicts resolve the way concurrent web edits already do: operations apply in order.
-5. **Report "now showing"** to Convex when online, so the singers' view can highlight the current part. Losing the connection only stops the highlight.
+2. **Pull** services, songs and media into the local library whenever online. Library songs are kept as local reference copies; the local copy is complete enough to run any service with no connection.
+3. **Run locally.** Cues, media and outputs only ever read local data. While a service is live, the projection computer owns it: the web shows it as "live on site" and holds edits to it until the service ends.
+4. **Push** desktop edits as the same small Convex operations the web app uses. They come from the desktop's edit history in SQLite (which also powers undo), are queued while offline, and are sent when the connection returns.
+5. **Conflicts never block the operator.** Operations that do not touch the same thing merge automatically. Changes to the same thing on both sides go to a "needs attention" list, settled in a side-by-side dialog when the operator chooses.
+6. **Switches (flags)** control costly or chatty updates such as "now showing" for the singers' view. Admins set team defaults on the web and per-computer overrides; the computer keeps its last known switches while offline. A **full offline** setting stops sync entirely.
+7. **Media** syncs both ways through Convex storage for files up to 100 MB, identified by content hash; larger files stay local.
 
-Media stays on the projection computer; services refer to it by path. Syncing media files is a later decision (see the roadmap).
+### Planned data model change
+
+The library becomes the reference artifact: editing a service never changes the library song. Library fixes reach **upcoming** services but not past ones; per-service variations are never overwritten. Desktop and cloud move to shared string IDs. The cloud model below describes today's web app, where library fixes flow into every service.
 
 ## How the repo is split
 

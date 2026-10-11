@@ -96,7 +96,8 @@ A song's own background carries over to items without one; a foreground video or
 - Library and services: `app.db` (SQLite) in the OS app-data folder (`com.magi.projection`; an existing `com.tauri.dev` library stays in use).
 - `output-settings.json`: typed as `protocol::OutputConfig`. Missing fields take defaults; fields this version does not know (from newer versions, or outline/shadow/glow from older ones) survive a round trip. Saved atomically; an unreadable file is kept as `*.invalid-<ms>.json` and reported.
 - `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: WebSocket host/port and the last projection window size.
-- Media is referenced by absolute path, not copied.
+- Media is referenced by absolute path, not copied. *Next (roadmap phase 3): media is copied into a library folder on import, IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
+- Output styling is shared by both screens except the confidence text size. *Next (phase 5): each screen gets its own parameters and a redesigned settings page.*
 
 ## Decisions
 
@@ -107,22 +108,34 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 3. **The engine owns playback state.** Outputs and the UI report and request; they never decide. One state machine with session and generation IDs makes stale or out-of-order input harmless.
 4. **React stays for editing and controls.** It is the fastest way to build the operator UI, and it is off the live path: a slow UI cannot disturb the outputs, which present from their own threads.
 5. **Platforms.** Develop on Omarchy Linux (Hyprland, run under XWayland). Users run Windows 10/11, which is the acceptance platform. Displays attached to different GPUs are not supported.
-6. **Target hardware: Ryzen 3 2200G, 8 GB RAM, GTX 1050 Ti (4 GB).** Features are judged against this machine. CPU decode plus RGBA upload is the measured baseline (about 27% of one core for 1080p on a Ryzen 5 5500U); hardware decoding waits until profiling on the target shows it is needed.
+6. **Target hardware: Ryzen 3 2200G, 8 GB RAM, GTX 1050 Ti (4 GB).** Features are judged against this machine. CPU decode plus RGBA upload is the measured baseline (about 27% of one core for 1080p on a Ryzen 5 5500U); hardware decoding comes after profiling on the target (roadmap phase 7), as a selectable option with software decoding as the fallback.
 7. **Audio uses the system default device** with automatic reconnect. Venue routing is done in the OS sound settings, which operators already know. Pitch follows rate because it is the simplest correct behavior.
 8. **Display policy as in the table above.** Logo is a picture override, so it pauses video but not walk-in music; Black and Clear keep transport running so the operator controls audio explicitly; a previous video never silently becomes a background.
 9. **Previews are still images from the real renderer.** No second layout engine to keep in step and no second decoder; low frequency keeps the operator light.
-10. **Minimal text styling.** Only what the native renderer draws is offered. Outline, shadow and glow were removed from the settings rather than left as controls that do nothing; they are on the roadmap.
+10. **Minimal text styling.** Only what the native renderer draws is offered. Outline, shadow and glow were removed from the settings rather than left as controls that do nothing. They return per screen in roadmap phase 5: shadow as a blurred glyph pass, outline and glow through signed-distance-field glyphs.
 11. **Keep the system light.** No unused ports, commands or settings in the code. Bounded queues everywhere, nothing redrawn without a change, no per-frame data through JSON.
-12. **Offline-first.** Everything on air runs from the local SQLite library; nothing on the live path waits on the network. Cloud sync (see ARCHITECTURE.md) feeds the local library and is never required to run a service.
+12. **Offline-first.** Everything on air runs from the local SQLite library; nothing on the live path waits on the network. Cloud sync (planned, see ARCHITECTURE.md) feeds the local library and is never required to run a service; while a service is live, the projection computer owns it.
 
 ## Known limits
 
-- Kerning pairs that include the space character are lost (cosmic-text shapes word by word); a few pixels in some fonts.
-- Color emoji render as single-color shapes.
-- The next cue is not prepared ahead of time; images load on cue and logo videos start when Logo is pressed, so they fade in after a short decode delay.
+- Kerning pairs that include the space character are lost (cosmic-text shapes word by word); a few pixels in some fonts. *Phase 5: shape whole lines.*
+- Color emoji render as single-color shapes. Not planned; an icon set drawable on the outputs is (phase 5).
+- The next cue is not prepared ahead of time; images load on cue and logo videos start when Logo is pressed, so they fade in after a short decode delay. *Phase 5: prepare the next and previous cues.*
+- Lyrics only crossfade. *Phase 5: cut and slide, with duration, easing and direction.*
 - When both output windows are covered, uploads wait behind their throttled presents and update about once a second; one visible output still runs at full rate.
-- Looping is not measured as seamless.
+- Looping is not measured as seamless. *Phase 7: prepare the loop point.*
+- Logs go to the console only, and nothing keeps the display awake. *Phase 1: rotated log file, display-awake while outputs are shown, crash recovery.*
 - Windows items still to check on the church PC are in [WINDOWS.md](WINDOWS.md).
+
+## What comes next for the engine
+
+From [ROADMAP.md](ROADMAP.md), the parts that change this document:
+
+- **Phase 5, looks:** per-screen parameters, text shadow, outline and glow, transition styles, shader backgrounds with built-in presets and hard resource limits (frame rate and resolution caps, automatic fallback to a still).
+- **Phase 6, operator controls:** one input layer for keyboard bindings, presenter clickers, MIDI, Stream Deck and OSC/Companion, all sending the same engine commands.
+- **Phase 7, media:** profiling on the church PC, YUV upload with shader conversion, selectable hardware decoding (D3D11VA, DXVA2, NVDEC, QSV, AMF on Windows; VA-API, VDPAU, NVDEC, Vulkan Video on Linux).
+- **Phase 8, screen capture:** a window or screen as an output source, captured once for both screens, with the capture API chosen per platform and switchable; a feed from another device's browser over WebRTC, with its audio through the one audio output.
+- **Phase 9, presentations:** web pages (the Canva player and other browser presentations) rendered off screen and shown as a source, so the outputs stay native; PDF and PowerPoint as slides.
 
 ## Checking it
 
