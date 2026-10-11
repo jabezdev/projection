@@ -1,0 +1,10 @@
+{
+ "kind": "projection",
+ "text": "Amazing grace how sweet the sound\nThat saved a wretch like me",
+ "config": {
+  "shadow": 0,
+  "outline": 0,
+  "glow": 0,
+  "transition": 250
+ }
+}

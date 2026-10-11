@@ -1,0 +1,11 @@
+[package]
+name = "media_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ffmpeg-next = { workspace = true }
+cpal = { workspace = true }
+crossbeam = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }

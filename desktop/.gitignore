@@ -8,3 +8,6 @@ crates/app/gen/
 *.db
 *.db-journal
 app-config.json
+
+# FFmpeg DLLs copied in for Windows packaging (see README)
+crates/app/windows/ffmpeg/

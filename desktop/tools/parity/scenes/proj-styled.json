@@ -1,0 +1,26 @@
+{
+ "kind": "projection",
+ "text": "Amazing grace how sweet the sound\nThat saved a wretch like me",
+ "config": {
+  "shadow": 0,
+  "outline": 0,
+  "glow": 0,
+  "transition": 250,
+  "font": "Liberation Serif",
+  "size": 5,
+  "weight": 400,
+  "italic": true,
+  "caps": true,
+  "color": "#ffe08a",
+  "align": "left",
+  "vertical": "center",
+  "marginX": 8,
+  "marginY": 6,
+  "lineHeight": 1.5,
+  "letterSpacing": 8,
+  "border": 6,
+  "borderColor": "#47c6bd",
+  "boxColor": "#203040",
+  "boxOpacity": 60
+ }
+}

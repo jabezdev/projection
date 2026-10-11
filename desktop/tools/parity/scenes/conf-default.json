@@ -1,0 +1,42 @@
+{
+ "kind": "confidence",
+ "items": [
+  {
+   "id": 1,
+   "title": "Amazing Grace",
+   "kind": {
+    "kind": "text",
+    "data": {
+     "steps": []
+    }
+   },
+   "song": "{\"format\": \"magi.song.v1\", \"slideSeparator\": \"blank-line\", \"background\": \"\", \"parts\": [{\"id\": \"v1\", \"type\": \"Verse\", \"number\": 1, \"lyrics\": \"Amazing grace how sweet the sound\\nThat saved a wretch like me\\n\\nI once was lost but now am found\\nWas blind but now I see\"}, {\"id\": \"c1\", \"type\": \"Chorus\", \"number\": 1, \"lyrics\": \"My chains are gone\\nI have been set free\\n\\nMy God my Savior has ransomed me\"}, {\"id\": \"b1\", \"type\": \"Bridge\", \"number\": 1, \"lyrics\": \"The Lord has promised good to me\"}], \"arrangement\": [\"v1\", \"c1\", \"b1\", \"c1\"]}"
+  },
+  {
+   "id": 2,
+   "title": "Announcements",
+   "kind": {
+    "kind": "video",
+    "data": {
+     "path": "/x.mp4"
+    }
+   }
+  },
+  {
+   "id": 3,
+   "title": null,
+   "kind": {
+    "kind": "presentation",
+    "data": {
+     "path": "/a.png",
+     "slides": [
+      "/a.png"
+     ]
+    }
+   }
+  }
+ ],
+ "activeId": 1,
+ "activeStep": 3,
+ "size": 4
+}

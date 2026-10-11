@@ -5,16 +5,8 @@ edition = "2021"
 
 [dependencies]
 protocol = { path = "../protocol" }
-wgpu = { workspace = true }
-winit = { workspace = true }
-rodio = { workspace = true }
-cpal = { workspace = true }
-crossbeam = { workspace = true }
-ffmpeg-next = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
-bytemuck = { workspace = true }
-glam = { workspace = true }
-glyphon = { workspace = true }
 image = { workspace = true }
-raw-window-handle = { workspace = true }

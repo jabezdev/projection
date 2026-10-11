@@ -1,16 +1,19 @@
-use crossbeam::channel::Sender;
 use futures_util::{SinkExt, StreamExt};
-use log::{error, info};
+use log::{error, info, warn};
 use protocol::{EngineCommand, EngineEvent, EngineSnapshot};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, watch};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
+/// Delivers a client command to the engine, or explains why it was refused.
+pub type CommandSink = Arc<dyn Fn(EngineCommand) -> Result<(), String> + Send + Sync>;
+
 pub struct WsServer {
     addr: SocketAddr,
-    cmd_sender: Sender<EngineCommand>,
+    cmd_sender: CommandSink,
     events: broadcast::Sender<EngineEvent>,
     snapshot_provider: Option<std::sync::Arc<dyn Fn() -> EngineSnapshot + Send + Sync>>,
     shutdown: Option<watch::Receiver<bool>>,
@@ -19,7 +22,7 @@ pub struct WsServer {
 impl WsServer {
     pub fn new(
         addr: SocketAddr,
-        cmd_sender: Sender<EngineCommand>,
+        cmd_sender: CommandSink,
         events: broadcast::Sender<EngineEvent>,
     ) -> Self {
         Self {
@@ -85,22 +88,23 @@ impl WsServer {
 
 async fn handle_connection(
     stream: TcpStream,
-    cmd_sender: Sender<EngineCommand>,
+    cmd_sender: CommandSink,
     events: broadcast::Sender<EngineEvent>,
     snapshot_provider: Option<std::sync::Arc<dyn Fn() -> EngineSnapshot + Send + Sync>>,
 ) -> anyhow::Result<()> {
     let ws_stream = accept_async(stream).await?;
     let (mut ws_sink, mut ws_source) = ws_stream.split();
 
-    // Bring the client up to the current state.
-    if let Some(provider) = snapshot_provider {
-        for evt in (provider)().sync_events() {
-            let msg = serde_json::to_string(&evt)?;
-            ws_sink.send(Message::Text(msg.into())).await?;
-        }
-    }
-
+    // Subscribe before reading the snapshot so no change falls between them.
+    // Events that predate the snapshot carry older versions/revisions, which
+    // clients discard.
     let mut event_rx = events.subscribe();
+    let sync = |provider: &Option<std::sync::Arc<dyn Fn() -> EngineSnapshot + Send + Sync>>| {
+        provider.as_ref().map(|p| p().sync_events().to_vec()).unwrap_or_default()
+    };
+    for evt in sync(&snapshot_provider) {
+        ws_sink.send(Message::Text(serde_json::to_string(&evt)?.into())).await?;
+    }
 
     loop {
         tokio::select! {
@@ -110,13 +114,14 @@ async fn handle_connection(
                 let msg = msg?;
                 if msg.is_text() {
                     let text = msg.to_text()?;
-                    match serde_json::from_str::<EngineCommand>(text) {
-                        Ok(cmd) => {
-                            let _ = cmd_sender.send(cmd);
-                        }
-                        Err(e) => {
-                            error!("Failed to parse command: {}", e);
-                        }
+                    let refusal = match serde_json::from_str::<EngineCommand>(text) {
+                        Ok(cmd) => (cmd_sender)(cmd).err(),
+                        Err(e) => Some(format!("Invalid command: {e}")),
+                    };
+                    if let Some(message) = refusal {
+                        warn!("Refused WebSocket command: {message}");
+                        let evt = EngineEvent::Error { source: "remote".into(), message, recoverable: true };
+                        ws_sink.send(Message::Text(serde_json::to_string(&evt)?.into())).await?;
                     }
                 }
             }
@@ -130,9 +135,13 @@ async fn handle_connection(
                             break;
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {
-                        // Drop lagged events; client can request a fresh snapshot.
-                        continue;
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        // Every domain event is complete state, so a fresh
+                        // snapshot fully replaces what was skipped.
+                        warn!("WebSocket client lagged by {skipped} events; resynchronizing");
+                        for evt in sync(&snapshot_provider) {
+                            ws_sink.send(Message::Text(serde_json::to_string(&evt)?.into())).await?;
+                        }
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }

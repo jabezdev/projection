@@ -1,0 +1,196 @@
+{
+  "description": "Song normalization cases shared by the Rust (core_engine::song) and TypeScript (song.ts) parsers. Both suites must pass the same expectations.",
+  "cases": [
+    {
+      "name": "plain library lyrics become one legacy verse",
+      "song": "A\nB\n\nC",
+      "steps": [
+        "A\nB",
+        "C"
+      ],
+      "occurrences": [
+        {
+          "part": "legacy",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "A\nB",
+            "C"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CRLF and whitespace-only lines separate slides",
+      "song": "\r\n First\r\nSecond\r\n \t\r\n\r\nThird\r\n\r\n",
+      "steps": [
+        "First\nSecond",
+        "Third"
+      ],
+      "occurrences": [
+        {
+          "part": "legacy",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "First\nSecond",
+            "Third"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "text that is not a song document is plain lyrics",
+      "song": "{not json\n\nsecond",
+      "steps": [
+        "{not json",
+        "second"
+      ],
+      "occurrences": [
+        {
+          "part": "legacy",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "{not json",
+            "second"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "JSON without the song format is plain lyrics",
+      "song": "{\"format\":\"other\"}",
+      "steps": [
+        "{\"format\":\"other\"}"
+      ],
+      "occurrences": [
+        {
+          "part": "legacy",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "{\"format\":\"other\"}"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "old single-line documents keep one slide per line",
+      "song": "{\"format\": \"magi.song.v1\", \"parts\": [{\"id\": \"v\", \"type\": \"Verse\", \"number\": 1, \"lyrics\": \"A\\n B \\n\\nC\"}], \"arrangement\": [\"v\"], \"background\": \"\"}",
+      "steps": [
+        "A",
+        "B",
+        "C"
+      ],
+      "occurrences": [
+        {
+          "part": "v",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "A",
+            "B",
+            "C"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "old documents with stored slide texts keep them",
+      "song": "{\"format\": \"magi.song.v1\", \"parts\": [{\"id\": \"v\", \"type\": \"Verse\", \"number\": 2, \"lyrics\": \"ignored\", \"slideTexts\": [\"X\", \"Y\\nZ\"]}], \"arrangement\": [\"v\"], \"background\": \"\"}",
+      "steps": [
+        "X",
+        "Y\nZ"
+      ],
+      "occurrences": [
+        {
+          "part": "v",
+          "code": "V2",
+          "color": "#4f91e8",
+          "slides": [
+            "X",
+            "Y\nZ"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeated arrangement keeps occurrence order, codes and colors",
+      "song": "{\"format\": \"magi.song.v1\", \"slideSeparator\": \"blank-line\", \"parts\": [{\"id\": \"v1\", \"type\": \"Verse\", \"number\": 1, \"lyrics\": \"Verse a\\n\\nVerse b\"}, {\"id\": \"pc\", \"type\": \"Pre-chorus\", \"number\": 1, \"lyrics\": \"Lift\"}, {\"id\": \"c\", \"type\": \"Chorus\", \"number\": 1, \"lyrics\": \"Chorus\", \"color\": \"#123456\"}, {\"id\": \"br\", \"type\": \"Bridge\", \"number\": 2, \"lyrics\": \"Bridge\"}, {\"id\": \"x\", \"type\": \"Custom\", \"number\": 3, \"lyrics\": \"Other\", \"color\": \"\"}], \"arrangement\": [\"v1\", \"pc\", \"c\", \"missing\", \"br\", \"c\", \"x\"], \"background\": \"\"}",
+      "steps": [
+        "Verse a",
+        "Verse b",
+        "Lift",
+        "Chorus",
+        "Bridge",
+        "Chorus",
+        "Other"
+      ],
+      "occurrences": [
+        {
+          "part": "v1",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": [
+            "Verse a",
+            "Verse b"
+          ]
+        },
+        {
+          "part": "pc",
+          "code": "PC1",
+          "color": "#efa34a",
+          "slides": [
+            "Lift"
+          ]
+        },
+        {
+          "part": "c",
+          "code": "C1",
+          "color": "#123456",
+          "slides": [
+            "Chorus"
+          ]
+        },
+        {
+          "part": "br",
+          "code": "BR2",
+          "color": "#aa84df",
+          "slides": [
+            "Bridge"
+          ]
+        },
+        {
+          "part": "c",
+          "code": "C1",
+          "color": "#123456",
+          "slides": [
+            "Chorus"
+          ]
+        },
+        {
+          "part": "x",
+          "code": "C3",
+          "color": "#a3a8b2",
+          "slides": [
+            "Other"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "an empty stored slide list shows no slides",
+      "song": "{\"format\": \"magi.song.v1\", \"slideSeparator\": \"blank-line\", \"parts\": [{\"id\": \"v\", \"type\": \"Verse\", \"number\": 1, \"lyrics\": \"Hidden\", \"slideTexts\": []}], \"arrangement\": [\"v\"], \"background\": \"\"}",
+      "steps": [],
+      "occurrences": [
+        {
+          "part": "v",
+          "code": "V1",
+          "color": "#4f91e8",
+          "slides": []
+        }
+      ]
+    }
+  ]
+}
