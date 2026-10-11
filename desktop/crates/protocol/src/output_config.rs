@@ -50,15 +50,6 @@ pub struct OutputConfig {
     pub margin_y: f64,
     pub line_height: f64,
     pub letter_spacing: f64,
-    // Outline, shadow and glow are preserved but not rendered natively yet.
-    pub outline: f64,
-    pub outline_color: String,
-    pub shadow: f64,
-    pub shadow_x: f64,
-    pub shadow_y: f64,
-    pub shadow_color: String,
-    pub glow: f64,
-    pub glow_color: String,
     pub border: f64,
     pub border_color: String,
     pub box_color: String,
@@ -68,7 +59,8 @@ pub struct OutputConfig {
     pub transition: f64,
     pub confidence_size: f64,
     pub logo_path: String,
-    /// Fields written by newer versions survive a round trip through this one.
+    /// Fields this version does not render survive a round trip: those written
+    /// by newer versions, and the outline/shadow/glow of older ones.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -89,14 +81,6 @@ impl Default for OutputConfig {
             margin_y: 10.0,
             line_height: 1.2,
             letter_spacing: 0.0,
-            outline: 0.0,
-            outline_color: "#000000".into(),
-            shadow: 16.0,
-            shadow_x: 0.0,
-            shadow_y: 3.0,
-            shadow_color: "#000000".into(),
-            glow: 0.0,
-            glow_color: "#ffffff".into(),
             border: 0.0,
             border_color: "#ffffff".into(),
             box_color: "#000000".into(),
@@ -143,7 +127,7 @@ impl OutputConfig {
 mod tests {
     use super::*;
 
-    /// A settings file saved by the webview-era operator UI.
+    /// A settings file saved by an earlier version, with outline, shadow and glow.
     const SAVED: &str = r##"{
       "align": "center", "backgroundFit": "cover", "border": 2, "borderColor": "#000000",
       "boxColor": "#000000", "boxOpacity": 100, "caps": true, "color": "#ffffff",
@@ -160,7 +144,9 @@ mod tests {
         assert_eq!((config.size, config.line_height, config.margin_y), (3.8, 0.9, 25.0));
         assert_eq!((config.vertical, config.border, config.box_opacity), (VerticalAlign::Top, 2.0, 100.0));
         assert!(config.caps);
-        assert!(config.extra.is_empty(), "every saved field is typed");
+        let mut untyped: Vec<_> = config.extra.keys().map(String::as_str).collect();
+        untyped.sort_unstable();
+        assert_eq!(untyped, ["glow", "glowColor", "outline", "outlineColor", "shadow", "shadowColor", "shadowX", "shadowY"]);
         config.validate().unwrap();
     }
 

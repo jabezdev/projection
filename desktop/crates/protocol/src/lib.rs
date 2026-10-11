@@ -329,20 +329,10 @@ pub enum EngineCommand {
     SetDisplay {
         display: DisplayMode,
     },
-    SetOpacity {
-        layer: usize,
-        value: f32,
-    },
 
     // Background
     SetBackground {
         path: String,
-    },
-
-    // Windowing
-    Resize {
-        width: u32,
-        height: u32,
     },
 
     // Project

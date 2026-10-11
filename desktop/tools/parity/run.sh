@@ -13,7 +13,7 @@
 # reference with the reviewed native capture when it is intended.
 #
 # Needs ImageMagick. Captures use system fonts, so run on a machine with the
-# fonts the references were made with (see ENGINE.md, stages 4 and 5).
+# fonts the references were made with (see docs/records/2026-10-native-output-migration.md, stages 4 and 5).
 set -euo pipefail
 here=$(dirname "$(readlink -f "$0")")
 desktop=$(readlink -f "$here/../..")

@@ -1,6 +1,5 @@
 //! What each output shows, in the operator's units. Outputs convert these to
-//! pixels for their own size: `cq` below is 1% of the output width, like the
-//! webview's `cqw`.
+//! pixels for their own size: `cq` below is 1% of the output width.
 
 use std::time::{Duration, Instant};
 

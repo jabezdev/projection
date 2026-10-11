@@ -7,12 +7,10 @@ export type OutputConfig = {
   font: string; size: number; weight: number; italic: boolean; caps: boolean;
   color: string; align: 'left' | 'center' | 'right'; vertical: 'top' | 'center' | 'bottom';
   marginX: number; marginY: number; lineHeight: number; letterSpacing: number;
-  outline: number; outlineColor: string; shadow: number; shadowX: number; shadowY: number; shadowColor: string;
-  glow: number; glowColor: string; border: number; borderColor: string; boxColor: string; boxOpacity: number;
+  border: number; borderColor: string; boxColor: string; boxOpacity: number;
   backgroundFit: 'cover' | 'contain'; transition: number; confidenceSize: number; logoPath: string;
 };
-export const defaultOutputConfig: OutputConfig = { font: 'Arial', size: 6, weight: 800, italic: false, caps: false, color: '#ffffff', align: 'center', vertical: 'bottom', marginX: 5, marginY: 10, lineHeight: 1.2, letterSpacing: 0, outline: 0, outlineColor: '#000000', shadow: 16, shadowX: 0, shadowY: 3, shadowColor: '#000000', glow: 0, glowColor: '#ffffff', border: 0, borderColor: '#ffffff', boxColor: '#000000', boxOpacity: 0, backgroundFit: 'cover', transition: 250, confidenceSize: 4, logoPath: '' };
-// Follower timing input; derived from the engine's PlaybackState.
+export const defaultOutputConfig: OutputConfig = { font: 'Arial', size: 6, weight: 800, italic: false, caps: false, color: '#ffffff', align: 'center', vertical: 'bottom', marginX: 5, marginY: 10, lineHeight: 1.2, letterSpacing: 0, border: 0, borderColor: '#ffffff', boxColor: '#000000', boxOpacity: 0, backgroundFit: 'cover', transition: 250, confidenceSize: 4, logoPath: '' };
 const prefix = 'magi.output.';
 export function useOutputState<T extends object>(domain: 'config', defaults: T): [T, (value: T) => Promise<void>] {
   const [value, setValue] = useState<T>(() => {

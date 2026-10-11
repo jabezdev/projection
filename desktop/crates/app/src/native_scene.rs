@@ -1,6 +1,5 @@
 //! Builds what each native output shows from the engine's state and the
-//! saved output style, mirroring the webview's `App.tsx`, `ProjectionSurface`
-//! and `ConfidenceScreen`, and keeps the renderer and ambient videos in step.
+//! saved output style, and keeps the renderer and ambient videos in step.
 
 use std::sync::{Arc, RwLock};
 
@@ -371,7 +370,7 @@ mod tests {
         assert_eq!(main.background.unwrap().source, MediaSource::Video(VideoKey::Session(7)));
         let confidence = confidence_scene(&OutputConfig::default(), &program, Some(&project), Some(&playback));
         assert_eq!(confidence.video, Some(VideoKey::Session(7)));
-        // Only while Live, as in the webview.
+        // Only while Live.
         program.display = DisplayMode::Black;
         assert_eq!(confidence_scene(&OutputConfig::default(), &program, Some(&project), Some(&playback)).video, None);
     }

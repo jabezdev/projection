@@ -1,5 +1,5 @@
-//! Offscreen rendering of a scene, for tests and visual comparisons with the
-//! webview outputs. Uses the same renderers and painter as the windows.
+//! Offscreen rendering of a scene, for tests and the parity check. Uses the
+//! same renderers and painter as the windows.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

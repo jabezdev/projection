@@ -50,7 +50,7 @@ impl Fonts {
     }
 
     /// The family to use for `requested`: itself when installed, else what
-    /// the platform would substitute (fontconfig on Linux, as the webview).
+    /// the platform would substitute (fontconfig on Linux).
     fn resolve(&self, system: &FontSystem, requested: &str) -> FamilyChoice {
         let key = requested.trim().to_ascii_lowercase();
         match key.as_str() {

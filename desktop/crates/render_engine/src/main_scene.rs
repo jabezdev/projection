@@ -1,6 +1,5 @@
 //! The audience output: background media, Black/Logo overrides and the
-//! lyric box. Geometry follows the webview's `ProjectionSurface` CSS (with
-//! `box-sizing: border-box`, so margins hold).
+//! lyric box. Margins are inset inside the output, so they always hold.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,7 +65,7 @@ struct Layer {
     opacity: Fade,
 }
 
-/// Port of the webview's `MediaStage`: a new source fades in only once it
+/// A new source fades in only once it
 /// can be drawn, while the previous one stays until then and fades out.
 #[derive(Default)]
 pub(crate) struct MediaStage {
@@ -342,7 +341,7 @@ impl MainRenderer {
             if self.scene.logo.is_some() {
                 self.logo.draw(&mut list, geometry.area, now);
             } else {
-                // No logo configured: the webview shows "MAGI" in the root font.
+                // No logo configured: show "MAGI" in the root font.
                 let cq = w / 100.0;
                 let laid = match &self.logo_text {
                     Some((width, laid)) if *width == size.0 => laid.clone(),
@@ -376,8 +375,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn geometry_matches_the_webview_at_1080p() {
-        // Reference values measured from the webview (border-box) in Chromium.
+    fn geometry_matches_the_parity_reference_at_1080p() {
+        // Values from the parity references in tools/parity.
         let g = LyricGeometry::new(&LyricStyle::default(), (1920, 1080));
         let close = |a: f32, b: f32| (a - b).abs() < 0.01;
         assert!(close(g.area.x, 96.0) && close(g.area.y, 108.0) && close(g.area.w, 1728.0) && close(g.area.h, 864.0), "{:?}", g.area);

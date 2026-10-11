@@ -2,9 +2,10 @@
 //!
 //! `Engine` turns `EngineCommand`s and media backend reports into state changes
 //! and `EngineEvent`s. It knows nothing about windows, GPUs, decoders or
-//! databases: scenes go through [`Output`], playback through [`MediaBackend`]
-//! and project storage through [`ProjectStore`], so the whole command surface
-//! can be unit-tested with fakes.
+//! databases: background files are checked through [`Assets`], playback goes
+//! through [`MediaBackend`] and project storage through [`ProjectStore`], so
+//! the whole command surface can be unit-tested with fakes. Outputs draw from
+//! the published state.
 
 use protocol::{
     Background, BackgroundKind, DisplayMode, EngineCommand, EngineEvent, EngineSnapshot,
@@ -12,14 +13,10 @@ use protocol::{
     ProgramState, ProjectModel, SessionId, SessionItem, SessionItemKind, VideoOptions,
 };
 
-/// Where engine decisions become pixels.
-pub trait Output {
-    fn show_text(&mut self, text: &str);
-    fn show_background(&mut self, background: &Background) -> anyhow::Result<()>;
-    fn clear_background(&mut self);
-    /// Layers are scene nodes back to front: 0 = background, 1 = text.
-    fn set_opacity(&mut self, layer: usize, value: f32) -> anyhow::Result<()>;
-    fn resize(&mut self, width: u32, height: u32);
+/// Checks a background before the program switches to it, so a missing file
+/// is reported and the previous background stays on air.
+pub trait Assets {
+    fn check_background(&self, background: &Background) -> anyhow::Result<()>;
 }
 
 /// Whatever plays foreground media. Failures come back as `PlaybackReport`s.
@@ -34,7 +31,7 @@ pub trait ProjectStore {
 
 /// The engine's adapters for one call.
 pub struct Ports<'a> {
-    pub output: &'a mut dyn Output,
+    pub assets: &'a dyn Assets,
     pub media: &'a mut dyn MediaBackend,
     pub store: &'a dyn ProjectStore,
     /// Wall-clock time used to stamp playback positions.
@@ -157,10 +154,6 @@ impl Engine {
             EngineCommand::SetDisplay { display } => {
                 let was_logo = program.display == DisplayMode::Logo;
                 program.display = display;
-                let hidden = matches!(display, DisplayMode::Black | DisplayMode::Logo);
-                if let Err(e) = ports.output.set_opacity(0, if hidden { 0.0 } else { 1.0 }) {
-                    errors.push(error("display", format!("{e:#}")));
-                }
                 // Logo suspends foreground video and resumes it on the way out;
                 // Black and Clear leave transport running. Standalone audio has
                 // no picture to hide, so it keeps playing under the Logo.
@@ -181,19 +174,12 @@ impl Engine {
             }
             EngineCommand::SetActiveText { text } => {
                 program.active_step_index = None;
-                ports.output.show_text(&text);
                 program.active_text = text;
-            }
-            EngineCommand::SetOpacity { layer, value } => {
-                if let Err(e) = ports.output.set_opacity(layer, value.clamp(0.0, 1.0)) {
-                    errors.push(error("opacity", format!("{e:#}")));
-                }
             }
             EngineCommand::SetBackground { path } => {
                 let background = Background { kind: background_kind(&path), path };
                 self.show_background(Some(background), ports, errors);
             }
-            EngineCommand::Resize { width, height } => ports.output.resize(width, height),
 
             EngineCommand::LoadProject { project_id } => match ports.store.load_project(project_id) {
                 Ok(project) => {
@@ -353,7 +339,6 @@ impl Engine {
         program.next_item_id = sel.next_item_id;
         program.active_step_index = sel.step;
         if program.active_text != sel.text || force_media {
-            ports.output.show_text(&sel.text);
             program.active_text = sel.text;
         }
 
@@ -441,7 +426,7 @@ impl Engine {
         }
     }
 
-    /// The program background only changes if the output accepted it.
+    /// The program background only changes if its file checks out.
     fn show_background(
         &mut self,
         background: Option<Background>,
@@ -449,11 +434,10 @@ impl Engine {
         errors: &mut Vec<EngineEvent>,
     ) {
         let Some(background) = background else {
-            ports.output.clear_background();
             self.state.program_state.background = None;
             return;
         };
-        match ports.output.show_background(&background) {
+        match ports.assets.check_background(&background) {
             Ok(()) => self.state.program_state.background = Some(background),
             Err(e) => errors.push(error(
                 "background",
@@ -534,8 +518,6 @@ fn supersedes(next: &EngineInput, previous: &EngineInput) -> bool {
             Command(Media { session_id: b, action: MediaAction::SetVolume { .. } }),
         ) => a == b,
         (Command(SaveProject { project: a }), Command(SaveProject { project: b })) => a.id == b.id,
-        // Window resizes arrive in bursts while a compositor animates.
-        (Command(EngineCommand::Resize { .. }), Command(EngineCommand::Resize { .. })) => true,
         _ => false,
     }
 }
@@ -691,33 +673,21 @@ mod tests {
     use std::cell::RefCell;
 
     #[derive(Default)]
-    struct FakeOutput {
-        text: String,
-        backgrounds: Vec<String>,
+    struct FakeAssets {
+        /// Backgrounds accepted, in order.
+        backgrounds: RefCell<Vec<String>>,
         /// Paths that fail to load.
         broken: Vec<String>,
-        cleared: usize,
     }
 
-    impl Output for FakeOutput {
-        fn show_text(&mut self, text: &str) {
-            self.text = text.to_string();
-        }
-        fn show_background(&mut self, background: &Background) -> anyhow::Result<()> {
+    impl Assets for FakeAssets {
+        fn check_background(&self, background: &Background) -> anyhow::Result<()> {
             if self.broken.contains(&background.path) {
                 anyhow::bail!("no such file");
             }
-            self.backgrounds.push(background.path.clone());
+            self.backgrounds.borrow_mut().push(background.path.clone());
             Ok(())
         }
-        fn set_opacity(&mut self, layer: usize, _value: f32) -> anyhow::Result<()> {
-            anyhow::ensure!(layer < 2, "unknown layer {layer}");
-            Ok(())
-        }
-        fn clear_background(&mut self) {
-            self.cleared += 1;
-        }
-        fn resize(&mut self, _width: u32, _height: u32) {}
     }
 
     #[derive(Default)]
@@ -781,7 +751,7 @@ mod tests {
 
     struct Harness {
         engine: Engine,
-        out: FakeOutput,
+        assets: FakeAssets,
         media: FakeMedia,
         store: FakeStore,
         now_ms: i64,
@@ -789,7 +759,7 @@ mod tests {
 
     impl Harness {
         fn ports(&mut self) -> (&mut Engine, Ports<'_>) {
-            let ports = Ports { output: &mut self.out, media: &mut self.media, store: &self.store, now_ms: self.now_ms };
+            let ports = Ports { assets: &self.assets, media: &mut self.media, store: &self.store, now_ms: self.now_ms };
             (&mut self.engine, ports)
         }
         fn send(&mut self, cmd: EngineCommand) -> Vec<EngineEvent> {
@@ -827,7 +797,7 @@ mod tests {
         };
         let store = FakeStore::default();
         store.projects.borrow_mut().push(project);
-        Harness { engine: Engine::new(), out: FakeOutput::default(), media: FakeMedia::default(), store, now_ms: 1_000 }
+        Harness { engine: Engine::new(), assets: FakeAssets::default(), media: FakeMedia::default(), store, now_ms: 1_000 }
     }
 
     fn selection(engine: &Engine) -> (Option<i64>, Option<u32>, &str) {
@@ -846,7 +816,7 @@ mod tests {
         h.send(EngineCommand::GoToItem { item_id: 30 });
         let events = h.send(EngineCommand::Cue { item_id: 10, index: 1 });
         assert_eq!(selection(&h.engine), (Some(10), Some(1), "b"));
-        assert_eq!(h.out.text, "b");
+        assert_eq!(h.engine.snapshot().program_state.active_text, "b");
         assert_eq!(events.len(), 1);
         match &events[0] {
             EngineEvent::ProgramChanged { program_state, .. } => {
@@ -862,9 +832,9 @@ mod tests {
         let mut h = setup();
         h.store.projects.borrow_mut()[0].session.items[0].background = Some("song.jpg".into());
         h.load();
-        assert_eq!(h.out.backgrounds, vec!["song.jpg"]);
+        assert_eq!(*h.assets.backgrounds.borrow(), vec!["song.jpg"]);
         h.send(EngineCommand::GoToStep { index: 1 });
-        assert_eq!(h.out.backgrounds.len(), 1);
+        assert_eq!(h.assets.backgrounds.borrow().len(), 1);
         h.send(EngineCommand::GoToItem { item_id: 30 });
         assert_eq!(
             h.engine
@@ -877,7 +847,7 @@ mod tests {
             "song.jpg"
         );
         h.send(EngineCommand::GoToItem { item_id: 20 });
-        assert_eq!(h.out.backgrounds, vec!["song.jpg", "bg.png"]);
+        assert_eq!(*h.assets.backgrounds.borrow(), vec!["song.jpg", "bg.png"]);
     }
 
     #[test]
@@ -887,7 +857,7 @@ mod tests {
         let mut project = h.engine.snapshot().project.clone().unwrap();
         project.session.items[0].background = Some("edited.jpg".into());
         h.send(EngineCommand::SaveProject { project });
-        assert_eq!(h.out.backgrounds, vec!["edited.jpg"]);
+        assert_eq!(*h.assets.backgrounds.borrow(), vec!["edited.jpg"]);
         assert_eq!(selection(&h.engine), (Some(10), Some(0), "a"));
     }
 
@@ -925,7 +895,7 @@ mod tests {
         ));
         assert_eq!(selection(&h.engine), (Some(10), Some(0), "a"));
         assert_eq!(h.engine.snapshot().program_state.next_item_id, Some(20));
-        assert_eq!(h.out.text, "a");
+        assert_eq!(h.engine.snapshot().program_state.active_text, "a");
     }
 
     #[test]
@@ -938,7 +908,7 @@ mod tests {
 
         h.send(EngineCommand::Next);
         assert_eq!(selection(&h.engine), (Some(20), None, ""));
-        assert_eq!(h.out.backgrounds, ["bg.png"]);
+        assert_eq!(*h.assets.backgrounds.borrow(), ["bg.png"]);
         assert_eq!(
             h.engine
                 .snapshot()
@@ -991,7 +961,7 @@ mod tests {
     #[test]
     fn failed_background_keeps_previous_background() {
         let mut h = setup();
-        h.out.broken.push("missing.png".into());
+        h.assets.broken.push("missing.png".into());
         h.send(EngineCommand::SetBackground {
                 path: "ok.png".into(),
             });
@@ -1044,7 +1014,7 @@ mod tests {
 
         assert_eq!(events.len(), 2);
         assert_eq!(selection(&h.engine), (Some(10), Some(0), "a (edited)"));
-        assert_eq!(h.out.text, "a (edited)");
+        assert_eq!(h.engine.snapshot().program_state.active_text, "a (edited)");
     }
     #[test]
     fn presentation_steps_cue_images_and_follow_navigation() {
@@ -1053,12 +1023,12 @@ mod tests {
         h.load();
         h.send(EngineCommand::GoToItem { item_id: 20 });
         assert_eq!(selection(&h.engine), (Some(20), Some(0), ""));
-        assert_eq!(h.out.backgrounds.last().unwrap(), "first.png");
+        assert_eq!(h.assets.backgrounds.borrow().last().unwrap(), "first.png");
         h.send(EngineCommand::Next);
         assert_eq!(selection(&h.engine), (Some(20), Some(1), ""));
-        assert_eq!(h.out.backgrounds.last().unwrap(), "second.png");
+        assert_eq!(h.assets.backgrounds.borrow().last().unwrap(), "second.png");
         h.send(EngineCommand::GoToStep { index: 2 });
-        assert_eq!(h.out.backgrounds.last().unwrap(), "third.png");
+        assert_eq!(h.assets.backgrounds.borrow().last().unwrap(), "third.png");
         h.send(EngineCommand::Next);
         assert_eq!(selection(&h.engine), (Some(30), Some(0), "c"));
     }
@@ -1074,7 +1044,7 @@ mod tests {
         project.session.items[1].kind = SessionItemKind::Presentation { path: "first.png".into(), slides: vec!["first.png".into(), "edited.png".into()] };
         h.send(EngineCommand::SaveProject { project });
         assert_eq!(selection(&h.engine), (Some(20), Some(1), ""));
-        assert_eq!(h.out.backgrounds.last().unwrap(), "edited.png");
+        assert_eq!(h.assets.backgrounds.borrow().last().unwrap(), "edited.png");
     }
 
 
@@ -1136,7 +1106,6 @@ mod tests {
         h.send(EngineCommand::GoToItem { item_id: 20 });
         h.send(EngineCommand::GoToItem { item_id: 30 });
         assert_eq!(h.engine.snapshot().program_state.background, None);
-        assert!(h.out.cleared > 0);
     }
 
     #[test]
@@ -1380,8 +1349,5 @@ mod tests {
         assert_eq!(coalesce(vec![save(1), save(1), save(2)]).len(), 2);
         let report = |phase| EngineInput::Report(PlaybackReport { session_id: 1, generation: 0, phase, position_ms: 0, duration_ms: None, error: None });
         assert_eq!(coalesce(vec![report(PlaybackPhase::Playing), report(PlaybackPhase::Playing), report(PlaybackPhase::Ended)]).len(), 2);
-        let resize = |width| EngineInput::Command(EngineCommand::Resize { width, height: 100 });
-        let merged = coalesce(vec![resize(1), resize(2), resize(3)]);
-        assert!(matches!(merged.as_slice(), [EngineInput::Command(EngineCommand::Resize { width: 3, .. })]));
     }
 }

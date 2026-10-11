@@ -144,12 +144,14 @@ pub fn role_for_label(label: &str) -> Option<OutputRole> {
 }
 
 /// Output windows start hidden and borderless; the operator shows them.
+/// They stay off the taskbar so the operator window is the app's only entry.
 pub fn build_output_window<R: Runtime, M: Manager<R>>(manager: &M, label: &str, title: &str, (width, height): (u32, u32)) -> tauri::Result<Window<R>> {
     tauri::window::WindowBuilder::new(manager, label)
         .title(title)
         .visible(false)
         .decorations(false)
         .shadow(false)
+        .skip_taskbar(true)
         .inner_size(width as f64, height as f64)
         .build()
 }

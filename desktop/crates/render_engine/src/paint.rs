@@ -2,7 +2,7 @@
 //! rectangles, images and text, which one instanced pipeline draws in order.
 //!
 //! Colors are sRGB-encoded and blended without linearization, as browsers
-//! do, so fades and antialiasing match the webview outputs.
+//! do, so fades and antialiasing look the same as in the operator UI.
 
 use std::collections::HashMap;
 use std::sync::Arc;

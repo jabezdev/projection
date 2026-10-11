@@ -23,5 +23,5 @@ export default defineConfig({
     }),
   ],
   // 5173 is the desktop control panel's dev server.
-  server: { port: 5174 },
+  server: { port: 5175, strictPort: true },
 });

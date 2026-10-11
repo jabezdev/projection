@@ -1,3 +1,6 @@
+// Release builds are GUI apps on Windows: no console window beside the app.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod engine_host;
 mod native_media;
 mod native_output;
@@ -15,7 +18,7 @@ use native_output::NativeOutputs;
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
-use core_engine::{EngineCommand, EngineEvent, EngineSnapshot, Projector};
+use core_engine::{EngineCommand, EngineEvent, EngineSnapshot, Files};
 use engine_host::{EngineHandle, EngineLoop};
 use native_media::{NativeMedia, NativeMediaBackend};
 use network_server::WsServer;
@@ -238,6 +241,9 @@ fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
     // requested after, some window managers miss it.
     window.set_fullscreen(route.fullscreen).map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
+    // Windows can restore the taskbar button of a window shown after being
+    // hidden; outputs never have one, so the app is one taskbar entry.
+    window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
     outputs.set_shown(role, true);
     if let Ok(size) = window.inner_size() {
         let _ = app.emit_to("main", "output:resized", content_size(&window, size));
@@ -742,17 +748,11 @@ fn main() -> anyhow::Result<()> {
             }
             app.manage(feed);
 
-            // Listen for Resizes
+            // Remember the projection size for the next start.
             {
-                let engine = engine.clone();
                 let config = config.clone();
                 projection_window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Resized(size) = event {
-                        let _ = engine.command(EngineCommand::Resize {
-                            width: size.width,
-                            height: size.height,
-                        });
-
                         if let Ok(mut cfg) = config.write() {
                             cfg.projection_size = Some((size.width, size.height));
                         }
@@ -766,7 +766,7 @@ fn main() -> anyhow::Result<()> {
             let shutdown = shutdown_flag.clone();
             thread::Builder::new().name("engine".into()).spawn(move || {
                 let media = NativeMediaBackend { media };
-                EngineLoop { inputs, output: Projector, media, store, snapshot, events, shutdown }.run()
+                EngineLoop { inputs, assets: Files, media, store, snapshot, events, shutdown }.run()
             })?;
 
             Ok(())

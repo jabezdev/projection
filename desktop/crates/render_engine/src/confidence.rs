@@ -1,6 +1,5 @@
 //! The confidence output: clock, arrangement tape and the scrolling
 //! teleprompter, or the foreground video when its confidence option is on.
-//! Geometry follows the webview's `ConfidenceScreen` CSS.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -483,9 +482,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn metrics_match_the_webview_at_1080p() {
-        // Measured from the webview in Chromium, with the built stylesheet
-        // (Tailwind's border-box preflight included; see tools/parity).
+    fn metrics_match_the_parity_reference_at_1080p() {
+        // Values from the parity references in tools/parity.
         let m = Metrics::new((1920, 1080));
         assert!((m.scroll_top() - 116.2).abs() < 0.05);
         assert!((m.tape_left() - 250.6).abs() < 0.05);

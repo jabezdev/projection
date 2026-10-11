@@ -3,10 +3,10 @@
 //! connect it to outputs, media and storage.
 
 mod engine;
-mod projector;
+mod assets;
 pub mod song;
 
-pub use engine::{coalesce, Engine, EngineInput, MediaBackend, Output, Ports, ProjectStore};
-pub use projector::Projector;
+pub use assets::Files;
+pub use engine::{coalesce, Assets, Engine, EngineInput, MediaBackend, Ports, ProjectStore};
 
 pub use protocol::{EngineCommand, EngineEvent, EngineSnapshot, ProgramState};

@@ -1,5 +1,5 @@
-//! Renders a named scene offscreen to a PNG, for comparison with captures of
-//! the webview outputs (`capture <scene> <width> <height> <out.png>`).
+//! Renders a named scene offscreen to a PNG, for comparison with the parity
+//! references (`capture <scene> <width> <height> <out.png>`).
 
 use std::time::{Duration, Instant};
 

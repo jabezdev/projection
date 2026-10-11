@@ -8,7 +8,7 @@ use std::time::Duration;
 use crossbeam::channel::{bounded, Receiver, RecvTimeoutError, Sender, TrySendError};
 use tokio::sync::broadcast;
 
-use core_engine::{coalesce, Engine, EngineInput, MediaBackend, Output, Ports, ProjectStore};
+use core_engine::{coalesce, Assets, Engine, EngineInput, MediaBackend, Ports, ProjectStore};
 use protocol::{EngineCommand, EngineEvent, EngineSnapshot, PlaybackReport};
 
 /// Room for bursts of input; a full queue means the engine is stalled.
@@ -45,9 +45,9 @@ impl EngineHandle {
     }
 }
 
-pub struct EngineLoop<O, M, S> {
+pub struct EngineLoop<A, M, S> {
     pub inputs: Receiver<EngineInput>,
-    pub output: O,
+    pub assets: A,
     pub media: M,
     pub store: S,
     pub snapshot: Arc<RwLock<EngineSnapshot>>,
@@ -55,7 +55,7 @@ pub struct EngineLoop<O, M, S> {
     pub shutdown: Arc<AtomicBool>,
 }
 
-impl<O: Output, M: MediaBackend, S: ProjectStore> EngineLoop<O, M, S> {
+impl<A: Assets, M: MediaBackend, S: ProjectStore> EngineLoop<A, M, S> {
     pub fn run(mut self) {
         let mut engine = Engine::with_session_seed(crate::now_ms().max(1) as u64);
         while !self.shutdown.load(Ordering::Acquire) {
@@ -68,7 +68,7 @@ impl<O: Output, M: MediaBackend, S: ProjectStore> EngineLoop<O, M, S> {
             batch.extend(self.inputs.try_iter().take(MAX_BATCH - 1));
 
             let mut ports = Ports {
-                output: &mut self.output,
+                assets: &self.assets,
                 media: &mut self.media,
                 store: &self.store,
                 now_ms: crate::now_ms(),

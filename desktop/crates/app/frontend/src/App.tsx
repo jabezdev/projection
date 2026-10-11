@@ -141,7 +141,7 @@ function App() {
   const saveQueue = useRef(Promise.resolve());
   const projectRef = useRef(project);
   const pendingSaves = useRef(0);
-  const run = useCallback(async (work: () => Promise<unknown>) => { setError(''); try { await work(); } catch (e) { setError(String(e)); } }, []);
+  const run = useCallback(async (work: () => Promise<unknown>) => { setError(''); try { await work(); } catch (e) { setError(String(e)); } }, [setError]);
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => void) | undefined;
@@ -169,7 +169,7 @@ function App() {
     const task = saveQueue.current.then(() => invoke('save_project', { project: updated })).then(() => {});
     saveQueue.current = task.catch(e => setError(String(e))).finally(() => { pendingSaves.current--; });
     return task;
-  }, []);
+  }, [setError]);
   const updateVideoOptions = useCallback((id: number, options: VideoOptions) => {
     const current = projectRef.current;
     if (!current) return;
