@@ -4,6 +4,7 @@
 
 mod engine;
 mod assets;
+pub mod openlyrics;
 pub mod song;
 
 pub use assets::Files;

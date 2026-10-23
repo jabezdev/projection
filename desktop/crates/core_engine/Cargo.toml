@@ -10,3 +10,4 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 image = { workspace = true }
+quick-xml = "0.42"

@@ -76,10 +76,10 @@ Items:
 - [ ] Migrate the SQLite schema and existing libraries to string IDs and the new model, with the phase 2 backup taken first.
 - [ ] Edit history in SQLite; undo/redo for library and service edits.
 - [ ] Library UI revamp: browse, filter and edit songs and media in one place.
-- [ ] Quick search (Ctrl+K): find a song or media file and add it to the service.
-- [ ] Copy media into the library folder on import; move existing referenced files in during migration.
-- [ ] Relink missing media: search a chosen folder by file name.
-- [ ] Import songs from OpenLyrics XML.
+- [x] Quick search (Ctrl+K): find a song or media file and add it to the service.
+- [/] Copy media into the library folder on import; move existing referenced files in during migration. *Import, presentation images and the logo copy into `media/` (identical files reused); moving existing files waits for the migration.*
+- [x] Relink missing media: search a chosen folder by file name (Library → Missing).
+- [x] Import songs from OpenLyrics XML (Library → Songs → Import OpenLyrics…).
 - [ ] **Service templates** designed by the operator: any number of templates (e.g. "Sunday", "Youth night"), each a reusable structure of placeholder slots and fixed items; create a service from a template and edit templates later.
 
 ## 4. Cloud sync (offline-first)

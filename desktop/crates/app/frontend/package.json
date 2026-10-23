@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types src/song.test.mjs"
+    "test": "node --experimental-strip-types --test src/song.test.mjs src/search.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

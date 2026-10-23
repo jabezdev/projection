@@ -6,6 +6,7 @@ mod backup;
 mod commands;
 mod displays;
 mod engine_host;
+mod library;
 mod logging;
 mod native_media;
 mod native_output;
@@ -114,6 +115,9 @@ fn main() -> anyhow::Result<()> {
             get_app_info,
             export_backup,
             open_backups_folder,
+            list_missing_media,
+            relink_media,
+            import_openlyrics,
             get_output_state,
             set_output_state,
             resolve_media_path,

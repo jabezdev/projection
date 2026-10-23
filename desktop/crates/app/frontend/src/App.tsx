@@ -9,6 +9,7 @@ import { invoke } from './tauri';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SongEditor from './SongEditor';
 import LibraryPanel from './LibraryPanel';
+import QuickSearch from './QuickSearch';
 import ServiceBuilder from './ServiceBuilder';
 import { useColumns } from './useColumns';
 import { useEngine, type ProjectHeader } from './useEngine';
@@ -27,6 +28,7 @@ function App() {
   const [editor, setEditor] = useState<{ id?: number; libraryId?: number; title?: string; song?: SongDocument } | null>(null);
   const [partEditor, setPartEditor] = useState<PartEdit | null>(null);
   const [serviceEditor, setServiceEditor] = useState<'new' | 'edit' | null>(null);
+  const [quickSearch, setQuickSearch] = useState(false);
   const display = program?.display || 'live';
   const updateVideoOptions = useCallback((id: number, options: VideoOptions) => {
     const current = projectRef.current;
@@ -66,6 +68,16 @@ function App() {
   async function refreshCatalog() { const [songs, assets] = await Promise.all([invoke<SongHeader[]>('list_songs'), invoke<Media[]>('list_media')]); setLibrary(songs); setMedia(assets); }
   async function openLibrary() { await refreshCatalog(); setLibraryOpen(true); }
   async function openService(editor: 'new' | 'edit') { await refreshCatalog(); setServiceEditor(editor); }
+  async function openQuickSearch() { await refreshCatalog(); setQuickSearch(true); }
+  const openQuickSearchRef = useRef(openQuickSearch);
+  useEffect(() => { openQuickSearchRef.current = openQuickSearch; });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') { event.preventDefault(); void run(() => openQuickSearchRef.current()); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [run]);
   async function addMedia(item: Media) { const current = projectRef.current; if (!current) throw new Error('Select a service first.'); await persist({ ...current, session: { items: [...current.session.items, { id: newItemId(), title: item.title, kind: { kind: item.kind, data: { path: item.path } } }] } }); setLibraryOpen(false); }
   async function addSong(id: number) {
     const current = projectRef.current;
@@ -115,7 +127,8 @@ function App() {
       }
       setServiceEditor(null);
     }}/ >}
-    {libraryOpen && <LibraryPanel onNewPresentation={() => { setLibraryOpen(false); setPresentationEditor('new'); }} songs={library} media={media} canAdd={!!project} onClose={() => setLibraryOpen(false)} onAddSong={addSong} onAddMedia={addMedia} onNewSong={() => { setLibraryOpen(false); setEditor({}); }} onEditSong={async id => { const saved = await invoke<SongModel>('get_song', { id }); setLibraryOpen(false); setEditor({ libraryId: id, title: saved.title, song: decodeSong(saved.lyrics) }); }} onImported={item => setMedia(old => [...old, item])}/ >}
+    {quickSearch && <QuickSearch songs={library} media={media} canAdd={!!project} onClose={() => setQuickSearch(false)} onAdd={result => result.kind === 'song' ? addSong(result.song.id) : addMedia(result.media)}/>}
+    {libraryOpen && <LibraryPanel onCatalogChanged={refreshCatalog} onNewPresentation={() => { setLibraryOpen(false); setPresentationEditor('new'); }} songs={library} media={media} canAdd={!!project} onClose={() => setLibraryOpen(false)} onAddSong={addSong} onAddMedia={addMedia} onNewSong={() => { setLibraryOpen(false); setEditor({}); }} onEditSong={async id => { const saved = await invoke<SongModel>('get_song', { id }); setLibraryOpen(false); setEditor({ libraryId: id, title: saved.title, song: decodeSong(saved.lyrics) }); }} onImported={item => setMedia(old => [...old, item])}/ >}
 
   </div>;
 }

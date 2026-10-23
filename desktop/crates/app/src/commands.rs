@@ -105,11 +105,22 @@ pub async fn choose_presentation_images(app: tauri::AppHandle) -> Result<Vec<Str
     let (sender, receiver) = tokio::sync::oneshot::channel();
     app.dialog().file().set_title("Choose presentation images").add_filter("Images", &["png", "jpg", "jpeg", "webp", "bmp"]).pick_files(move |files| { let _ = sender.send(files); });
     let files = receiver.await.map_err(|e| e.to_string())?.unwrap_or_default();
-    files.into_iter().map(|file| {
-        let path = file.into_path().map_err(|e| e.to_string())?;
-        app.asset_protocol_scope().allow_file(&path).map_err(|e| e.to_string())?;
-        Ok(path.to_string_lossy().into_owned())
-    }).collect()
+    let paths = files.into_iter().map(|file| file.into_path().map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>()?;
+    let mut imported = Vec::with_capacity(paths.len());
+    for path in paths {
+        imported.push(import_into_library(&app, path).await?);
+    }
+    Ok(imported)
+}
+
+/// Copies a chosen file into the library's media folder (off the UI thread)
+/// and lets the operator UI load it.
+async fn import_into_library(app: &tauri::AppHandle, path: std::path::PathBuf) -> Result<String, String> {
+    let data_dir = app.state::<DataDir>().0.clone();
+    let copy = tauri::async_runtime::spawn_blocking(move || crate::library::import_file(&data_dir, &path).map_err(|e| format!("Copying {} into the library: {e}", path.display())))
+        .await.map_err(|e| e.to_string())??;
+    app.asset_protocol_scope().allow_file(&copy).map_err(|e| e.to_string())?;
+    Ok(copy.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -247,7 +258,14 @@ pub async fn choose_media_file(app: tauri::AppHandle, kind: String) -> Result<Op
     };
     let (sender, receiver) = tokio::sync::oneshot::channel();
     app.dialog().file().set_title("Choose media").add_filter("Media files", extensions).pick_file(move |file| { let _ = sender.send(file); });
-    receiver.await.map_err(|e| e.to_string())?.map(|file| file.into_path().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())).transpose()
+    let Some(file) = receiver.await.map_err(|e| e.to_string())? else { return Ok(None) };
+    let path = file.into_path().map_err(|e| e.to_string())?;
+    // The logo goes straight into the settings, so it is copied now; other
+    // media is copied when imported (`create_media`).
+    if kind == "logo" {
+        return import_into_library(&app, path).await.map(Some);
+    }
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -258,10 +276,113 @@ pub fn list_media(state: tauri::State<AppState>, app: tauri::AppHandle) -> Resul
 }
 
 #[tauri::command]
-pub fn create_media(state: tauri::State<AppState>, app: tauri::AppHandle, title: String, kind: protocol::MediaKind, path: String) -> Result<protocol::MediaModel, String> {
+pub async fn create_media(app: tauri::AppHandle, title: String, kind: protocol::MediaKind, path: String) -> Result<protocol::MediaModel, String> {
     let file = std::fs::canonicalize(path.trim()).map_err(|e| format!("Cannot open media file: {e}"))?;
     if !file.is_file() { return Err("Choose a media file, not a directory.".into()); }
     if title.trim().is_empty() { return Err("Enter a media title.".into()); }
-    app.asset_protocol_scope().allow_file(&file).map_err(|e| e.to_string())?;
-    state.db.lock().map_err(|e| e.to_string())?.create_media(title.trim().into(), kind, file.to_string_lossy().into()).map_err(|e| e.to_string())
+    let copy = import_into_library(&app, file).await?;
+    let db = app.state::<AppState>().db.clone();
+    let created = db.lock().map_err(|e| e.to_string())?.create_media(title.trim().into(), kind, copy);
+    created.map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct MissingMedia { path: String, title: Option<String>, services: Vec<String> }
+
+/// Media the library or a service uses whose file is gone.
+#[tauri::command]
+pub fn list_missing_media(state: tauri::State<AppState>, output: tauri::State<crate::settings::OutputState>) -> Result<Vec<MissingMedia>, String> {
+    let logo = output.config.lock().map(|c| c.logo_path.clone()).unwrap_or_default();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let media = crate::backup::media_list(&db, &logo).map_err(|e| e.to_string())?;
+    Ok(media.into_iter().filter(|m| !m.exists).map(|m| MissingMedia { path: m.path, title: m.title, services: m.services }).collect())
+}
+
+#[derive(serde::Serialize)]
+pub struct Relinked { found: usize, missing: usize }
+
+/// Asks for a folder, finds missing media there by file name and points the
+/// library, every service, library songs and the logo at the found files.
+/// `None` when cancelled.
+#[tauri::command]
+pub async fn relink_media(app: tauri::AppHandle) -> Result<Option<Relinked>, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title("Choose a folder to search for missing media").pick_folder(move |folder| { let _ = sender.send(folder); });
+    let Some(folder) = receiver.await.map_err(|e| e.to_string())? else { return Ok(None) };
+    let folder = folder.into_path().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let missing: Vec<String> = list_missing_media(app.state(), app.state())?.into_iter().map(|m| m.path).collect();
+        let found = crate::library::search(&folder, &missing);
+        relink_everywhere(&app, &found).map_err(|e| format!("Relinking media: {e:#}"))?;
+        log::info!("Relinked {} of {} missing media files from {}", found.len(), missing.len(), folder.display());
+        Ok(Some(Relinked { found: found.len(), missing: missing.len() - found.len() }))
+    }).await.map_err(|e| e.to_string())?
+}
+
+fn relink_everywhere(app: &tauri::AppHandle, map: &std::collections::BTreeMap<String, String>) -> anyhow::Result<()> {
+    if map.is_empty() {
+        return Ok(());
+    }
+    let state = app.state::<AppState>();
+    let loaded = state.snapshot.read().map_err(|_| anyhow::anyhow!("snapshot lock poisoned"))?.project.as_ref().map(|p| p.id);
+    {
+        let db = state.db.lock()?;
+        for (old, new) in map {
+            db.relink_media(old, new)?;
+            app.asset_protocol_scope().allow_file(new)?;
+        }
+        for header in db.list_projects()? {
+            let project = db.get_project(header.id)?;
+            let mut value = serde_json::to_value(&project)?;
+            if !crate::library::replace_paths(&mut value, map) {
+                continue;
+            }
+            let mut project: ProjectModel = serde_json::from_value(value)?;
+            if Some(project.id) == loaded {
+                // The engine owns the loaded service; it saves and re-resolves media.
+                state.send(EngineCommand::SaveProject { project }).map_err(anyhow::Error::msg)?;
+            } else {
+                db.save_project(&mut project, now_ms())?;
+            }
+        }
+        for header in db.list_songs()? {
+            let mut song = db.get_song(header.id)?;
+            let mut lyrics = serde_json::Value::String(song.lyrics.clone());
+            if crate::library::replace_paths(&mut lyrics, map) {
+                song.lyrics = lyrics.as_str().unwrap_or_default().to_string();
+                db.update_song(&song)?;
+            }
+        }
+    }
+    let output = app.state::<crate::settings::OutputState>();
+    let config = output.config.lock().map_err(|_| anyhow::anyhow!("settings lock poisoned"))?.clone();
+    if let Some(logo) = map.get(&config.logo_path) {
+        crate::settings::set_output_state(output, app.clone(), "config".into(), protocol::OutputConfig { logo_path: logo.clone(), ..config }).map_err(anyhow::Error::msg)?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct SongImport { imported: Vec<SongHeader>, failed: Vec<String> }
+
+/// Asks for OpenLyrics XML files and adds each as a library song.
+#[tauri::command]
+pub async fn import_openlyrics(app: tauri::AppHandle) -> Result<SongImport, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title("Import OpenLyrics songs").add_filter("OpenLyrics", &["xml"]).pick_files(move |files| { let _ = sender.send(files); });
+    let files = receiver.await.map_err(|e| e.to_string())?.unwrap_or_default();
+    let mut result = SongImport { imported: Vec::new(), failed: Vec::new() };
+    for file in files {
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let parsed = std::fs::read_to_string(&path).map_err(anyhow::Error::from).and_then(|xml| core_engine::openlyrics::parse(&xml));
+        match parsed {
+            Ok(song) => {
+                let created = app.state::<AppState>().db.lock().map_err(|e| e.to_string())?.create_song(song.title, song.document).map_err(|e| e.to_string())?;
+                result.imported.push(SongHeader { id: created.id, title: created.title });
+            }
+            Err(e) => result.failed.push(format!("{name}: {e:#}")),
+        }
+    }
+    Ok(result)
 }

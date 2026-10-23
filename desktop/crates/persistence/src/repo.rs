@@ -278,6 +278,11 @@ impl Repository {
 }
 
 impl Repository {
+    /// Points every library media record at `old` to `new`.
+    pub fn relink_media(&self, old: &str, new: &str) -> Result<usize> {
+        Ok(self.conn.execute("UPDATE media SET path = ?2 WHERE path = ?1", params![old, new]).context("relink media")?)
+    }
+
     /// Writes a consistent copy of the whole database to `path` (which must
     /// not exist), safe while the app keeps using this connection.
     pub fn backup_to(&self, path: &Path) -> Result<()> {

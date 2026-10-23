@@ -98,7 +98,7 @@ A song's own background carries over to items without one; a foreground video or
 - `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: WebSocket host/port and the last projection window size.
 - `session-state.json`: crash recovery. Marked running from start to a clean exit, with the current service, item and step. A start that finds it still running reopens that cue with media paused and outputs hidden; if the run that restored a cue crashes again before moving on, the next start does not restore it again.
 - `logs/`: `pakit.log` and up to four rotated files. The displays are kept awake while any output is shown (`SetThreadExecutionState` on Windows, the `org.freedesktop.ScreenSaver` idle inhibitor on Linux).
-- Media is referenced by absolute path, not copied. *Next (roadmap phase 3): media is copied into a library folder on import, IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
+- Media is referenced by absolute path. Imports (library media, presentation images, the logo) copy the file into `media/` first, reusing an identical file; older media still points at its original location until the phase 3 migration moves it in. Relinking rewrites matching paths in the media table, every service (including song documents inside items), library songs and the logo; the loaded service is saved through the engine. *Next (roadmap phase 3): IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
 - Output styling is shared by both screens except the confidence text size. *Next (phase 5): each screen gets its own parameters and a redesigned settings page.*
 
 ## Decisions

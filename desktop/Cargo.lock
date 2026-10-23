@@ -756,6 +756,7 @@ dependencies = [
  "image",
  "log",
  "protocol",
+ "quick-xml",
  "serde",
  "serde_json",
 ]
