@@ -40,12 +40,12 @@ Check the 1050 Ti's ports and simultaneous display limit. Using the 2200G's inte
 
 Goal: nothing at church can fail silently or without a way back.
 
-- [ ] **Log file** in `%APPDATA%\com.magi.projection\logs\` (Linux: the app-data folder), rotated by size (5 × 5 MB).
-- [ ] **Keep the display awake** while any output is shown (`SetThreadExecutionState` on Windows; an idle inhibitor on Linux); release it when outputs are hidden.
-- [ ] **"Open logs folder"** button in Settings.
-- [ ] **Crash recovery:** on the next start after a crash, reopen the last service at the last cue. Outputs stay hidden until the operator shows them.
-- [ ] **Church-PC visit checklist:** one printable page covering scaling, projector hotplug, HDMI audio, GPU and fonts (from [WINDOWS.md](WINDOWS.md)).
-- [ ] **Soak script:** cue a video with confidence on for 30 minutes, log memory, decoders and frame counts, and fail if anything grows.
+- [x] **Log file** in `%APPDATA%\com.magi.projection\logs\` (Linux: the app-data folder), rotated by size (5 × 5 MB).
+- [x] **Keep the display awake** while any output is shown (`SetThreadExecutionState` on Windows; an idle inhibitor on Linux); release it when outputs are hidden.
+- [x] **"Open logs folder"** button in Settings.
+- [x] **Crash recovery:** on the next start after a crash, reopen the last service at the last cue. Outputs stay hidden until the operator shows them.
+- [x] **Church-PC visit checklist:** one printable page covering scaling, projector hotplug, HDMI audio, GPU and fonts (from [WINDOWS.md](WINDOWS.md)): [docs/church-pc-checklist.md](docs/church-pc-checklist.md).
+- [x] **Soak script:** cue a video with confidence on for 30 minutes, log memory, decoders and frame counts, and fail if anything grows: `bun desktop/tools/e2e/soak.ts --video <file>`.
 - [ ] Finish the remaining [WINDOWS.md](WINDOWS.md) checks and a full rehearsal on the church PC ([README.md](README.md#mvp-rehearsal)).
 
 ## 2. Foundations

@@ -150,6 +150,7 @@ dependencies = [
  "anyhow",
  "core_engine",
  "crossbeam",
+ "dirs",
  "env_logger",
  "gtk",
  "image",
@@ -166,6 +167,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tokio",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

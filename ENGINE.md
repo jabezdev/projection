@@ -96,6 +96,8 @@ A song's own background carries over to items without one; a foreground video or
 - Library and services: `app.db` (SQLite) in the OS app-data folder (`com.magi.projection`; an existing `com.tauri.dev` library stays in use).
 - `output-settings.json`: typed as `protocol::OutputConfig`. Missing fields take defaults; fields this version does not know (from newer versions, or outline/shadow/glow from older ones) survive a round trip. Saved atomically; an unreadable file is kept as `*.invalid-<ms>.json` and reported.
 - `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: WebSocket host/port and the last projection window size.
+- `session-state.json`: crash recovery. Marked running from start to a clean exit, with the current service, item and step. A start that finds it still running reopens that cue with media paused and outputs hidden; if the run that restored a cue crashes again before moving on, the next start does not restore it again.
+- `logs/`: `pakit.log` and up to four rotated files. The displays are kept awake while any output is shown (`SetThreadExecutionState` on Windows, the `org.freedesktop.ScreenSaver` idle inhibitor on Linux).
 - Media is referenced by absolute path, not copied. *Next (roadmap phase 3): media is copied into a library folder on import, IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
 - Output styling is shared by both screens except the confidence text size. *Next (phase 5): each screen gets its own parameters and a redesigned settings page.*
 
@@ -124,7 +126,6 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 - Lyrics only crossfade. *Phase 5: cut and slide, with duration, easing and direction.*
 - When both output windows are covered, uploads wait behind their throttled presents and update about once a second; one visible output still runs at full rate.
 - Looping is not measured as seamless. *Phase 7: prepare the loop point.*
-- Logs go to the console only, and nothing keeps the display awake. *Phase 1: rotated log file, display-awake while outputs are shown, crash recovery.*
 - Windows items still to check on the church PC are in [WINDOWS.md](WINDOWS.md).
 
 ## What comes next for the engine
@@ -149,4 +150,11 @@ From [ROADMAP.md](ROADMAP.md), the parts that change this document:
 | Simulate a slow confidence output | `MAGI_CONFIDENCE_STALL_MS=<ms>` |
 | Run the ignored media repro against a real file | `MAGI_MEDIA=<file> cargo test -p media_engine -- --ignored paused_seek` |
 
-Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens.
+Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens. Logs go to stderr and to `logs/pakit.log` in the data folder (5 × 5 MB, rotated); `RUST_LOG` sets the filter.
+
+| Test aid | What it does |
+|---|---|
+| `PAKIT_DATA_DIR=<dir>` | Uses `<dir>` as the data folder (library, settings, logs) |
+| `PAKIT_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
+| `bun tools/e2e/e2e.ts` | End-to-end WebSocket check against a scratch data folder (cue, navigation, display modes, transport, save, restart and crash recovery) |
+| `bun tools/e2e/soak.ts --video <file>` | 30-minute soak: looping video with confidence; fails if memory, decoders or audio outputs grow or frames stop |

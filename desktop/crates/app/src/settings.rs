@@ -2,8 +2,13 @@
 //! malformed files set aside rather than silently overwritten.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
-use serde::{de::DeserializeOwned, Serialize};
+use log::error;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use tauri::{Emitter, Manager};
+
+use crate::native_scene;
 
 /// Writes through a sibling temporary file and renames it into place, so a
 /// crash mid-write leaves the previous file intact.
@@ -43,6 +48,83 @@ pub fn load_or_set_aside<T: DeserializeOwned + Default>(path: &Path, now_ms: i64
             Loaded { value: T::default(), set_aside: Some(aside) }
         }
     }
+}
+
+pub const CONFIG_FILENAME: &str = "app-config.json";
+pub const DB_FILENAME: &str = "app.db";
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    pub ws_bind_host: String,
+    pub ws_port: u16,
+    pub projection_size: Option<(u32, u32)>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            ws_bind_host: "127.0.0.1".to_string(),
+            ws_port: 8080,
+            projection_size: None,
+        }
+    }
+}
+
+/// Overrides the data folder (library, settings and logs), so test scripts
+/// run against a scratch copy on any platform.
+pub const DATA_DIR_ENV: &str = "PAKIT_DATA_DIR";
+
+/// All runtime state lives in the OS app-data dir, never the workspace. An
+/// existing MVP library under the pre-release identifier stays in use.
+pub fn data_dir(new_data_dir: std::path::PathBuf) -> std::path::PathBuf {
+    if let Some(dir) = std::env::var_os(DATA_DIR_ENV).filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let legacy_data_dir = new_data_dir.with_file_name("com.tauri.dev");
+    if !new_data_dir.join(DB_FILENAME).exists() && legacy_data_dir.join(DB_FILENAME).exists() {
+        legacy_data_dir
+    } else {
+        new_data_dir
+    }
+}
+
+pub fn load_config(path: &Path) -> AppConfig {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_config(path: &Path, config: &AppConfig) {
+    if let Err(e) = write_atomic(path, config) {
+        error!("Saving {}: {e}", path.display());
+    }
+}
+
+pub struct OutputState {
+    pub config: Mutex<protocol::OutputConfig>,
+    pub path: std::path::PathBuf,
+}
+
+#[tauri::command]
+pub fn get_output_state(state: tauri::State<OutputState>, domain: String) -> Result<protocol::OutputConfig, String> {
+    if domain != "config" { return Err("Unknown output domain".into()); }
+    Ok(state.config.lock().map_err(|e| e.to_string())?.clone())
+}
+
+/// Validates before saving, so the outputs never receive a style they cannot render.
+#[tauri::command]
+pub fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle, domain: String, value: protocol::OutputConfig) -> Result<(), String> {
+    if domain != "config" { return Err("Unknown output domain".into()); }
+    value.validate()?;
+    let mut guard = state.config.lock().map_err(|e| e.to_string())?;
+    write_atomic(&state.path, &value).map_err(|e| format!("Saving output settings: {e}"))?;
+    *guard = value.clone();
+    drop(guard);
+    if let Some(feed) = app.try_state::<native_scene::SceneFeed>() {
+        feed.refresh();
+    }
+    let event = serde_json::json!({ "domain": domain, "value": value });
+    app.emit("output:changed", event).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -94,5 +176,16 @@ mod tests {
         assert_eq!(loaded.value, OutputConfig::default());
         assert!(loaded.set_aside.is_none());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::*;
+
+    #[test]
+    fn app_configs_saved_with_an_output_backend_still_load() {
+        let config: AppConfig = serde_json::from_str(r#"{"ws_bind_host":"0.0.0.0","ws_port":9000,"projection_size":null,"output_backend":"webview"}"#).unwrap();
+        assert_eq!(config.ws_port, 9000);
     }
 }

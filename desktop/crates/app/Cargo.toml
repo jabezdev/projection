@@ -23,7 +23,11 @@ serde_json = { workspace = true }
 tauri = { workspace = true, features = ["protocol-asset", "unstable"] }
 tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4"] }
+dirs = "7"
 image = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Power"] }

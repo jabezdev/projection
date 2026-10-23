@@ -11,11 +11,11 @@ End users run Windows 10/11; Windows is the acceptance platform. Builds are cros
 
 ## Fix before a live service
 
-These are also roadmap phase 1, together with crash recovery and an "Open logs folder" button.
+Roadmap phase 1. Built and checked on Linux; not yet tested on Windows. The [church PC checklist](docs/church-pc-checklist.md) covers each on the next visit.
 
-
-- [ ] **Log file.** Without the console, `env_logger` output is lost on Windows, so a failure at church leaves nothing to inspect. Write logs to `%APPDATA%\com.magi.projection\logs\`, rotated by size or date.
-- [ ] **Keep the display awake.** Nothing stops Windows from blanking the display, starting the screensaver or sleeping during a long stretch without input. While any output is shown, call `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)`; clear it when outputs are hidden.
+- [/] **Log file.** Without the console, log output would be lost on Windows. Logs go to `%APPDATA%\com.magi.projection\logs\pakit.log`, rotated at 5 MB with four older files kept; panics are logged. Settings → Troubleshooting → Open logs folder.
+- [/] **Keep the display awake.** While any output is shown, the app calls `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)` from a dedicated thread and clears it when outputs are hidden.
+- [/] **Crash recovery.** After a crash the next start reopens the last service at the last cue, media paused, outputs hidden.
 
 ## Test on the church PC
 

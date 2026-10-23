@@ -1,73 +1,35 @@
 // Release builds are GUI apps on Windows: no console window beside the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod awake;
+mod commands;
+mod displays;
 mod engine_host;
+mod logging;
 mod native_media;
 mod native_output;
 mod native_scene;
+mod recovery;
 mod settings;
 mod storage;
 use log::{error, info, warn};
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::thread;
 use native_output::NativeOutputs;
 use tauri::{Emitter, Manager};
-use tauri_plugin_dialog::DialogExt;
 
+use commands::*;
 use core_engine::{EngineCommand, EngineEvent, EngineSnapshot, Files};
+use displays::*;
 use engine_host::{EngineHandle, EngineLoop};
 use native_media::{NativeMedia, NativeMediaBackend};
 use network_server::WsServer;
 use persistence::Repository;
-use protocol::{ProjectHeader, ProjectModel, SongHeader, SongModel};
+use protocol::ProjectModel;
+use settings::*;
 use tokio::sync::{broadcast, watch};
-
-const CONFIG_FILENAME: &str = "app-config.json";
-const DB_FILENAME: &str = "app.db";
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AppConfig {
-    ws_bind_host: String,
-    ws_port: u16,
-    projection_size: Option<(u32, u32)>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            ws_bind_host: "127.0.0.1".to_string(),
-            ws_port: 8080,
-            projection_size: None,
-        }
-    }
-}
-
-/// All runtime state lives in the OS app-data dir, never the workspace. An
-/// existing MVP library under the pre-release identifier stays in use.
-fn data_dir(new_data_dir: std::path::PathBuf) -> std::path::PathBuf {
-    let legacy_data_dir = new_data_dir.with_file_name("com.tauri.dev");
-    if !new_data_dir.join(DB_FILENAME).exists() && legacy_data_dir.join(DB_FILENAME).exists() {
-        legacy_data_dir
-    } else {
-        new_data_dir
-    }
-}
-
-fn load_config(path: &Path) -> AppConfig {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
-}
-
-fn save_config(path: &Path, config: &AppConfig) {
-    if let Err(e) = settings::write_atomic(path, config) {
-        error!("Saving {}: {e}", path.display());
-    }
-}
 
 pub(crate) fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,10 +41,10 @@ pub(crate) fn now_ms() -> i64 {
 
 /// The single database connection, shared by IPC commands and the engine.
 #[derive(Clone)]
-struct Db(Arc<Mutex<Repository>>);
+pub(crate) struct Db(Arc<Mutex<Repository>>);
 
 impl Db {
-    fn lock(&self) -> anyhow::Result<MutexGuard<'_, Repository>> {
+    pub(crate) fn lock(&self) -> anyhow::Result<MutexGuard<'_, Repository>> {
         self.0
             .lock()
             .map_err(|_| anyhow::anyhow!("database lock poisoned"))
@@ -104,426 +66,20 @@ type Storage = storage::StorageWorker<Db>;
 /// Saves still queued at exit get this long to reach the disk.
 const EXIT_FLUSH: std::time::Duration = std::time::Duration::from_secs(5);
 
-struct AppState {
+pub(crate) struct AppState {
     engine: EngineHandle,
     snapshot: Arc<RwLock<EngineSnapshot>>,
     db: Db,
 }
 
 impl AppState {
-    fn send(&self, cmd: EngineCommand) -> Result<(), String> {
+    pub(crate) fn send(&self, cmd: EngineCommand) -> Result<(), String> {
         self.engine.command(cmd)
     }
 }
-
-/// Problems found while starting, shown to the operator once the UI loads.
-struct StartupWarnings(Vec<String>);
-
-#[tauri::command]
-fn get_startup_warnings(warnings: tauri::State<StartupWarnings>) -> Vec<String> {
-    warnings.0.clone()
-}
-
-struct OutputState {
-    config: Mutex<protocol::OutputConfig>,
-    path: std::path::PathBuf,
-}
-
-#[tauri::command]
-fn get_output_state(state: tauri::State<OutputState>, domain: String) -> Result<protocol::OutputConfig, String> {
-    if domain != "config" { return Err("Unknown output domain".into()); }
-    Ok(state.config.lock().map_err(|e| e.to_string())?.clone())
-}
-
-/// Validates before saving, so the outputs never receive a style they cannot render.
-#[tauri::command]
-fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle, domain: String, value: protocol::OutputConfig) -> Result<(), String> {
-    if domain != "config" { return Err("Unknown output domain".into()); }
-    value.validate()?;
-    let mut guard = state.config.lock().map_err(|e| e.to_string())?;
-    settings::write_atomic(&state.path, &value).map_err(|e| format!("Saving output settings: {e}"))?;
-    *guard = value.clone();
-    drop(guard);
-    if let Some(feed) = app.try_state::<native_scene::SceneFeed>() {
-        feed.refresh();
-    }
-    let event = serde_json::json!({ "domain": domain, "value": value });
-    app.emit("output:changed", event).map_err(|e| e.to_string())
-}
-
-/// Where and how an output window appears. Saved routes from before the
-/// enable, size and aspect choices load with the defaults.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct OutputRoute {
-    name: Option<String>, x: i32, y: i32, width: u32, height: u32,
-    #[serde(default = "yes")] fullscreen: bool,
-    #[serde(default = "yes")] enabled: bool,
-    /// Window size when not fullscreen.
-    #[serde(default)] size: Option<(u32, u32)>,
-    /// Content aspect ratio, letterboxed; `None` fills the screen.
-    #[serde(default)] aspect: Option<(u32, u32)>,
-}
-fn yes() -> bool { true }
-const OUTPUTS: [(&str, &str); 2] = [("projection", "Projection Output"), ("confidence", "Confidence")];
-const WINDOWED_SIZE: (u32, u32) = (1280, 720);
-struct OutputRoutes {
-    values: Mutex<std::collections::BTreeMap<String, OutputRoute>>,
-    path: std::path::PathBuf,
-    /// The global switch; outputs always start hidden.
-    shown: AtomicBool,
-}
-fn matching_route(route: &OutputRoute, candidates: &[OutputRoute]) -> Option<usize> {
-    candidates.iter().position(|m| m.name == route.name && m.x == route.x && m.y == route.y)
-        .or_else(|| {
-            let matches: Vec<_> = candidates.iter().enumerate().filter(|(_, m)| route.name.is_some() && m.name == route.name).map(|(i, _)| i).collect();
-            if matches.len() == 1 { Some(matches[0]) } else {
-                let matches: Vec<_> = candidates.iter().enumerate().filter(|(_, m)| m.name == route.name && m.width == route.width && m.height == route.height).map(|(i, _)| i).collect();
-                if matches.len() == 1 { Some(matches[0]) } else { None }
-            }
-        })
-}
-fn monitor_route(monitor: &tauri::Monitor) -> OutputRoute {
-    OutputRoute { name: monitor.name().cloned(), x: monitor.position().x, y: monitor.position().y, width: monitor.size().width, height: monitor.size().height, fullscreen: true, enabled: true, size: None, aspect: None }
-}
-fn matching_monitor(route: &OutputRoute, monitors: &[tauri::Monitor]) -> Option<usize> {
-    let candidates: Vec<_> = monitors.iter().map(monitor_route).collect();
-    matching_route(route, &candidates)
-}
-/// Unconfigured outputs take the displays the operator window is not on, in
-/// order, and share the operator's display when there are too few.
-fn default_monitor(output: &str, operator: Option<usize>, count: usize) -> usize {
-    let others: Vec<_> = (0..count).filter(|&i| Some(i) != operator).collect();
-    let rank = if output == "projection" { 0 } else { 1 };
-    others.get(rank).copied().or(operator).unwrap_or(0)
-}
-/// The saved route, or the default one, and its display's index (`None`
-/// when the saved display is disconnected).
-fn resolve_route(app: &tauri::AppHandle, saved: &std::collections::BTreeMap<String, OutputRoute>, output: &str, monitors: &[tauri::Monitor]) -> (OutputRoute, Option<usize>) {
-    if let Some(route) = saved.get(output) {
-        return (route.clone(), matching_monitor(route, monitors));
-    }
-    let operator = app.get_webview_window("main").and_then(|w| w.current_monitor().ok().flatten()).and_then(|m| matching_monitor(&monitor_route(&m), monitors));
-    let index = default_monitor(output, operator, monitors.len());
-    match monitors.get(index) {
-        Some(monitor) => (monitor_route(monitor), Some(index)),
-        None => (OutputRoute { name: None, x: 0, y: 0, width: 0, height: 0, fullscreen: true, enabled: true, size: None, aspect: None }, None),
-    }
-}
-/// The size previews draw at: the window's, letterboxed to the aspect.
-fn content_size(window: &tauri::Window, size: tauri::PhysicalSize<u32>) -> serde_json::Value {
-    let aspect = window.app_handle().try_state::<OutputRoutes>().and_then(|routes| routes.values.lock().ok()?.get(window.label())?.aspect);
-    let [_, _, width, height] = render_engine::fit_aspect((size.width, size.height), aspect);
-    serde_json::json!({ "label": window.label(), "width": width, "height": height })
-}
-/// Shows `output` on its display as a borderless window, or hides it.
-fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
-    let window = app.get_window(output).ok_or("Output window unavailable")?;
-    let role = native_output::role_for_label(output).ok_or("Unknown output")?;
-    let routes = app.state::<OutputRoutes>();
-    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
-    let (route, index) = resolve_route(app, &*routes.values.lock().map_err(|e| e.to_string())?, output, &monitors);
-    let outputs = app.state::<NativeOutputs>();
-    // A disconnected saved display keeps its output hidden rather than
-    // unexpectedly covering another screen.
-    let target = index.and_then(|i| monitors.get(i)).filter(|_| route.enabled && routes.shown.load(Ordering::Acquire));
-    let Some(target) = target else {
-        outputs.set_shown(role, false);
-        return window.hide().map_err(|e| e.to_string());
-    };
-    outputs.set_aspect(role, route.aspect);
-    window.set_decorations(false).map_err(|e| e.to_string())?;
-    if !route.fullscreen {
-        let (width, height) = route.size.unwrap_or(WINDOWED_SIZE);
-        window.set_size(tauri::PhysicalSize::new(width, height)).map_err(|e| e.to_string())?;
-    }
-    window.set_position(*target.position()).map_err(|e| e.to_string())?;
-    // Requested before mapping, fullscreen is the window's initial state;
-    // requested after, some window managers miss it.
-    window.set_fullscreen(route.fullscreen).map_err(|e| e.to_string())?;
-    window.show().map_err(|e| e.to_string())?;
-    // Windows can restore the taskbar button of a window shown after being
-    // hidden; outputs never have one, so the app is one taskbar entry.
-    window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
-    outputs.set_shown(role, true);
-    if let Ok(size) = window.inner_size() {
-        let _ = app.emit_to("main", "output:resized", content_size(&window, size));
-    }
-    Ok(())
-}
-#[derive(Serialize)]
-struct OutputDisplay { monitor: Option<usize>, enabled: bool, fullscreen: bool, size: Option<(u32, u32)>, aspect: Option<(u32, u32)> }
-#[derive(Serialize)]
-struct OutputDisplays { monitors: Vec<String>, shown: bool, outputs: std::collections::BTreeMap<String, OutputDisplay> }
-fn monitor_label(index: usize, monitor: &tauri::Monitor) -> String {
-    format!("{}: {} ({}×{})", index + 1, monitor.name().map(String::as_str).unwrap_or("Display"), monitor.size().width, monitor.size().height)
-}
-#[tauri::command]
-fn get_output_displays(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>) -> Result<OutputDisplays, String> {
-    let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
-    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
-    let saved = routes.values.lock().map_err(|e| e.to_string())?;
-    let outputs = OUTPUTS.iter().map(|(output, _)| {
-        let (route, monitor) = resolve_route(&app, &saved, output, &monitors);
-        (output.to_string(), OutputDisplay { monitor, enabled: route.enabled, fullscreen: route.fullscreen, size: route.size, aspect: route.aspect })
-    }).collect();
-    Ok(OutputDisplays { monitors: monitors.iter().enumerate().map(|(i, m)| monitor_label(i, m)).collect(), shown: routes.shown.load(Ordering::Acquire), outputs })
-}
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, output: String, monitor: usize, label: String, enabled: bool, fullscreen: bool, size: Option<(u32, u32)>, aspect: Option<(u32, u32)>) -> Result<OutputDisplays, String> {
-    if !OUTPUTS.iter().any(|(name, _)| *name == output) { return Err("Unknown output".into()); }
-    if size.is_some_and(|(w, h)| w == 0 || h == 0) || aspect.is_some_and(|(w, h)| w == 0 || h == 0) { return Err("Sizes and aspect ratios must not be zero".into()); }
-    let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
-    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
-    let target = monitors.get(monitor).ok_or("Display is no longer connected")?;
-    // The list may have changed since the operator chose from it.
-    if label != monitor_label(monitor, target) {
-        return Err("The connected displays changed. Choose the display again.".into());
-    }
-    {
-        let mut saved = routes.values.lock().map_err(|e| e.to_string())?;
-        saved.insert(output.clone(), OutputRoute { fullscreen, enabled, size, aspect, ..monitor_route(target) });
-        settings::write_atomic(&routes.path, &*saved).map_err(|e| e.to_string())?;
-    }
-    present_output(&app, &output)?;
-    get_output_displays(app, routes)
-}
-#[tauri::command]
-fn set_outputs_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, shown: bool) -> Result<OutputDisplays, String> {
-    routes.shown.store(shown, Ordering::Release);
-    for (output, _) in OUTPUTS {
-        present_output(&app, output)?;
-    }
-    get_output_displays(app, routes)
-}
-
-/// The latest native preview still of an output ("projection", "confidence")
-/// or of the style sample ("style"), as JPEG bytes.
-#[tauri::command]
-fn get_output_preview(previews: tauri::State<native_output::PreviewStore>, target: String) -> Result<tauri::ipc::Response, String> {
-    previews.jpeg(&target).map(tauri::ipc::Response::new).ok_or_else(|| format!("No {target} preview yet"))
-}
-
-/// Renders the settings dialog's sample lyrics in `config` natively.
-#[tauri::command]
-fn preview_output_style(outputs: tauri::State<NativeOutputs>, config: protocol::OutputConfig) -> Result<(), String> {
-    config.validate()?;
-    outputs.preview_style(render_engine::Scene::Main(native_scene::style_sample_scene(&config)));
-    Ok(())
-}
-
-#[tauri::command]
-fn resolve_media_path(app: tauri::AppHandle, path: String) -> Result<String, String> {
-    let file = std::fs::canonicalize(&path).map_err(|e| format!("Cannot open media: {e}"))?;
-    if !file.is_file() { return Err("Media must be a file".into()); }
-    app.asset_protocol_scope().allow_file(&file).map_err(|e| e.to_string())?;
-    Ok(file.to_string_lossy().into_owned())
-}
-
-#[tauri::command]
-async fn video_thumbnail(app: tauri::AppHandle, path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        use std::hash::{Hash, Hasher};
-        let file = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
-        let metadata = file.metadata().map_err(|e| e.to_string())?;
-        let mut hash = std::collections::hash_map::DefaultHasher::new();
-        file.hash(&mut hash); metadata.len().hash(&mut hash); metadata.modified().ok().hash(&mut hash);
-        let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("video-thumbnails");
-        std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-        let poster = cache.join(format!("{:x}.jpg", hash.finish()));
-        if !poster.exists() {
-            // Decoded in-process: packaged builds ship FFmpeg libraries, not its CLI.
-            let frame = media_engine::poster(&file.to_string_lossy(), 640).map_err(|e| format!("Thumbnail: {e:#}"))?;
-            let temporary = cache.join(format!("{}.jpg", uuid::Uuid::new_v4()));
-            image::save_buffer_with_format(&temporary, &frame.rgb, frame.width, frame.height, image::ColorType::Rgb8, image::ImageFormat::Jpeg).map_err(|e| e.to_string())?;
-            std::fs::rename(&temporary, &poster).map_err(|e| e.to_string())?;
-        }
-        app.asset_protocol_scope().allow_file(&poster).map_err(|e| e.to_string())?;
-        Ok(poster.to_string_lossy().into_owned())
-    }).await.map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-async fn choose_presentation_images(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Choose presentation images").add_filter("Images", &["png", "jpg", "jpeg", "webp", "bmp"]).pick_files(move |files| { let _ = sender.send(files); });
-    let files = receiver.await.map_err(|e| e.to_string())?.unwrap_or_default();
-    files.into_iter().map(|file| {
-        let path = file.into_path().map_err(|e| e.to_string())?;
-        app.asset_protocol_scope().allow_file(&path).map_err(|e| e.to_string())?;
-        Ok(path.to_string_lossy().into_owned())
-    }).collect()
-}
-
-#[tauri::command]
-fn play(state: tauri::State<AppState>) -> Result<(), String> {
-    state.send(EngineCommand::Play)
-}
-
-#[tauri::command]
-fn pause(state: tauri::State<AppState>) -> Result<(), String> {
-    state.send(EngineCommand::Pause)
-}
-
-#[tauri::command]
-fn stop(state: tauri::State<AppState>) -> Result<(), String> {
-    state.send(EngineCommand::Stop)
-}
-
-#[tauri::command]
-fn set_active_text(state: tauri::State<AppState>, text: String) -> Result<(), String> {
-    state.send(EngineCommand::SetActiveText { text })
-}
-
-#[tauri::command]
-fn set_display(state: tauri::State<AppState>, display: protocol::DisplayMode) -> Result<(), String> {
-    state.send(EngineCommand::SetDisplay { display })
-}
-
-#[tauri::command]
-fn set_background(state: tauri::State<AppState>, path: String) -> Result<(), String> {
-    state.send(EngineCommand::SetBackground { path })
-}
-
-#[tauri::command]
-fn nav_next(state: tauri::State<AppState>) -> Result<(), String> {
-    state.send(EngineCommand::Next)
-}
-
-#[tauri::command]
-fn nav_prev(state: tauri::State<AppState>) -> Result<(), String> {
-    state.send(EngineCommand::Prev)
-}
-
-#[tauri::command]
-fn cue(state: tauri::State<AppState>, item_id: i64, index: u32) -> Result<(), String> {
-    state.send(EngineCommand::Cue { item_id, index })
-}
-
-/// Any typed engine command; local controls use the same vocabulary as
-/// WebSocket clients.
-#[tauri::command]
-fn engine_command(state: tauri::State<AppState>, command: EngineCommand) -> Result<(), String> {
-    state.send(command)
-}
-
-#[tauri::command]
-fn go_to_item(state: tauri::State<AppState>, item_id: i64) -> Result<(), String> {
-    state.send(EngineCommand::GoToItem { item_id })
-}
-
-#[tauri::command]
-fn go_to_step(state: tauri::State<AppState>, index: u32) -> Result<(), String> {
-    state.send(EngineCommand::GoToStep { index })
-}
-
-#[tauri::command]
-fn seek(state: tauri::State<AppState>, time_ms: i64) -> Result<(), String> {
-    state.send(EngineCommand::Seek { time_ms })
-}
-
-#[tauri::command]
-fn get_engine_snapshot(state: tauri::State<AppState>) -> EngineSnapshot {
-    state.snapshot.read().expect("snapshot lock poisoned").clone()
-}
-
-#[tauri::command]
-fn list_projects(state: tauri::State<AppState>) -> Result<Vec<ProjectHeader>, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.list_projects().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn create_project(state: tauri::State<AppState>, name: String) -> Result<ProjectModel, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.create_project(name, now_ms()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_project(state: tauri::State<AppState>, project_id: i64) -> Result<ProjectModel, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.get_project(project_id).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn load_project(state: tauri::State<AppState>, project_id: i64) -> Result<(), String> {
-    state.send(EngineCommand::LoadProject { project_id })
-}
-
-#[tauri::command]
-fn save_project(state: tauri::State<AppState>, project: ProjectModel) -> Result<(), String> {
-    state.send(EngineCommand::SaveProject { project })
-}
-
-#[tauri::command]
-fn list_songs(state: tauri::State<AppState>) -> Result<Vec<SongHeader>, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.list_songs().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn create_song(state: tauri::State<AppState>, title: String, lyrics: String) -> Result<SongModel, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.create_song(title, lyrics).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_song(state: tauri::State<AppState>, id: i64) -> Result<SongModel, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.get_song(id).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn update_song(state: tauri::State<AppState>, song: SongModel) -> Result<(), String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.update_song(&song).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn choose_media_file(app: tauri::AppHandle, kind: String) -> Result<Option<String>, String> {
-    let extensions: &[&str] = match kind.as_str() {
-        "image" => &["png", "jpg", "jpeg", "webp", "gif", "bmp"],
-        "audio" => &["mp3", "wav", "ogg", "flac", "m4a", "aac"],
-        "video" => &["mp4", "mov", "mkv", "webm", "avi"],
-        "logo" => &["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "m4v", "mov", "mkv", "webm", "avi"],
-        _ => &["png", "jpg", "jpeg", "webp", "mp4", "mov", "mkv", "webm"],
-    };
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Choose media").add_filter("Media files", extensions).pick_file(move |file| { let _ = sender.send(file); });
-    receiver.await.map_err(|e| e.to_string())?.map(|file| file.into_path().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())).transpose()
-}
-
-#[tauri::command]
-fn list_media(state: tauri::State<AppState>, app: tauri::AppHandle) -> Result<Vec<protocol::MediaModel>, String> {
-    let media = state.db.lock().map_err(|e| e.to_string())?.list_media().map_err(|e| e.to_string())?;
-    for item in &media { app.asset_protocol_scope().allow_file(&item.path).map_err(|e| e.to_string())?; }
-    Ok(media)
-}
-
-#[tauri::command]
-fn create_media(state: tauri::State<AppState>, app: tauri::AppHandle, title: String, kind: protocol::MediaKind, path: String) -> Result<protocol::MediaModel, String> {
-    let file = std::fs::canonicalize(path.trim()).map_err(|e| format!("Cannot open media file: {e}"))?;
-    if !file.is_file() { return Err("Choose a media file, not a directory.".into()); }
-    if title.trim().is_empty() { return Err("Enter a media title.".into()); }
-    app.asset_protocol_scope().allow_file(&file).map_err(|e| e.to_string())?;
-    state.db.lock().map_err(|e| e.to_string())?.create_media(title.trim().into(), kind, file.to_string_lossy().into()).map_err(|e| e.to_string())
-}
-
-/// Current output dimensions for matching operator preview aspect ratios.
-#[tauri::command]
-fn get_output_sizes(app: tauri::AppHandle) -> serde_json::Value {
-    let mut sizes = serde_json::Map::new();
-    for (label, _) in OUTPUTS {
-        if let Some(window) = app.get_window(label) {
-            if let Ok(size) = window.inner_size() { sizes.insert(label.into(), content_size(&window, size)); }
-        }
-    }
-    serde_json::Value::Object(sizes)
-}
-
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
-    info!("Starting projection-rust Tauri Edition...");
+    logging::init();
+    info!("Starting PAKIT {}", env!("CARGO_PKG_VERSION"));
 
     native_output::prepare_platform();
 
@@ -553,6 +109,7 @@ fn main() -> anyhow::Result<()> {
             set_output_display,
             set_outputs_shown,
             get_startup_warnings,
+            open_logs_folder,
             get_output_state,
             set_output_state,
             resolve_media_path,
@@ -592,12 +149,11 @@ fn main() -> anyhow::Result<()> {
             let output_config = settings::load_or_set_aside(&output_path, now_ms());
             let routes_path = app_data_dir.join("output-displays.json");
             let saved_routes = settings::load_or_set_aside(&routes_path, now_ms());
-            let warnings = [output_config.set_aside.as_ref(), saved_routes.set_aside.as_ref()]
+            let mut warnings: Vec<String> = [output_config.set_aside.as_ref(), saved_routes.set_aside.as_ref()]
                 .into_iter()
                 .flatten()
                 .map(|aside| format!("A settings file could not be read, so defaults are in use. The original was kept as {}.", aside.display()))
                 .collect();
-            app.manage(StartupWarnings(warnings));
             app.manage(OutputState { config: Mutex::new(output_config.value), path: output_path });
             app.manage(OutputRoutes { values: Mutex::new(saved_routes.value), path: routes_path, shown: AtomicBool::new(false) });
             let config_path = app_data_dir.join(CONFIG_FILENAME);
@@ -605,6 +161,49 @@ fn main() -> anyhow::Result<()> {
             let db = Db(Arc::new(Mutex::new(Repository::new(
                 app_data_dir.join(DB_FILENAME),
             )?)));
+
+            // After a crash, reopen the last service at the last cue; the
+            // engine applies these once its thread starts.
+            let (recovery, previous) = recovery::Recovery::start(&app_data_dir);
+            match previous {
+                recovery::Previous::Clean => {}
+                recovery::Previous::Restore(state) => {
+                    let project = state.project_id.map(|id| db.lock().and_then(|db| db.get_project(id)));
+                    match project {
+                        Some(Ok(project)) => {
+                            warn!("Previous run ended unexpectedly; reopening {} at its last cue", project.name);
+                            for command in recovery::restore_commands(&state, &project) {
+                                let _ = engine.command(command);
+                            }
+                            warnings.push(format!("PAKIT did not close normally. \"{}\" was reopened at its last cue with media paused. Outputs stay hidden until you show them.", project.name));
+                        }
+                        _ => warnings.push("PAKIT did not close normally, and the last service could not be reopened.".into()),
+                    }
+                }
+                recovery::Previous::RepeatedCrash => {
+                    warn!("Previous run crashed right after a recovery; not restoring again");
+                    warnings.push("PAKIT closed unexpectedly twice in a row, so the last service was not reopened automatically. Open it from the service list. The log folder (Settings) has details.".into());
+                }
+                recovery::Previous::Crashed => warnings.push("PAKIT did not close normally last time.".into()),
+            }
+            let recovery = Arc::new(recovery);
+            app.manage(recovery.clone());
+            {
+                let mut rx = event_tx.subscribe();
+                let snapshot = snapshot.clone();
+                thread::Builder::new().name("recovery".into()).spawn(move || loop {
+                    match rx.blocking_recv() {
+                        Ok(EngineEvent::ProjectChanged { .. } | EngineEvent::ProgramChanged { .. }) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                            let current = snapshot.read().expect("snapshot lock poisoned").clone();
+                            recovery.observe(&current);
+                        }
+                        Ok(_) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                })?;
+            }
+            app.manage(StartupWarnings(warnings));
+            app.manage(awake::KeepAwake::start()?);
 
             app.manage(AppState {
                 engine: engine.clone(),
@@ -696,9 +295,7 @@ fn main() -> anyhow::Result<()> {
             for window in [&projection_window, &confidence_window] {
                 let (handle, label) = (app.handle().clone(), window.label().to_string());
                 native_output::refullscreen_on_map(window, move || {
-                    let routes = handle.state::<OutputRoutes>();
-                    let wants = routes.values.lock().ok().map(|saved| saved.get(&label).is_none_or(|route| route.fullscreen));
-                    wants.unwrap_or(false)
+                    handle.state::<OutputRoutes>().wants_fullscreen(&label)
                 })?;
             }
             for window in [&projection_window, &confidence_window] {
@@ -747,6 +344,7 @@ fn main() -> anyhow::Result<()> {
                 });
             }
             app.manage(feed);
+            show_outputs_if_requested(app.handle());
 
             // Remember the projection size for the next start.
             {
@@ -794,59 +392,13 @@ fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(outputs) = app.try_state::<NativeOutputs>() {
         outputs.shutdown();
     }
+    if let Some(awake) = app.try_state::<awake::KeepAwake>() {
+        awake.set(false);
+    }
     if let Some(media) = app.try_state::<Arc<NativeMedia>>() {
         media.shutdown();
     }
-}
-
-#[cfg(test)]
-mod config_tests {
-    use super::*;
-
-    #[test]
-    fn app_configs_saved_with_an_output_backend_still_load() {
-        let config: AppConfig = serde_json::from_str(r#"{"ws_bind_host":"0.0.0.0","ws_port":9000,"projection_size":null,"output_backend":"webview"}"#).unwrap();
-        assert_eq!(config.ws_port, 9000);
-    }
-}
-
-#[cfg(test)]
-mod output_route_tests {
-    use super::*;
-    fn display(name: &str, x: i32) -> OutputRoute { OutputRoute { name: Some(name.into()), x, y: 0, width: 1920, height: 1080, fullscreen: true, enabled: true, size: None, aspect: None } }
-    #[test]
-    fn restores_named_display_after_enumeration_or_position_changes() {
-        let audience = display("HDMI-A-1", 1920);
-        assert_eq!(matching_route(&audience, &[audience.clone(), display("eDP-1", 0)]), Some(0));
-        assert_eq!(matching_route(&audience, &[display("eDP-1", 0), display("HDMI-A-1", 0)]), Some(1));
-    }
-    #[test]
-    fn missing_or_ambiguous_display_does_not_redirect_output() {
-        let audience = display("HDMI-A-1", 1920);
-        assert_eq!(matching_route(&audience, &[display("eDP-1", 0)]), None);
-        assert_eq!(matching_route(&audience, &[display("HDMI-A-1", 0), display("HDMI-A-1", 3840)]), None);
-    }
-    #[test]
-    fn saved_routes_preserve_separate_fullscreen_choices() {
-        let audience = display("HDMI-A-1", 1920);
-        let mut confidence = display("DP-1", -1920);
-        confidence.fullscreen = false;
-        let routes = std::collections::BTreeMap::from([("projection", audience), ("confidence", confidence)]);
-        let loaded: std::collections::BTreeMap<String, OutputRoute> = serde_json::from_slice(&serde_json::to_vec(&routes).unwrap()).unwrap();
-        assert!(loaded["projection"].fullscreen);
-        assert!(!loaded["confidence"].fullscreen);
-        assert_eq!(loaded["confidence"].name.as_deref(), Some("DP-1"));
-    }
-    #[test]
-    fn routes_saved_before_display_options_enable_both_outputs() {
-        let route: OutputRoute = serde_json::from_str(r#"{"name":"HDMI-A-1","x":0,"y":0,"width":1920,"height":1080,"fullscreen":false}"#).unwrap();
-        assert!(route.enabled && !route.fullscreen);
-        assert_eq!((route.size, route.aspect), (None, None));
-    }
-    #[test]
-    fn default_displays_avoid_the_operator_screen() {
-        assert_eq!((default_monitor("projection", Some(0), 3), default_monitor("confidence", Some(0), 3)), (1, 2));
-        assert_eq!((default_monitor("projection", Some(1), 2), default_monitor("confidence", Some(1), 2)), (0, 1));
-        assert_eq!((default_monitor("projection", Some(0), 1), default_monitor("confidence", None, 1)), (0, 0));
+    if let Some(recovery) = app.try_state::<Arc<recovery::Recovery>>() {
+        recovery.clean_exit();
     }
 }
