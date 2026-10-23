@@ -41,7 +41,7 @@ flowchart LR
 | media_engine | `desktop/crates/media_engine` | Video/audio decoding, playback clocks, the single audio output, thumbnails. |
 | render_engine | `desktop/crates/render_engine` | Draws the projection and confidence screens and the operator preview stills. |
 | persistence | `desktop/crates/persistence` | SQLite: songs, media records, services (each service stored as one JSON document). |
-| network_server | `desktop/crates/network_server` | WebSocket remote control; same machine only for now. LAN access with pairing codes, a phone remote and OSC/Companion control are planned (roadmap phases 6 and 9). |
+| network_server | `desktop/crates/network_server` | WebSocket remote control; same machine only for now. LAN access with pairing codes, a phone remote and OSC/Companion control are planned (roadmap phases 6 and 10). Keyboard, MIDI and Stream Deck input go through the app's input layer instead. |
 
 ### One click, end to end
 
@@ -107,7 +107,9 @@ The library becomes the reference artifact: editing a service never changes the 
 | Change navigation or on-air behavior | `desktop/crates/core_engine/src/engine.rs` (tests at the bottom) |
 | Change how the screens look | `desktop/crates/render_engine/src/` (`main_scene.rs`, `confidence.rs`, `text.rs`) and the scene feed in `desktop/crates/app/src/native_scene.rs` |
 | Change playback, decoding or audio | `desktop/crates/media_engine/src/` |
-| Change output settings fields | `desktop/crates/protocol/src/output_config.rs` and `frontend/src/outputState.ts` |
+| Change output settings fields | `desktop/crates/protocol/src/output_config.rs` and `frontend/src/outputState.ts` (the settings page is `frontend/src/OutputSettings.tsx`) |
+| Add an operator action, key or controller | `desktop/crates/protocol/src/input.rs` (actions, triggers, default keys), `desktop/crates/app/src/input.rs` (what each action does), `midi.rs`, `streamdeck.rs` |
+| Change text effects, transitions or shader backgrounds | `desktop/crates/render_engine/src/` (`paint.rs` + `paint.wgsl`, `main_scene.rs`, `shader_bg.rs` + `shader_bg.wgsl`) |
 | Change how songs and services are stored | `desktop/crates/persistence/src/repo.rs` |
 | Change the song library web app | `web/app/src/pages/` |
 | Change the cloud data model or server rules | `web/backend/convex/` (`schema.ts`, tests in `services.test.ts`) |

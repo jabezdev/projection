@@ -24,7 +24,9 @@ Date: ____________  Version installed: ____________  Displays connected: _______
 | ☐ | Keep awake | Note the PC's screen-off time (Settings → System → Power). Show outputs and leave the PC untouched for longer than that. The displays stay on. Hide outputs: the normal timeout returns. | |
 | ☐ | Crash recovery | Load a service, cue a song's second slide. End PAKIT in Task Manager. Start it again: the same service is open at the same slide, media paused, outputs hidden, with a notice. | |
 | ☐ | Backup | Settings → **Export backup…** writes a zip. The weekly automatic backup folder exists under `%APPDATA%\com.magi.projection\backups`. | |
-| ☐ | Soak (30 min) | `bun tools\e2e\soak.ts --video <file> --app "C:\Program Files\PAKIT\app.exe"`. Passes; keep the CSV. | |
+| ☐ | Effects and animated backgrounds | Settings → Projection: turn on shadow, outline and glow; give a song the Aurora background (song editor). Advance lyrics for a minute with both outputs shown. `pakit.log` should keep near 60 fps on both outputs and must not say a shader background "cannot keep up". Note anything that stutters. | |
+| ☐ | Keys and controllers | → / ← / B / C / L work with the operator window focused; a presenter clicker advances. If a MIDI controller or Stream Deck is available, bind one button in Settings → Controls and use it. | |
+| ☐ | Soak (30 min) | `bun tools\e2e\soak.ts --video <file> --app "<PAKIT folder>\PAKIT.exe"` (the folder: Start menu → PAKIT → Open file location; usually `%LOCALAPPDATA%\PAKIT`). Passes; keep the CSV. | |
 | ☐ | Full rehearsal | The seven steps in README.md → MVP rehearsal, with the real songs, media and displays. | |
 | ☐ | Exit | Closing the operator window closes everything; no PAKIT process remains in Task Manager. | |
 
