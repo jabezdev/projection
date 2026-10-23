@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn previews_each_settled_scene_and_follow_output_resizes() {
         let gpu = Arc::new(Gpu::headless().expect("headless GPU"));
-        let resources = Resources { gpu: gpu.clone(), fonts: Fonts::load(), media: MediaTextures::new(gpu) };
+        let resources = Resources { gpu: gpu.clone(), fonts: Fonts::load(), media: MediaTextures::new(gpu), status: Arc::default() };
         let (sent, received) = crossbeam::channel::unbounded();
         let sink: SnapshotSink = Box::new(move |target, snapshot| {
             let _ = sent.send((target, snapshot));

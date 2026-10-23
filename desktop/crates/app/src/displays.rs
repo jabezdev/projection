@@ -169,6 +169,7 @@ pub fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRout
 pub fn show_outputs_if_requested(app: &tauri::AppHandle) {
     if std::env::var("PAKIT_SHOW_OUTPUTS").as_deref() != Ok("1") { return; }
     app.state::<OutputRoutes>().shown.store(true, Ordering::Release);
+    let _ = app.emit("output:shown", true);
     for (output, _) in OUTPUTS {
         if let Err(e) = present_output(app, output) { log::warn!("Showing {output}: {e}"); }
     }
@@ -176,6 +177,7 @@ pub fn show_outputs_if_requested(app: &tauri::AppHandle) {
 #[tauri::command]
 pub fn set_outputs_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, shown: bool) -> Result<OutputDisplays, String> {
     routes.shown.store(shown, Ordering::Release);
+    let _ = app.emit("output:shown", shown);
     for (output, _) in OUTPUTS {
         present_output(&app, output)?;
     }

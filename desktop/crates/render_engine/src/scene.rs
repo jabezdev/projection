@@ -257,6 +257,8 @@ pub struct Activity {
     pub settled: bool,
     /// Sum of the generations of visible video textures.
     pub generation: u64,
+    /// New media is waiting to be drawable: the previous picture is still up.
+    pub loading: bool,
 }
 
 impl Activity {
@@ -265,6 +267,7 @@ impl Activity {
             redraw: self.redraw || other.redraw,
             settled: self.settled && other.settled,
             generation: self.generation + other.generation,
+            loading: self.loading || other.loading,
         }
     }
 }

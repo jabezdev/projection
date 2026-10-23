@@ -32,6 +32,8 @@ impl NativeOutputs {
         }
     }
 
+    /// Linux only: GTK asks for a frame after it discards the window's contents.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub fn redraw(&self, role: OutputRole) {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {
@@ -209,6 +211,11 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
         let event = serde_json::json!({ "target": target.label(), "revision": revision, "width": width, "height": height });
         let _ = handle.emit_to("main", "output:preview", event);
     }))?;
+    // The operator UI marks a cue as pending until its output shows it.
+    let handle = app.handle().clone();
+    engine.on_status(Box::new(move |role, loading| {
+        let _ = handle.emit_to("main", "output:status", serde_json::json!({ "target": role.label(), "loading": loading }));
+    }));
     app.manage(NativeOutputs(Mutex::new(Some(engine))));
 
     for window in windows {

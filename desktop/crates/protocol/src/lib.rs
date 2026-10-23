@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+mod input;
 mod output_config;
+pub use input::{InputAction, InputBinding, InputBindings, InputTrigger, MidiMessage, INPUT_BINDINGS_VERSION};
 pub use output_config::{BackgroundFit, Easing, OutputConfig, TextAlign, TransitionDirection, TransitionKind, VerticalAlign, OUTPUT_CONFIG_VERSION, SHADER_PRESETS};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

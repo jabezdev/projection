@@ -242,6 +242,7 @@ impl ConfidenceRenderer {
             redraw: scrolling || clock_changed || built,
             settled: !scrolling && !building,
             generation: 0,
+            loading: false,
         })
     }
 

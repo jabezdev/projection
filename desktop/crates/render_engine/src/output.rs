@@ -48,7 +48,13 @@ pub(crate) struct Resources {
     pub gpu: Arc<Gpu>,
     pub fonts: Arc<Fonts>,
     pub media: Arc<MediaTextures>,
+    /// Told when an output starts or stops waiting for new media.
+    pub status: Arc<std::sync::OnceLock<StatusSink>>,
 }
+
+/// Receives `(output, loading)` whenever a shown output starts or stops
+/// waiting for its new media (the previous picture stays up meanwhile).
+pub type StatusSink = Box<dyn Fn(OutputRole, bool) + Send + Sync>;
 
 /// Latest requested size and scene. Kept outside the event queue so a burst
 /// while the worker is blocked can never drop the newest value.
@@ -311,6 +317,16 @@ impl Presenter {
         let mut window_frames = 0u64;
         let mut window_max_ms = 0f64;
         let mut debug_capture = DebugCapture::from_env();
+        let mut reported_loading = false;
+        let role = self.role;
+        let mut report = |loading: bool| {
+            if loading != reported_loading {
+                reported_loading = loading;
+                if let Some(sink) = resources.status.get() {
+                    sink(role, loading);
+                }
+            }
+        };
 
         loop {
             let now = Instant::now();
@@ -370,6 +386,7 @@ impl Presenter {
                 continue;
             }
             if self.hidden() {
+                report(false);
                 continue;
             }
             if !self.configured && !self.configure(gpu) {
@@ -412,6 +429,7 @@ impl Presenter {
             let size = (area[2], area[3]);
             let list = renderer.frame(&resources.fonts, size, now);
             let activity = renderer.activity(now);
+            report(activity.loading);
             shown_generation = activity.generation;
             dirty = false;
             if let Some(capture) = &mut debug_capture {

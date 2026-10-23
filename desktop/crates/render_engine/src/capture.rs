@@ -22,7 +22,7 @@ pub struct Capture {
 impl Capture {
     pub fn new(role: OutputRole) -> anyhow::Result<Self> {
         let gpu = Arc::new(Gpu::headless()?);
-        let resources = Resources { gpu: gpu.clone(), fonts: Fonts::load(), media: MediaTextures::new(gpu.clone()) };
+        let resources = Resources { gpu: gpu.clone(), fonts: Fonts::load(), media: MediaTextures::new(gpu.clone()), status: Arc::default() };
         let painter = Painter::new(&gpu.device, FORMAT);
         Ok(Self { resources, renderer: Renderer::for_role(role), painter })
     }

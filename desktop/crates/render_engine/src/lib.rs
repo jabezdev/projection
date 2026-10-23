@@ -27,7 +27,7 @@ pub use capture::Capture;
 pub use frame::{PixelFrame, SharedFrame, VideoFrames, VideoKey};
 pub use main_scene::LyricGeometry;
 pub use media::MediaTextures;
-pub use output::{OutputRole, OutputStats};
+pub use output::{OutputRole, OutputStats, StatusSink};
 pub use paint::{css_color, Rgba, TextEffects};
 pub use preview::{PreviewTarget, Snapshot, SnapshotSink};
 pub use scene::{
@@ -143,7 +143,7 @@ impl RenderEngine {
         let gpu = Arc::new(Gpu::open(instance, adapter)?);
         let media = MediaTextures::new(gpu.clone());
         let pump = FramePump::start(gpu.clone(), media.clone(), frames)?;
-        let resources = Resources { gpu: gpu.clone(), fonts, media: media.clone() };
+        let resources = Resources { gpu: gpu.clone(), fonts, media: media.clone(), status: Arc::default() };
         let mut outputs = HashMap::new();
         let mut sizes = HashMap::new();
         for (role, surface, width, height, stall) in surfaces {
@@ -181,6 +181,12 @@ impl RenderEngine {
         }
         *self.previews.lock().expect("previews poisoned") = Some(previews);
         Ok(())
+    }
+
+    /// Reports when a shown output waits for new media and when it shows it.
+    /// Set once.
+    pub fn on_status(&self, sink: StatusSink) {
+        let _ = self.resources.status.set(sink);
     }
 
     /// Previews a scene that no output shows: a style sample of the

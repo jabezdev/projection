@@ -10,6 +10,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import SongEditor from './SongEditor';
 import LibraryPanel from './LibraryPanel';
 import QuickSearch from './QuickSearch';
+import ControlsSettings from './ControlsSettings';
+import { useConfirm } from './ConfirmDialog';
+import { useInputBindings, useKeyboardInput } from './input';
+import { useOutputsLoading, useOutputsShown } from './useOutputs';
 import ServiceBuilder from './ServiceBuilder';
 import { useColumns } from './useColumns';
 import { useEngine, type ProjectHeader } from './useEngine';
@@ -20,6 +24,11 @@ function App() {
   const [outputConfig, setOutputConfig] = useOutputState('config', defaultOutputConfig);
   const { project, projectRef, projects, setProjects, program, media, setMedia, error, setError, run, persist, saveQueue } = useEngine();
   const { panesRef, panesStyle, resizeDivider } = useColumns();
+  const bindings = useInputBindings();
+  useKeyboardInput(bindings, setError);
+  const outputsShown = useOutputsShown();
+  const outputsLoading = useOutputsLoading();
+  const [confirmDialog, confirm] = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [presentationEditor, setPresentationEditor] = useState<SessionItem | 'new' | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
@@ -91,9 +100,13 @@ function App() {
 
     {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
-      <SessionPane project={project} projectRef={projectRef} projects={projects} program={program} run={run} persist={persist}
+      <SessionPane project={project} pending={outputsLoading.projection} projectRef={projectRef} projects={projects} program={program} run={run} persist={persist}
         onOpenSettings={() => setSettingsOpen(true)}
-        onLoadService={projectId => void run(async () => { await saveQueue.current; await invoke('load_project', { projectId }); })}
+        onLoadService={projectId => void run(async () => {
+          // While the audience sees the outputs, loading a service changes what they see.
+          if (outputsShown && project && project.id !== projectId && !(await confirm('The outputs are shown. Load another service? Its first item goes on air.', 'Load service'))) return;
+          await saveQueue.current; await invoke('load_project', { projectId });
+        })}
         onOpenService={mode => void run(() => openService(mode))} onOpenLibrary={() => void run(openLibrary)} onNewSong={() => setEditor({})}
         onEditSong={item => setEditor({ id: item.id, title: item.title || '', song: itemSong(item) })} onEditPresentation={setPresentationEditor} onEditPart={setPartEditor}
         onCue={selectFromSchedule} onVideoOptions={updateVideoOptions}/>
@@ -103,9 +116,9 @@ function App() {
 
       </div></section>
       {resizeDivider(1)}
-      <OutputControls display={display} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
+      <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
-    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)}/>}
+    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }]}/>}
     {presentationEditor && <PresentationEditor images={media} item={presentationEditor === 'new' ? undefined : presentationEditor} onClose={() => setPresentationEditor(null)} onSave={async item => {
       const current = projectRef.current; if (!current) throw new Error('Select a service first.');
       await persist({ ...current, session: { items: presentationEditor === 'new' ? [...current.session.items, item] : current.session.items.map(old => old.id === item.id ? item : old) } });
@@ -113,7 +126,7 @@ function App() {
     }}/>}
     {partEditor && <PartEditor part={partEditor} onClose={() => setPartEditor(null)} onSave={part => run(async () => { await editPart(part.itemId, part.partId, part.lyrics); setPartEditor(null); })}/>}
     {editor && <SongEditor backgrounds={media} title={editor.title} song={editor.song} onClose={() => setEditor(null)} onSave={async (title, song) => { if (editor.id != null) { const current = projectRef.current; if (!current) return; await persist({ ...current, session: { items: current.session.items.map(item => item.id === editor.id ? { ...item, title, song: JSON.stringify(song), background: song.background, kind: { kind: 'text', data: { steps: songSteps(song) } } } : item) } }); } else if (editor.libraryId != null) { await invoke('update_song', { song: { id: editor.libraryId, title, lyrics: JSON.stringify(song) } }); await openLibrary(); } else { await invoke('create_song', { title, lyrics: JSON.stringify(song) }); if (libraryOpen) await openLibrary(); } setEditor(null); }}/ >}
-    {serviceEditor && <ServiceBuilder name={serviceEditor === 'edit' ? project?.name : undefined} items={serviceEditor === 'edit' ? project?.session.items : undefined} currentItems={project?.session.items || []} songs={library} media={media} onClose={() => setServiceEditor(null)} onSave={async (name, items) => {
+    {serviceEditor && <ServiceBuilder name={serviceEditor === 'edit' ? project?.name : undefined} items={serviceEditor === 'edit' ? project?.session.items : undefined} currentItems={project?.session.items || []} songs={library} media={media} confirmRemove={outputsShown ? title => confirm(`The outputs are shown. Remove ${title} from the service?`, 'Remove') : undefined} onClose={() => setServiceEditor(null)} onSave={async (name, items) => {
       await saveQueue.current;
       if (serviceEditor === 'edit' && projectRef.current) {
         const current = projectRef.current;
@@ -128,6 +141,7 @@ function App() {
       setServiceEditor(null);
     }}/ >}
     {quickSearch && <QuickSearch songs={library} media={media} canAdd={!!project} onClose={() => setQuickSearch(false)} onAdd={result => result.kind === 'song' ? addSong(result.song.id) : addMedia(result.media)}/>}
+    {confirmDialog}
     {libraryOpen && <LibraryPanel onCatalogChanged={refreshCatalog} onNewPresentation={() => { setLibraryOpen(false); setPresentationEditor('new'); }} songs={library} media={media} canAdd={!!project} onClose={() => setLibraryOpen(false)} onAddSong={addSong} onAddMedia={addMedia} onNewSong={() => { setLibraryOpen(false); setEditor({}); }} onEditSong={async id => { const saved = await invoke<SongModel>('get_song', { id }); setLibraryOpen(false); setEditor({ libraryId: id, title: saved.title, song: decodeSong(saved.lyrics) }); }} onImported={item => setMedia(old => [...old, item])}/ >}
 
   </div>;

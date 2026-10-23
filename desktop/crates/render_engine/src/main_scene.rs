@@ -185,7 +185,7 @@ impl MediaStage {
             .filter(|l| l.opacity.value(now) > 0.0)
             .map(|l| l.handle.generation())
             .sum();
-        Activity { redraw: fading || pending || video, settled: !(fading || pending), generation: generations }
+        Activity { redraw: fading || pending || video, settled: !(fading || pending), generation: generations, loading: pending }
     }
 
     pub fn clear(&mut self) {
@@ -349,7 +349,7 @@ impl MainRenderer {
         self.background
             .activity(now)
             .and(self.logo.activity(now))
-            .and(Activity { redraw: lyrics, settled: !lyrics, generation: 0 })
+            .and(Activity { redraw: lyrics, settled: !lyrics, generation: 0, loading: false })
     }
 
     pub fn frame(&mut self, fonts: &Arc<Fonts>, size: (u32, u32), now: Instant) -> DrawList {

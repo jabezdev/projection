@@ -6,14 +6,17 @@ mod backup;
 mod commands;
 mod displays;
 mod engine_host;
+mod input;
 mod library;
 mod logging;
+mod midi;
 mod native_media;
 mod native_output;
 mod native_scene;
 mod recovery;
 mod settings;
 mod storage;
+mod streamdeck;
 use log::{error, info, warn};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -118,6 +121,12 @@ fn main() -> anyhow::Result<()> {
             list_missing_media,
             relink_media,
             import_openlyrics,
+            input::get_input_bindings,
+            input::set_input_bindings,
+            input::reset_input_bindings,
+            input::trigger_action,
+            input::learn_input,
+            input::get_input_devices,
             get_output_state,
             set_output_state,
             resolve_media_path,
@@ -157,7 +166,9 @@ fn main() -> anyhow::Result<()> {
             let output_config = settings::load_or_set_aside(&output_path, now_ms());
             let routes_path = app_data_dir.join("output-displays.json");
             let saved_routes = settings::load_or_set_aside(&routes_path, now_ms());
-            let mut warnings: Vec<String> = [output_config.set_aside.as_ref(), saved_routes.set_aside.as_ref()]
+            let (input_state, input_aside) = input::InputState::load(&app_data_dir, now_ms());
+            app.manage(input_state);
+            let mut warnings: Vec<String> = [output_config.set_aside.as_ref(), saved_routes.set_aside.as_ref(), input_aside.as_ref()]
                 .into_iter()
                 .flatten()
                 .map(|aside| format!("A settings file could not be read, so defaults are in use. The original was kept as {}.", aside.display()))
@@ -228,6 +239,9 @@ fn main() -> anyhow::Result<()> {
                 })?;
             }
             app.manage(awake::KeepAwake::start()?);
+            // Outside controllers share the input layer with the keyboard.
+            midi::start(app.handle().clone())?;
+            streamdeck::start(app.handle().clone())?;
 
             app.manage(AppState {
                 engine: engine.clone(),

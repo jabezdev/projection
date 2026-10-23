@@ -8,6 +8,8 @@ import type { ProgramState, ProjectHeader } from './useEngine';
 
 type Props = {
   project: ProjectModel | null;
+  /** The projection is still loading the current cue's media. */
+  pending?: boolean;
   projectRef: MutableRefObject<ProjectModel | null>;
   projects: ProjectHeader[];
   program: ProgramState | null;
@@ -26,7 +28,7 @@ type Props = {
 };
 
 /** The left column: service choice, library buttons and the service's items with their part cues. */
-export default function SessionPane({ project, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onOpenService, onOpenLibrary, onNewSong, onEditSong, onEditPresentation, onEditPart, onCue, onVideoOptions }: Props) {
+export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onOpenService, onOpenLibrary, onNewSong, onEditSong, onEditPresentation, onEditPart, onCue, onVideoOptions }: Props) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [dragged, setDragged] = useState<number | null>(null);
   return <section className="session-pane"><div className="operator-settings-bar"><button aria-label="Open output settings" onClick={onOpenSettings}><Icon name="settings"/><span>Settings</span></button></div><div className="session-tools" aria-label="Service and library controls"><div className="service-select-row"><select aria-label="Session / service" value={project?.id || ''} onChange={e => {
@@ -37,7 +39,7 @@ export default function SessionPane({ project, projectRef, projects, program, ru
     onLoadService(projectId);
   }}><option value="" disabled>Select a service</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="icon-button" aria-label="Edit current service" disabled={!project} onClick={() => onOpenService('edit')}><Icon name="edit"/></button></div><button onClick={() => onOpenService('new')}><Icon name="plus"/> Service</button><button onClick={onOpenLibrary}><Icon name="library"/> Library</button><button className="primary-action" onClick={onNewSong}><Icon name="plus"/> Song</button></div><div className="pane-scroll">
     {!project?.session.items.length && <p className="empty-panel">{project ? 'Add songs from the library to begin.' : 'Create or select a service to begin.'}</p>}
-    {project?.session.items.map((item) => <article className={`session-song ${program?.active_item_id === item.id ? 'is-current' : ''}`} key={item.id}>
+    {project?.session.items.map((item) => <article className={`session-song ${program?.active_item_id === item.id ? `is-current${pending ? ' is-pending' : ''}` : ''}`} key={item.id} title={program?.active_item_id === item.id && pending ? 'Selected; the projection shows it once its media has loaded' : undefined}>
       <header draggable onDragStart={e => { setDragged(item.id); e.dataTransfer.setData('text/plain', String(item.id)); }} onDragEnd={() => setDragged(null)} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const current = projectRef.current; if (!current || dragged === null || dragged === item.id) return; const items = [...current.session.items]; const from = items.findIndex(i => i.id === dragged); const to = items.findIndex(i => i.id === item.id); if (from < 0 || to < 0) return; const [moved] = items.splice(from, 1); items.splice(to, 0, moved); void run(() => persist({ ...current, session: { items } })); setDragged(null); }}>
         <button className={`song-collapse ${collapsed.has(item.id) ? 'is-collapsed' : ''}`} aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.title}`} aria-expanded={!collapsed.has(item.id)} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; })}>
           <span className="drag-handle" title="Drag to reorder"><Icon name="grip"/></span><Icon name="chevron"/><span className="song-name">{item.title || item.kind.kind}</span>

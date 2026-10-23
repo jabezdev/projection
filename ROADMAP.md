@@ -114,7 +114,7 @@ Goal: each screen looks right on its own, with effects that stay within the targ
 
 Decisions:
 - **Each screen has its own parameters** (text size, margins, placement, effects, transitions); the settings page is redesigned around screens.
-- **Text shadow** first, as a blurred glyph pass; **outline (and glow)** through signed-distance-field glyphs.
+- **Text shadow** first, as a blurred glyph pass; **outline (and glow)** through signed-distance-field glyphs. *(2026-10-24: the shadow uses the same distance-field glyphs instead of a separate pass; see ENGINE.md decision 10.)*
 - **Transitions:** crossfade, cut and slide, each with parameters (duration, easing, direction).
 - **Shader backgrounds** are supported, with built-in presets and hard limits (frame rate cap, render resolution cap, automatic fallback to a still) so they cannot take over the GPU.
 - **One icon set** for the control panel and drawable on the outputs. Color emoji are not planned.
@@ -140,12 +140,12 @@ Decisions:
 - **Confirm risky actions** (deleting an item, loading another service) only while outputs are shown; undo covers the rest.
 
 Items:
-- [ ] Input layer and bindings editor; default keyboard map (→/Space next, ← previous, Black/Clear/Logo/Live keys).
-- [ ] Presenter clickers (PageUp/PageDown).
-- [ ] Pending vs on-air indicator: what was selected vs what the output actually shows while media loads.
-- [ ] Confirmations while outputs are shown.
-- [ ] MIDI input.
-- [ ] Stream Deck.
+- [x] Input layer and bindings editor; default keyboard map (→/Space next, ← previous, Black/Clear/Logo/Live keys).
+- [x] Presenter clickers (PageUp/PageDown).
+- [x] Pending vs on-air indicator: what was selected vs what the output actually shows while media loads.
+- [x] Confirmations while outputs are shown (loading another service, removing an item).
+- [x] MIDI input. *Not yet tried with a physical controller.*
+- [x] Stream Deck (keys only; no key images yet). *Not yet tried with a physical deck.*
 - [ ] OSC / Companion over the network (uses phase 10's network access and pairing).
 - [ ] **Stage tools on the confidence screen:** timers, operator text messages and similar. **Open:** design when we get there.
 

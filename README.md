@@ -87,7 +87,7 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments; `session-state.json` the last cue, for crash recovery. `logs/` holds `pakit.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PAKIT_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `pakit.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PAKIT_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
 
 **Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PAKIT and unzip `app.db` and the settings files into the data folder.
 
@@ -124,7 +124,11 @@ desktop/
 
 **Audio device.** Choose the venue output in the OS sound settings. If it disappears, the media card shows a reconnecting message and playback resumes on the new default device.
 
-**Not there yet.** There are no keyboard shortcuts for cueing (the mouse runs the service), no undo, and output styling is shared by both screens except the confidence text size. Configurable shortcuts and outside devices (clickers, MIDI, Stream Deck, OSC), an edit history with undo, operator-designed service templates and per-screen settings are planned; see [ROADMAP.md](ROADMAP.md).
+**Keys and controllers.** With the operator window focused and no dialog open: → / Space / Page Down next, ← / Page Up previous, ↓ / ↑ next and previous item, B (or `.`) Black, C Clear, L Logo (each toggles back to Live), Esc Live, P play/pause media, Ctrl+K quick search. Presenter clickers send Page Up / Page Down. Settings → Controls changes any binding and binds MIDI notes, controls or program changes and Stream Deck keys: press Add, then the key or pad. MIDI inputs and Stream Decks are found when plugged in. While the outputs are shown, loading another service or removing an item asks first. A cue whose media is still loading is marked in amber until the projection shows it.
+
+*Stream Deck on Linux* needs read access to its hidraw device, for example `/etc/udev/rules.d/70-streamdeck.rules` with `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", TAG+="uaccess"`, then replug it. On Windows close Elgato's Stream Deck app, which otherwise holds the device.
+
+**Not there yet.** No undo, no operator-designed service templates, no OSC/Companion control (it needs the LAN access of phase 10); see [ROADMAP.md](ROADMAP.md).
 
 ### MVP rehearsal
 

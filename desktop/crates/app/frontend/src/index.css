@@ -336,3 +336,16 @@ kbd { padding: 1px 5px; border: 1px solid #454b54; border-bottom-width: 2px; bac
 .settings-fields .setting-group { border: 0; padding: 0 0 0 14px; display: grid; gap: 12px; border-left: 2px solid #2b3c48; }
 .settings-fields { overflow-x: hidden; } .settings-fields fieldset fieldset { min-width: 0; }
 .settings-fields .setting-check input[type=checkbox] { width: auto; flex: none; padding: 0; }
+.session-song.is-current.is-pending > header { box-shadow: inset 3px 0 #efa34a; background: #2f2a1d; animation: pending-pulse 1s ease-in-out infinite alternate; }
+@keyframes pending-pulse { from { opacity: 1; } to { opacity: .7; } }
+.on-air-pending { margin-left: 8px; padding: 1px 6px; background: #4a3a1a; color: #ffd18a; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.confirm-modal p { margin: 0; font-size: 14px; line-height: 1.5; }
+.controls-settings { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.controls-help { margin: 0; font-size: 11px; color: #92a8b8; }
+.control-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #22313c; }
+.control-action { font-size: 12px; color: #d3dde5; }
+.control-triggers { display: flex; flex-wrap: wrap; gap: 6px; }
+.control-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; background: #24343f; border: 1px solid #36505f; font-size: 11px; }
+.control-chip button { padding: 0 4px; color: #9fb2c1; }
+.control-row > button { padding: 6px 10px; border: 1px solid #405360; font-size: 11px; }
+.control-row > button.is-learning { border-color: #47c6bd; color: #98f2e7; }
