@@ -3,7 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const OUTPUT_CONFIG_VERSION: u32 = 1;
+pub const OUTPUT_CONFIG_VERSION: u32 = 2;
+
+/// Built-in animated backgrounds, chosen as a `shader:<name>` background.
+pub const SHADER_PRESETS: [&str; 3] = ["gradient", "aurora", "bokeh"];
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -25,6 +28,38 @@ pub enum VerticalAlign {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    #[default]
+    Fade,
+    Cut,
+    /// The new content pushes the old out in `TransitionDirection`.
+    Slide,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Easing {
+    #[default]
+    Linear,
+    Ease,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+/// Which way content moves during a slide.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionDirection {
+    #[default]
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum BackgroundFit {
     #[default]
     Cover,
@@ -33,7 +68,12 @@ pub enum BackgroundFit {
 
 /// Sizes are in the operator's units: `size`, `marginX` and `letterSpacing / 16`
 /// are percentages of output width; `marginY * 9/16` likewise; `lineHeight`
-/// is a multiple of the font size; `transition` is milliseconds.
+/// is a multiple of the font size; `transition` is milliseconds. Border,
+/// shadow, outline and glow sizes are sixteenths of a percent of the width.
+///
+/// The flat fields style the projection; `confidence*` fields style the
+/// confidence screen. Older files' numeric `shadow`, `outline` and `glow`
+/// (from the webview outputs) are not reused, so they cannot switch effects on.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OutputConfig {
@@ -57,7 +97,38 @@ pub struct OutputConfig {
     pub box_opacity: f64,
     pub background_fit: BackgroundFit,
     pub transition: f64,
+    pub transition_kind: TransitionKind,
+    pub transition_easing: Easing,
+    pub transition_direction: TransitionDirection,
+    pub text_shadow: bool,
+    pub shadow_size: f64,
+    pub shadow_offset_x: f64,
+    pub shadow_offset_y: f64,
+    pub shadow_color: String,
+    /// Percent, 0–100.
+    pub shadow_opacity: f64,
+    pub text_outline: bool,
+    pub outline_width: f64,
+    pub outline_color: String,
+    pub text_glow: bool,
+    pub glow_size: f64,
+    pub glow_color: String,
+    /// Percent, 0–100.
+    pub glow_opacity: f64,
+    /// Colors and speed of the built-in shader backgrounds.
+    pub shader_color_a: String,
+    pub shader_color_b: String,
+    pub shader_speed: f64,
+    /// Off shows shader backgrounds as a still.
+    pub shader_animate: bool,
     pub confidence_size: f64,
+    pub confidence_font: String,
+    pub confidence_line_height: f64,
+    pub confidence_caps: bool,
+    pub confidence_clock: bool,
+    pub confidence_tape: bool,
+    /// Fade of the confidence screen's video, in milliseconds.
+    pub confidence_transition: f64,
     pub logo_path: String,
     /// Fields this version does not render survive a round trip: those written
     /// by newer versions, and the outline/shadow/glow of older ones.
@@ -87,7 +158,33 @@ impl Default for OutputConfig {
             box_opacity: 0.0,
             background_fit: BackgroundFit::Cover,
             transition: 250.0,
+            transition_kind: TransitionKind::Fade,
+            transition_easing: Easing::Linear,
+            transition_direction: TransitionDirection::Left,
+            text_shadow: false,
+            shadow_size: 8.0,
+            shadow_offset_x: 0.0,
+            shadow_offset_y: 4.0,
+            shadow_color: "#000000".into(),
+            shadow_opacity: 80.0,
+            text_outline: false,
+            outline_width: 3.0,
+            outline_color: "#000000".into(),
+            text_glow: false,
+            glow_size: 12.0,
+            glow_color: "#ffffff".into(),
+            glow_opacity: 60.0,
+            shader_color_a: "#14213d".into(),
+            shader_color_b: "#47c6bd".into(),
+            shader_speed: 1.0,
+            shader_animate: true,
             confidence_size: 4.0,
+            confidence_font: "Segoe UI".into(),
+            confidence_line_height: 1.35,
+            confidence_caps: false,
+            confidence_clock: true,
+            confidence_tape: true,
+            confidence_transition: 250.0,
             logo_path: String::new(),
             extra: serde_json::Map::new(),
         }
@@ -101,22 +198,29 @@ impl OutputConfig {
             ("size", self.size), ("weight", self.weight), ("marginX", self.margin_x), ("marginY", self.margin_y),
             ("lineHeight", self.line_height), ("letterSpacing", self.letter_spacing), ("border", self.border),
             ("boxOpacity", self.box_opacity), ("transition", self.transition), ("confidenceSize", self.confidence_size),
+            ("shadowSize", self.shadow_size), ("shadowOffsetX", self.shadow_offset_x), ("shadowOffsetY", self.shadow_offset_y),
+            ("shadowOpacity", self.shadow_opacity), ("outlineWidth", self.outline_width), ("glowSize", self.glow_size),
+            ("glowOpacity", self.glow_opacity), ("shaderSpeed", self.shader_speed), ("confidenceLineHeight", self.confidence_line_height),
+            ("confidenceTransition", self.confidence_transition),
         ];
         for (name, value) in finite {
             if !value.is_finite() {
                 return Err(format!("Output setting {name} must be a number"));
             }
         }
-        if self.size <= 0.0 || self.confidence_size <= 0.0 || self.line_height <= 0.0 {
+        if self.size <= 0.0 || self.confidence_size <= 0.0 || self.line_height <= 0.0 || self.confidence_line_height <= 0.0 {
             return Err("Text size and line height must be greater than zero".into());
         }
-        if !(0.0..=100.0).contains(&self.box_opacity) {
-            return Err("Box opacity must be between 0 and 100".into());
+        if [self.box_opacity, self.shadow_opacity, self.glow_opacity].iter().any(|o| !(0.0..=100.0).contains(o)) {
+            return Err("Opacity must be between 0 and 100".into());
         }
-        if self.transition < 0.0 || self.border < 0.0 {
-            return Err("Transition and border cannot be negative".into());
+        if [self.transition, self.confidence_transition, self.border, self.shadow_size, self.outline_width, self.glow_size].iter().any(|v| *v < 0.0) {
+            return Err("Transitions, borders and effect sizes cannot be negative".into());
         }
-        if self.font.trim().is_empty() {
+        if self.shader_speed <= 0.0 {
+            return Err("Shader speed must be greater than zero".into());
+        }
+        if self.font.trim().is_empty() || self.confidence_font.trim().is_empty() {
             return Err("Choose a font".into());
         }
         Ok(())
@@ -146,7 +250,8 @@ mod tests {
         assert!(config.caps);
         let mut untyped: Vec<_> = config.extra.keys().map(String::as_str).collect();
         untyped.sort_unstable();
-        assert_eq!(untyped, ["glow", "glowColor", "outline", "outlineColor", "shadow", "shadowColor", "shadowX", "shadowY"]);
+        assert_eq!(untyped, ["glow", "outline", "shadow", "shadowX", "shadowY"]);
+        assert!(!config.text_shadow && !config.text_outline && !config.text_glow, "old effect sizes do not switch effects on");
         config.validate().unwrap();
     }
 
@@ -157,7 +262,8 @@ mod tests {
         let mut written = serde_json::to_value(&config).unwrap();
         written.as_object_mut().unwrap().remove("version");
         let (written, saved) = (written.as_object().unwrap(), saved.as_object().unwrap());
-        assert_eq!(written.keys().collect::<Vec<_>>(), saved.keys().collect::<Vec<_>>());
+        // Every saved key survives; fields added since are written too.
+        assert!(saved.keys().all(|key| written.contains_key(key)));
         for (key, value) in saved {
             // JSON numbers compare by value: `0.9` must not become `0.8999999761`.
             match value.as_f64() {

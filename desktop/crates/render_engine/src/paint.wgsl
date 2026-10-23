@@ -16,7 +16,8 @@ struct Instance {
     @location(2) color: vec4<f32>,
     // Transform: origin (x, y) in pixels, then cos and sin of the rotation.
     @location(3) transform: vec4<f32>,
-    // x: 0 solid, 1 texture, 2 coverage mask.
+    // x: 0 solid, 1 texture, 2 coverage mask, 3 distance field (y: spread,
+    // zw: the distance band over which coverage falls from 1 to 0).
     @location(4) kind: vec4<f32>,
 }
 
@@ -24,7 +25,7 @@ struct VsOut {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
-    @location(2) kind: f32,
+    @location(2) kind: vec4<f32>,
 }
 
 @vertex
@@ -38,18 +39,24 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VsOut {
     out.position = vec4<f32>(world.x / globals.size.x * 2.0 - 1.0, 1.0 - world.y / globals.size.y * 2.0, 0.0, 1.0);
     out.uv = mix(instance.uv.xy, instance.uv.zw, corner);
     out.color = instance.color;
-    out.kind = instance.kind.x;
+    out.kind = instance.kind;
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    if (in.kind < 0.5) {
+    if (in.kind.x < 0.5) {
         return in.color;
     }
     let texel = textureSampleLevel(source, linear_sampler, in.uv, 0.0);
-    if (in.kind < 1.5) {
+    if (in.kind.x < 1.5) {
         return vec4<f32>(texel.rgb * in.color.rgb, texel.a * in.color.a);
     }
-    return vec4<f32>(in.color.rgb, in.color.a * texel.r);
+    if (in.kind.x < 2.5) {
+        return vec4<f32>(in.color.rgb, in.color.a * texel.r);
+    }
+    // Signed distance in pixels, positive outside the glyph.
+    let distance = (texel.r - 0.5) * 2.0 * in.kind.y;
+    let coverage = 1.0 - smoothstep(in.kind.z, in.kind.w, distance);
+    return vec4<f32>(in.color.rgb, in.color.a * coverage);
 }

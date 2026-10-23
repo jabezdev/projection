@@ -51,9 +51,15 @@ impl NativeMedia {
         Arc::new(MediaFrames(self.engine.clone()))
     }
 
-    /// Keeps exactly these muted looping videos decoding.
-    pub fn set_ambient(&self, paths: &[String]) {
-        self.engine.set_ambient(paths);
+    /// Keeps exactly these muted looping videos open: `playing` ones play,
+    /// `prepared` ones wait on their first frame.
+    pub fn set_ambient(&self, playing: &[String], prepared: &[String]) {
+        self.engine.set_ambient(playing, prepared);
+    }
+
+    /// Opens the next foreground media paused, so its cue starts at once.
+    pub fn prepare(&self, path: Option<&str>) {
+        self.engine.prepare(path);
     }
 
     /// Stops reporting and closes the session (and its decoder).
@@ -212,6 +218,8 @@ impl VideoFrames for MediaFrames {
         let frame = match key {
             VideoKey::Session(id) => self.0.session(*id)?.current_frame(now_us()),
             VideoKey::Ambient(path) => self.0.ambient_frame(path, now_us()),
+            // Rendered by the frame pump, never decoded.
+            VideoKey::Shader(_) => None,
         };
         frame.map(|frame| Arc::new(Frame(frame)) as Arc<dyn PixelFrame>)
     }

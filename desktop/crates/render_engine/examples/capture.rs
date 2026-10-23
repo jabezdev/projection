@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use render_engine::{
     css_color, Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole, PixelFrame, Scene,
-    TextAlign, VideoKey, Vertical,
+    Shadow, ShaderSpec, Stroke, TextAlign, VideoKey, Vertical,
 };
 
 /// A deterministic gradient: red across, green down, blue fixed.
@@ -74,7 +74,26 @@ fn scene(name: &str) -> Scene {
                 border: 6.0,
                 border_color: css_color("#47c6bd", [1.0; 4]),
                 box_color: [0x20 as f32 / 255.0, 0x30 as f32 / 255.0, 0x40 as f32 / 255.0, 0.6],
+                ..LyricStyle::default()
             },
+            ..Default::default()
+        }),
+        "proj-effects" => Scene::Main(MainScene {
+            text,
+            background: Some(MediaLayer { source: MediaSource::Image(gradient_png()), cover: true }),
+            transition_ms: 250.0,
+            style: LyricStyle {
+                shadow: Some(Shadow { color: [0.0, 0.0, 0.0, 0.8], x: 0.0, y: 6.0, blur: 10.0 }),
+                outline: Some(Stroke { color: css_color("#14213d", [1.0; 4]), size: 3.0 }),
+                glow: Some(Stroke { color: [1.0, 0.9, 0.5, 0.6], size: 14.0 }),
+                ..LyricStyle::default()
+            },
+            ..Default::default()
+        }),
+        shader if shader.starts_with("proj-shader-") => Scene::Main(MainScene {
+            text,
+            background: Some(MediaLayer { source: MediaSource::Video(VideoKey::Shader(ShaderSpec::encode(&shader["proj-shader-".len()..], "#14213d", "#47c6bd", 1.0, false))), cover: true }),
+            transition_ms: 250.0,
             ..Default::default()
         }),
         "proj-black" => Scene::Main(MainScene { text, display: Display::Black, background: Some(MediaLayer { source: MediaSource::Image(gradient_png()), cover: true }), transition_ms: 250.0, ..Default::default() }),
@@ -95,6 +114,7 @@ fn scene(name: &str) -> Scene {
             size: 4.0,
             video: None,
             transition_ms: 250.0,
+            style: Default::default(),
         }),
         "conf-waiting" => Scene::Confidence(ConfidenceScene { size: 4.0, transition_ms: 250.0, ..Default::default() }),
         other => panic!("unknown scene {other}"),
@@ -116,6 +136,7 @@ fn main() -> anyhow::Result<()> {
     }
     let start = Instant::now();
     capture.set_scene(scene, start);
+    capture.render_shaders();
     let (pixels, _) = capture.settle(size, start, Duration::from_secs(5));
     image::save_buffer(out, &pixels, size.0, size.1, image::ColorType::Rgba8)?;
     Ok(())

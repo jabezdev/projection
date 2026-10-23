@@ -20,6 +20,9 @@ pub trait PixelFrame: Send + Sync {
 pub enum VideoKey {
     Session(u64),
     Ambient(String),
+    /// A built-in animated background, rendered on the GPU rather than
+    /// decoded: `shader_bg::ShaderSpec` encoded as a string.
+    Shader(String),
 }
 
 /// Supplies the frame due now for each video. Polled by one pump thread,
@@ -54,7 +57,8 @@ impl SharedFrame {
             dimension: wgpu::TextureDimension::D2,
             // sRGB values pass through unconverted; outputs blend in sRGB.
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            // Rendered into by shader backgrounds; read back in tests.
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -96,6 +100,12 @@ impl SharedFrame {
     pub fn uv(&self) -> [f32; 4] {
         let (w, h) = self.size().unwrap_or((0, 0));
         [0.0, 0.0, w as f32 / self.capacity.0 as f32, h as f32 / self.capacity.1 as f32]
+    }
+
+    /// Records that `size` pixels in the top-left corner were rendered on the GPU.
+    pub(crate) fn rendered(&self, size: (u32, u32)) {
+        self.content.store((size.0 as u64) << 32 | size.1 as u64, Ordering::Release);
+        self.generation.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Uploads `frame` into the top-left corner. Frames larger than the

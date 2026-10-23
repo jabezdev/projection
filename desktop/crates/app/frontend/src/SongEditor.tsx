@@ -3,6 +3,7 @@ import { arrangedParts, emptySong, partCode, partColor, partColors, slides, move
 import SongPartEditor from './SongPartEditor';
 import { Icon } from './Icons';
 import type { Media } from './models';
+import { shaderPresets } from './outputState';
 
 type Props = { title?: string; song?: SongDocument; backgrounds?: Media[]; onClose: () => void; onSave: (title: string, song: SongDocument) => Promise<void> };
 const PART_DRAG = 'application/x-magi-part';
@@ -91,7 +92,7 @@ export default function SongEditor({ title = '', song, backgrounds = [], onClose
           </div>)}
           {document.arrangement.length > 0 && <div className={`arrangement-end ${dropSlot === document.arrangement.length ? 'drop-before' : ''}`}>Drop here to append</div>}
         </div>
-        <div className="editor-background"><label htmlFor="song-background">Background</label><select aria-label="Choose song background" value={backgrounds.some(m => m.path === document.background) ? document.background : ''} onChange={e => setDocument(current => ({ ...current, background: e.target.value }))}><option value="">Keep previous / custom path</option>{backgrounds.filter(m => m.kind !== 'audio').map(m => <option value={m.path} key={m.id}>{m.title}</option>)}</select><input id="song-background" value={document.background} placeholder="Image or video file path" onChange={e => setDocument(current => ({ ...current, background: e.target.value }))}/><small>Leave empty to retain the previous background.</small></div>
+        <div className="editor-background"><label htmlFor="song-background">Background</label><select aria-label="Choose song background" value={backgrounds.some(m => m.path === document.background) || shaderPresets.some(p => `shader:${p.name}` === document.background) ? document.background : ''} onChange={e => setDocument(current => ({ ...current, background: e.target.value }))}><option value="">Keep previous / custom path</option>{backgrounds.filter(m => m.kind !== 'audio').map(m => <option value={m.path} key={m.id}>{m.title}</option>)}<optgroup label="Animated">{shaderPresets.map(p => <option value={`shader:${p.name}`} key={p.name}>{p.title}</option>)}</optgroup></select><input id="song-background" value={document.background} placeholder="Image or video file path" onChange={e => setDocument(current => ({ ...current, background: e.target.value }))}/><small>Leave empty to retain the previous background.</small></div>
       </aside>
     </div>
   </div>;

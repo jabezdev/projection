@@ -189,11 +189,12 @@ pub fn get_output_preview(previews: tauri::State<native_output::PreviewStore>, t
     previews.jpeg(&target).map(tauri::ipc::Response::new).ok_or_else(|| format!("No {target} preview yet"))
 }
 
-/// Renders the settings dialog's sample lyrics in `config` natively.
+/// Renders the settings dialog's samples of both screens in `config` natively.
 #[tauri::command]
 pub fn preview_output_style(outputs: tauri::State<NativeOutputs>, config: protocol::OutputConfig) -> Result<(), String> {
     config.validate()?;
     outputs.preview_style(render_engine::Scene::Main(native_scene::style_sample_scene(&config)));
+    outputs.preview_style(render_engine::Scene::Confidence(native_scene::confidence_sample_scene(&config)));
     Ok(())
 }
 

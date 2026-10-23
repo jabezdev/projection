@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { invoke, listen } from './tauri';
 import { useVideoPoster } from './useVideoPoster';
 
-type Target = 'projection' | 'confidence' | 'style';
+type Target = 'projection' | 'confidence' | 'style' | 'confidence-style';
 /** A still rendered by the native output engine, refreshed when its scene settles. */
 export function NativePreview({ target, label }: { target: Target; label: string }) {
   const [url, setUrl] = useState('');

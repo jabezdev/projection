@@ -14,6 +14,7 @@ mod output;
 mod paint;
 mod preview;
 pub mod scene;
+mod shader_bg;
 mod test_source;
 pub mod text;
 
@@ -27,9 +28,13 @@ pub use frame::{PixelFrame, SharedFrame, VideoFrames, VideoKey};
 pub use main_scene::LyricGeometry;
 pub use media::MediaTextures;
 pub use output::{OutputRole, OutputStats};
-pub use paint::{css_color, Rgba};
+pub use paint::{css_color, Rgba, TextEffects};
 pub use preview::{PreviewTarget, Snapshot, SnapshotSink};
-pub use scene::{ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, Scene, Vertical};
+pub use scene::{
+    ConfidenceGroup, ConfidenceScene, ConfidenceStyle, Direction, Display, Easing, LyricStyle, MainScene, MediaLayer, MediaSource, Scene, Shadow, Stroke,
+    Transition, TransitionKind, Vertical,
+};
+pub use shader_bg::{ShaderSpec, SHADER_SIZE};
 pub use test_source::TestPatternSource;
 pub use text::{Fonts, TextAlign};
 
@@ -100,6 +105,8 @@ pub struct RenderEngine {
     sizes: Mutex<HashMap<OutputRole, (u32, u32)>>,
     aspects: Mutex<HashMap<OutputRole, (u32, u32)>>,
     previews: Mutex<Option<Previews>>,
+    /// Stills loaded ahead of their cue, kept with the scenes' own media.
+    preloads: Mutex<HashSet<String>>,
 }
 
 impl RenderEngine {
@@ -154,6 +161,7 @@ impl RenderEngine {
             sizes: Mutex::new(sizes),
             aspects: Mutex::default(),
             previews: Mutex::default(),
+            preloads: Mutex::default(),
         })
     }
 
@@ -175,10 +183,15 @@ impl RenderEngine {
         Ok(())
     }
 
-    /// Previews a main scene that no output shows, such as a style sample.
+    /// Previews a scene that no output shows: a style sample of the
+    /// projection (main scene) or the confidence screen.
     pub fn preview_style(&self, scene: Scene) {
+        let target = match scene {
+            Scene::Main(_) => PreviewTarget::Style,
+            Scene::Confidence(_) => PreviewTarget::ConfidenceStyle,
+        };
         if let Some(previews) = self.previews.lock().expect("previews poisoned").as_ref() {
-            previews.set_scene(PreviewTarget::Style, scene);
+            previews.set_scene(target, scene);
         }
     }
 
@@ -191,7 +204,36 @@ impl RenderEngine {
     pub fn set_scene(&self, role: OutputRole, scene: Scene) {
         let mut scenes = self.scenes.lock().expect("scenes poisoned");
         scenes.insert(role, scene.clone());
-        let (mut videos, mut images) = (HashSet::new(), HashSet::new());
+        self.retain_media(&scenes);
+        drop(scenes);
+        if let Some(previews) = self.previews.lock().expect("previews poisoned").as_ref() {
+            previews.set_scene(preview_target(role), scene.clone());
+        }
+        if let Some(worker) = self.outputs.get(&role) {
+            worker.set_scene(scene);
+        }
+    }
+
+    /// Loads `images` ahead of their cues (the next and previous slides), so
+    /// they appear without a decode delay. Replaces the previous set.
+    pub fn preload(&self, images: &[String]) {
+        let wanted: HashSet<String> = images.iter().cloned().collect();
+        let mut preloads = self.preloads.lock().expect("preloads poisoned");
+        if *preloads == wanted {
+            return;
+        }
+        for path in &wanted {
+            self.media.image(path);
+        }
+        *preloads = wanted;
+        drop(preloads);
+        let scenes = self.scenes.lock().expect("scenes poisoned");
+        self.retain_media(&scenes);
+    }
+
+    /// Keeps the textures the scenes use plus the preloaded stills.
+    fn retain_media(&self, scenes: &HashMap<OutputRole, Scene>) {
+        let (mut videos, mut images) = (HashSet::new(), self.preloads.lock().expect("preloads poisoned").clone());
         for scene in scenes.values() {
             for source in scene_sources(scene) {
                 match source {
@@ -201,13 +243,6 @@ impl RenderEngine {
             }
         }
         self.media.retain(&videos, &images);
-        drop(scenes);
-        if let Some(previews) = self.previews.lock().expect("previews poisoned").as_ref() {
-            previews.set_scene(preview_target(role), scene.clone());
-        }
-        if let Some(worker) = self.outputs.get(&role) {
-            worker.set_scene(scene);
-        }
     }
 
     pub fn resize(&self, role: OutputRole, width: u32, height: u32) {
@@ -340,14 +375,28 @@ impl FramePump {
         let thread = {
             let running = running.clone();
             std::thread::Builder::new().name("frame-pump".into()).spawn(move || {
+                let mut shaders = shader_bg::ShaderBackgrounds::new(&gpu.device);
                 while running.load(Ordering::Acquire) {
                     let mut uploaded = false;
-                    for (key, texture) in media.videos() {
-                        // A stopped source keeps its last frame for fading layers.
-                        if let Some(next) = frames.frame(&key).filter(|f| f.id() != texture.last_id()) {
-                            uploaded |= texture.upload(&gpu.queue, next.as_ref());
+                    let videos = media.videos();
+                    let now = std::time::Instant::now();
+                    for (key, texture) in &videos {
+                        match key {
+                            // Rendered here rather than decoded; submits its own work.
+                            VideoKey::Shader(spec) => {
+                                shaders.tick(&gpu, spec, texture, now);
+                            }
+                            // A stopped source keeps its last frame for fading layers.
+                            _ => {
+                                if let Some(next) = frames.frame(key).filter(|f| f.id() != texture.last_id()) {
+                                    uploaded |= texture.upload(&gpu.queue, next.as_ref());
+                                }
+                            }
                         }
                     }
+                    shaders.retain(&videos.iter().filter_map(|(key, _)| match key { VideoKey::Shader(spec) => Some(spec), _ => None }).collect::<Vec<_>>());
+                    // Runs completion callbacks (the shader budget) without waiting.
+                    let _ = gpu.device.poll(wgpu::PollType::Poll);
                     if uploaded {
                         // Writes are applied on the next submit; without one, an
                         // idle output would never see the frame.

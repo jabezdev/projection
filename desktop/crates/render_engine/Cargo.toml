@@ -11,6 +11,8 @@ bytemuck = { workspace = true }
 pollster = { workspace = true }
 crossbeam = { workspace = true }
 cosmic-text = "0.19"
+# The shaper cosmic-text uses, for kerning across word boundaries.
+harfrust = "0.5"
 etagere = "0.3"
 image = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

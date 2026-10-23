@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 mod output_config;
-pub use output_config::{BackgroundFit, OutputConfig, TextAlign, VerticalAlign, OUTPUT_CONFIG_VERSION};
+pub use output_config::{BackgroundFit, Easing, OutputConfig, TextAlign, TransitionDirection, TransitionKind, VerticalAlign, OUTPUT_CONFIG_VERSION, SHADER_PRESETS};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectModel {
@@ -111,7 +111,12 @@ pub enum Mode {
 pub enum BackgroundKind {
     Image,
     Video,
+    /// A built-in animated background: the path is `shader:<preset>`.
+    Shader,
 }
+
+/// The `shader:` prefix of shader background paths.
+pub const SHADER_PREFIX: &str = "shader:";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Background {

@@ -327,3 +327,12 @@ kbd { padding: 1px 5px; border: 1px solid #454b54; border-bottom-width: 2px; bac
 .missing-media { padding: 14px; display: grid; gap: 10px; align-content: start; }
 .missing-media li { overflow-wrap: anywhere; }
 .missing-media small { display: block; color: #8e98a6; }
+.settings-tabs { display: flex; gap: 1px; padding: 0 18px; border-bottom: 1px solid #344a58; background: #131d24; }
+.settings-tabs button { padding: 10px 14px; font-size: 12px; color: #9fb2c1; border-bottom: 2px solid transparent; }
+.settings-tabs button[aria-selected=true] { color: #e6f3f2; border-bottom-color: #47c6bd; }
+.settings-single { grid-template-columns: minmax(0, 1fr); }
+.settings-fields .setting-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #d3dde5; }
+.setting-check input { accent-color: #47c6bd; }
+.settings-fields .setting-group { border: 0; padding: 0 0 0 14px; display: grid; gap: 12px; border-left: 2px solid #2b3c48; }
+.settings-fields { overflow-x: hidden; } .settings-fields fieldset fieldset { min-width: 0; }
+.settings-fields .setting-check input[type=checkbox] { width: auto; flex: none; padding: 0; }

@@ -7,7 +7,7 @@ export type TauriEvent<T> = {
   payload: T;
 };
 
-type UiOnlyBackgroundKind = 'image' | 'video';
+type UiOnlyBackgroundKind = 'image' | 'video' | 'shader';
 type UiOnlyBackground = { kind: UiOnlyBackgroundKind; path: string };
 
 type UiOnlyProgramState = {

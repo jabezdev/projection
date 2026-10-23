@@ -345,12 +345,14 @@ fn main() -> anyhow::Result<()> {
                 native_scene::SceneFeed::start(
                     snapshot.clone(),
                     move || handle.state::<OutputState>().config.lock().map(|c| c.clone()).unwrap_or_default(),
-                    move |scenes, videos| {
-                        ambient.set_ambient(&videos);
+                    move |scenes, plan| {
+                        ambient.set_ambient(&plan.ambient, &plan.prepared_ambient);
+                        ambient.prepare(plan.foreground.as_deref());
                         if let Some(outputs) = apply_handle.try_state::<NativeOutputs>() {
                             for (role, scene) in scenes {
                                 outputs.set_scene(role, scene);
                             }
+                            outputs.preload(&plan.images);
                         }
                     },
                 )?

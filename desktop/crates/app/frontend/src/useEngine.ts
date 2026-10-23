@@ -4,7 +4,7 @@ import type { Media, ProjectModel } from './models';
 import type { PlaybackState } from './playback';
 
 export type DisplayMode = 'logo' | 'black' | 'clear' | 'live';
-export type Background = { kind: 'image' | 'video'; path: string };
+export type Background = { kind: 'image' | 'video' | 'shader'; path: string };
 export type ProgramState = {
   display?: DisplayMode;
   mode: 'manual' | 'automated' | 'external';

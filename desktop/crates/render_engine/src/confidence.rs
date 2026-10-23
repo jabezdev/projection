@@ -9,8 +9,8 @@ use crossbeam::channel::{bounded, Receiver};
 
 use crate::media::MediaTextures;
 use crate::main_scene::MediaStage;
-use crate::paint::{css_color, with_alpha, DrawList, Item, Rect, Rgba};
-use crate::scene::{Activity, ConfidenceGroup, ConfidenceScene, MediaLayer, MediaSource};
+use crate::paint::{css_color, with_alpha, DrawList, Item, Rect, Rgba, TextEffects};
+use crate::scene::{Activity, ConfidenceGroup, ConfidenceScene, ConfidenceStyle, MediaLayer, MediaSource};
 use crate::text::{layout, Fonts, TextAlign, TextLayout, TextStyle};
 
 const UI_FONT: &str = "Segoe UI";
@@ -99,12 +99,16 @@ struct Card {
     color: Rgba,
 }
 
+/// What a layout is built from: groups, lyric size, style and output size.
+type LayoutKey = (Vec<ConfidenceGroup>, f32, ConfidenceStyle, (u32, u32));
+
 /// Everything shaped for one scene at one output size.
 struct Layout {
     size: (u32, u32),
     /// What it was built from.
     groups: Vec<ConfidenceGroup>,
     scale: f32,
+    style: ConfidenceStyle,
     rows: Vec<Row>,
     sections: Vec<Section>,
     content_height: f32,
@@ -117,27 +121,32 @@ struct Metrics {
     cq: f32,
     w: f32,
     h: f32,
+    clock: bool,
+    tape: bool,
 }
 
 impl Metrics {
-    fn new(size: (u32, u32)) -> Self {
-        Self { cq: size.0 as f32 / 100.0, w: size.0 as f32, h: size.1 as f32 }
+    fn new(size: (u32, u32), style: &ConfidenceStyle) -> Self {
+        Self { cq: size.0 as f32 / 100.0, w: size.0 as f32, h: size.1 as f32, clock: style.clock, tape: style.tape }
+    }
+    fn bar(&self) -> bool {
+        self.clock || self.tape
     }
     fn topbar(&self) -> f32 {
-        (6.0 * self.cq).max(20.0)
+        if self.bar() { (6.0 * self.cq).max(20.0) } else { 0.0 }
     }
     /// Top of the scroll viewport, below the topbar's 1px border.
     fn scroll_top(&self) -> f32 {
-        self.topbar() + 1.0
+        if self.bar() { self.topbar() + 1.0 } else { 0.0 }
     }
     fn scroll_height(&self) -> f32 {
         (self.h - self.scroll_top()).max(0.0)
     }
     fn time_width(&self) -> f32 {
-        13.0 * self.cq
+        if self.clock { 13.0 * self.cq } else { 0.0 }
     }
     fn tape_left(&self) -> f32 {
-        self.time_width() + 1.0
+        if self.clock { self.time_width() + 1.0 } else { 0.0 }
     }
     /// `flex: 0 0 18cqw` under the app's border-box sizing: the padding and
     /// right border are inside.
@@ -166,10 +175,10 @@ impl Metrics {
 }
 
 /// Shaped text by content, kept across rebuilds so an edit reshapes only
-/// what changed. Valid for one output width and lyric size.
+/// what changed. Valid for one output width, lyric size and style.
 #[derive(Default)]
 struct TextCache {
-    metrics: (u32, u32),
+    metrics: Option<(u32, u32, ConfidenceStyle)>,
     entries: HashMap<(u8, String), Arc<TextLayout>>,
 }
 
@@ -181,7 +190,7 @@ pub struct ConfidenceRenderer {
     /// The active row within `layout`, which may lag the scene while a
     /// rebuild for new groups is in flight.
     active: Option<(usize, usize)>,
-    building: Option<((Vec<ConfidenceGroup>, f32, (u32, u32)), Receiver<Layout>)>,
+    building: Option<(LayoutKey, Receiver<Layout>)>,
     cache: Arc<Mutex<TextCache>>,
     video: MediaStage,
     scroll: Smooth,
@@ -218,7 +227,7 @@ impl ConfidenceRenderer {
     pub fn set_scene(&mut self, scene: ConfidenceScene, media: &MediaTextures, now: Instant) {
         let video = scene.video.clone().map(|key| MediaLayer { source: MediaSource::Video(key), cover: false });
         self.video.set(video.as_ref(), media, now, scene.transition_ms);
-        if scene.groups != self.scene.groups || scene.size != self.scene.size || scene.active != self.scene.active {
+        if scene.groups != self.scene.groups || scene.size != self.scene.size || scene.active != self.scene.active || scene.style != self.scene.style {
             self.revision += 1;
         }
         self.scene = scene;
@@ -226,7 +235,7 @@ impl ConfidenceRenderer {
 
     pub fn activity(&self, now: Instant) -> Activity {
         let scrolling = self.scroll.running(now) || self.tape.running(now);
-        let clock_changed = self.clock.as_ref().is_none_or(|(text, ..)| *text != clock_text());
+        let clock_changed = self.scene.style.clock && self.clock.as_ref().is_none_or(|(text, ..)| *text != clock_text());
         let built = self.building.as_ref().is_some_and(|(_, done)| !done.is_empty());
         let building = self.building.is_some();
         self.video.activity(now).and(Activity {
@@ -240,7 +249,7 @@ impl ConfidenceRenderer {
     /// built in place; later ones on a worker while the old one stays up, so
     /// loading or editing a long service never stalls presentation.
     fn update_layout(&mut self, fonts: &Arc<Fonts>, size: (u32, u32)) {
-        let wanted = (self.scene.groups.clone(), self.scene.size, size);
+        let wanted: LayoutKey = (self.scene.groups.clone(), self.scene.size, self.scene.style.clone(), size);
         if let Some((key, done)) = &self.building {
             if *key != wanted {
                 self.building = None;
@@ -249,21 +258,21 @@ impl ConfidenceRenderer {
                 self.building = None;
             }
         }
-        let current = self.layout.as_ref().is_some_and(|l| l.groups == wanted.0 && l.scale == wanted.1 && l.size == wanted.2);
+        let current = self.layout.as_ref().is_some_and(|l| l.groups == wanted.0 && l.scale == wanted.1 && l.style == wanted.2 && l.size == wanted.3);
         if current {
             self.active = self.scene.active;
             return;
         }
         if self.layout.is_none() {
-            self.layout = Some(Arc::new(build_layout(fonts, &self.cache, &wanted.0, wanted.1, size)));
+            self.layout = Some(Arc::new(build_layout(fonts, &self.cache, &wanted.0, wanted.1, &wanted.2, size)));
             self.active = self.scene.active;
             return;
         }
         if self.building.is_none() {
             let (done_tx, done) = bounded(1);
-            let (fonts, cache, (groups, scale, size)) = (fonts.clone(), self.cache.clone(), wanted.clone());
+            let (fonts, cache, (groups, scale, style, size)) = (fonts.clone(), self.cache.clone(), wanted.clone());
             let spawned = std::thread::Builder::new().name("confidence-layout".into()).spawn(move || {
-                let _ = done_tx.send(build_layout(&fonts, &cache, &groups, scale, size));
+                let _ = done_tx.send(build_layout(&fonts, &cache, &groups, scale, &style, size));
             });
             match spawned {
                 Ok(_) => self.building = Some((wanted, done)),
@@ -275,11 +284,12 @@ impl ConfidenceRenderer {
     pub fn frame(&mut self, fonts: &Arc<Fonts>, size: (u32, u32), now: Instant) -> DrawList {
         self.video.update(now, self.scene.transition_ms);
         self.update_layout(fonts, size);
-        let m = Metrics::new(size);
+        let laid = self.layout.clone().expect("layout built");
+        // Metrics follow the layout on screen, which may lag a style change.
+        let m = Metrics::new(size, &laid.style);
         self.focus(&m, size, now);
         let scroll = self.scroll.value(now);
         let tape = self.tape.value(now);
-        let laid = self.layout.clone().expect("layout built");
         let laid = laid.as_ref();
         let active = self.active;
         let mut list = DrawList::new();
@@ -311,6 +321,7 @@ impl ConfidenceRenderer {
                 y: (y + label_h - 1.5 * m.cq).round(),
                 color: section.color,
                 angle: -std::f32::consts::FRAC_PI_2,
+                effects: TextEffects::default(),
             });
         }
         for row in &laid.rows {
@@ -333,18 +344,22 @@ impl ConfidenceRenderer {
         list.set_clip(None);
 
         // Topbar: clock and tape.
-        list.fill(Rect::new(0.0, 0.0, m.w, m.topbar()), rgb("#172029"));
-        list.fill(Rect::new(0.0, m.topbar(), m.w, 1.0), rgb("#3d4d5b"));
-        list.fill(Rect::new(m.time_width(), 0.0, 1.0, m.topbar()), rgb("#42515e"));
-        let now_text = clock_text();
-        if self.clock.as_ref().is_none_or(|(text, width, _)| *text != now_text || *width != size.0) {
-            let style = TextStyle { weight: 600, line_height: 0.0, align: TextAlign::Center, ..TextStyle::new(MONO_FONT, 3.4 * m.cq) };
-            let clock = Arc::new(layout(fonts, &now_text, &style, Some(m.time_width())));
-            self.clock = Some((now_text, size.0, clock));
+        if m.bar() {
+            list.fill(Rect::new(0.0, 0.0, m.w, m.topbar()), rgb("#172029"));
+            list.fill(Rect::new(0.0, m.topbar(), m.w, 1.0), rgb("#3d4d5b"));
         }
-        let (_, _, clock) = self.clock.as_ref().expect("clock laid out");
-        list.text(clock, 0.0, (m.topbar() - clock.height) / 2.0, rgb("#ffffff"));
-        let strip = Rect::new(m.tape_left(), 0.0, m.w - m.tape_left(), m.topbar());
+        if m.clock {
+            list.fill(Rect::new(m.time_width(), 0.0, 1.0, m.topbar()), rgb("#42515e"));
+            let now_text = clock_text();
+            if self.clock.as_ref().is_none_or(|(text, width, _)| *text != now_text || *width != size.0) {
+                let style = TextStyle { weight: 600, line_height: 0.0, align: TextAlign::Center, ..TextStyle::new(MONO_FONT, 3.4 * m.cq) };
+                let clock = Arc::new(layout(fonts, &now_text, &style, Some(m.time_width())));
+                self.clock = Some((now_text, size.0, clock));
+            }
+            let (_, _, clock) = self.clock.as_ref().expect("clock laid out");
+            list.text(clock, 0.0, (m.topbar() - clock.height) / 2.0, rgb("#ffffff"));
+        }
+        let strip = if m.tape { Rect::new(m.tape_left(), 0.0, m.w - m.tape_left(), m.topbar()) } else { Rect::default() };
         list.set_clip(Some(strip));
         let active_group = active.map(|(g, _)| g);
         for (index, card) in laid.cards.iter().enumerate() {
@@ -384,7 +399,7 @@ impl ConfidenceRenderer {
     fn focus(&mut self, m: &Metrics, size: (u32, u32), now: Instant) {
         // Wait for a layout of the current groups before moving.
         let laid = self.layout.clone().expect("layout built");
-        if laid.groups != self.scene.groups || laid.size != size || self.focused == Some((self.revision, size)) {
+        if laid.groups != self.scene.groups || laid.style != self.scene.style || laid.size != size || self.focused == Some((self.revision, size)) {
             return;
         }
         let animate = self.focused.is_some_and(|(_, s)| s == size);
@@ -403,11 +418,11 @@ impl ConfidenceRenderer {
     }
 }
 
-fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[ConfidenceGroup], scale: f32, size: (u32, u32)) -> Layout {
-    let m = Metrics::new(size);
+fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[ConfidenceGroup], scale: f32, style: &ConfidenceStyle, size: (u32, u32)) -> Layout {
+    let m = Metrics::new(size, style);
     let cq = m.cq;
     let mut cache = cache.lock().expect("text cache poisoned");
-    let metrics = (size.0, scale.to_bits());
+    let metrics = Some((size.0, scale.to_bits(), style.clone()));
     if cache.metrics != metrics {
         *cache = TextCache { metrics, entries: HashMap::new() };
     }
@@ -419,7 +434,7 @@ fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[ConfidenceGro
         entries.insert(key, laid.clone());
         laid
     };
-    let lyric = TextStyle { line_height: 1.35 * scale * cq, ..TextStyle::new(UI_FONT, scale * cq) };
+    let lyric = TextStyle { line_height: style.line_height * scale * cq, ..TextStyle::new(&style.font, scale * cq) };
     let code_style = TextStyle { line_height: 0.0, ..TextStyle::new(MONO_FONT, 1.3 * cq) };
     let label_style = TextStyle { weight: 750, line_height: 4.2 * cq, ..TextStyle::new(UI_FONT, 2.8 * cq) };
     let card_code = TextStyle { weight: 700, line_height: 3.3 * cq, ..TextStyle::new(UI_FONT, 2.2 * cq) };
@@ -433,7 +448,8 @@ fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[ConfidenceGro
         for (line, text) in group.lines.iter().enumerate() {
             let code_text = format!("{}.{}", group.code, line + 1);
             let code = shape(0, &code_text, &|| layout(fonts, &code_text, &code_style, None));
-            let laid = shape(1, text, &|| layout(fonts, text, &lyric, Some(m.text_width())));
+            let shown = if style.caps { text.to_uppercase() } else { text.clone() };
+            let laid = shape(1, &shown, &|| layout(fonts, &shown, &lyric, Some(m.text_width())));
             let height = 3.6 * cq + laid.height + 1.0;
             rows.push(Row { group: index, line, top, height, code, text: laid });
             top += height;
@@ -454,7 +470,7 @@ fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[ConfidenceGro
         let style = TextStyle { line_height: 6.0 * cq, align: TextAlign::Center, ..TextStyle::new(UI_FONT, 4.0 * cq) };
         Arc::new(layout(fonts, "Waiting for the next cue", &style, Some(m.w)))
     });
-    Layout { size, groups: groups.to_vec(), scale, rows, sections, content_height: top, cards, waiting }
+    Layout { size, groups: groups.to_vec(), scale, style: style.clone(), rows, sections, content_height: top, cards, waiting }
 }
 
 /// One line of `text`, cut with an ellipsis to fit `width`.
@@ -484,7 +500,7 @@ mod tests {
     #[test]
     fn metrics_match_the_parity_reference_at_1080p() {
         // Values from the parity references in tools/parity.
-        let m = Metrics::new((1920, 1080));
+        let m = Metrics::new((1920, 1080), &ConfidenceStyle::default());
         assert!((m.scroll_top() - 116.2).abs() < 0.05);
         assert!((m.tape_left() - 250.6).abs() < 0.05);
         assert!((m.card_width() - 345.6).abs() < 0.05);

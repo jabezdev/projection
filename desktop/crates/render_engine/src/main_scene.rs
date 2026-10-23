@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use crate::frame::SharedFrame;
 use crate::media::{ImageSlot, MediaTextures};
-use crate::paint::{fit, with_alpha, DrawList, Rect};
-use crate::scene::{millis, Activity, Display, Fade, LyricStyle, MainScene, MediaLayer, MediaSource, Vertical};
+use crate::paint::{fit, with_alpha, DrawList, Rect, TextEffects};
+use crate::scene::{millis, Activity, Display, Fade, LyricStyle, MainScene, MediaLayer, MediaSource, Transition, TransitionKind, Vertical};
 use crate::text::{layout, Fonts, TextAlign, TextLayout, TextStyle};
 
 enum Handle {
@@ -39,6 +39,9 @@ impl Handle {
     }
 
     fn draw(&self, list: &mut DrawList, area: Rect, cover: bool, opacity: f32) {
+        if area.w <= 0.0 || area.h <= 0.0 {
+            return;
+        }
         match self {
             Handle::Video(frame) => {
                 if let Some(size) = frame.size() {
@@ -65,18 +68,39 @@ struct Layer {
     opacity: Fade,
 }
 
-/// A new source fades in only once it
-/// can be drawn, while the previous one stays until then and fades out.
+/// A new source comes in (fading, cut or sliding) only once it can be
+/// drawn, while the previous one stays until then and goes out.
 #[derive(Default)]
 pub(crate) struct MediaStage {
     target: Option<MediaSource>,
     shown: Option<MediaSource>,
     layers: Vec<Layer>,
     remove_at: Option<Instant>,
+    transition: Transition,
+}
+
+/// How long a transition of `kind` lasts.
+fn duration(kind: TransitionKind, fade_ms: f32) -> f32 {
+    if kind == TransitionKind::Cut { 0.0 } else { fade_ms }
+}
+
+/// Where a sliding layer is at `progress` (0 out of view, 1 in place): the
+/// incoming one arrives from behind the movement, the outgoing one leaves ahead.
+fn slide_offset(transition: &Transition, incoming: bool, progress: f32, area: Rect) -> (f32, f32) {
+    let (vx, vy) = transition.direction.vector();
+    let away = 1.0 - progress;
+    let sign = if incoming { -1.0 } else { 1.0 };
+    (sign * vx * area.w * away, sign * vy * area.h * away)
 }
 
 impl MediaStage {
+    pub fn set_transition(&mut self, transition: Transition) {
+        self.transition = transition;
+    }
+
     pub fn set(&mut self, layer: Option<&MediaLayer>, media: &MediaTextures, now: Instant, fade_ms: f32) {
+        let fade_ms = duration(self.transition.kind, fade_ms);
+        let easing = self.transition.easing;
         let key = layer.map(|l| l.source.clone());
         if let Some(existing) = layer.and_then(|l| self.layers.iter_mut().find(|x| x.source == l.source)) {
             existing.cover = layer.is_some_and(|l| l.cover);
@@ -99,7 +123,7 @@ impl MediaStage {
         } else {
             self.shown = None;
             for l in &mut self.layers {
-                l.opacity.retarget(0.0, now, millis(fade_ms));
+                l.opacity.retarget_eased(0.0, now, millis(fade_ms), easing);
             }
             self.remove_at = Some(now + millis(fade_ms));
         }
@@ -108,11 +132,12 @@ impl MediaStage {
 
     /// Advances readiness and removes faded layers.
     pub fn update(&mut self, now: Instant, fade_ms: f32) {
+        let fade_ms = duration(self.transition.kind, fade_ms);
         if let Some(target) = self.target.clone() {
             let ready = self.layers.iter().any(|l| l.source == target && l.handle.ready());
             if self.shown.as_ref() != Some(&target) && ready {
                 for l in &mut self.layers {
-                    l.opacity.retarget(if l.source == target { 1.0 } else { 0.0 }, now, millis(fade_ms));
+                    l.opacity.retarget_eased(if l.source == target { 1.0 } else { 0.0 }, now, millis(fade_ms), self.transition.easing);
                 }
                 self.shown = Some(target);
                 self.remove_at = Some(now + millis(fade_ms));
@@ -126,11 +151,25 @@ impl MediaStage {
     }
 
     pub fn draw(&self, list: &mut DrawList, area: Rect, now: Instant) {
+        let sliding = self.transition.kind == TransitionKind::Slide;
+        if sliding {
+            list.set_clip(Some(area));
+        }
         for layer in &self.layers {
-            let opacity = layer.opacity.value(now);
-            if opacity > 0.0 {
-                layer.handle.draw(list, area, layer.cover, opacity);
+            let progress = layer.opacity.value(now);
+            if progress <= 0.0 {
+                continue;
             }
+            if sliding {
+                let incoming = layer.opacity.target() > 0.0;
+                let (dx, dy) = slide_offset(&self.transition, incoming, progress, area);
+                layer.handle.draw(list, Rect::new(area.x + dx, area.y + dy, area.w, area.h), layer.cover, 1.0);
+            } else {
+                layer.handle.draw(list, area, layer.cover, progress);
+            }
+        }
+        if sliding {
+            list.set_clip(None);
         }
     }
 
@@ -161,10 +200,11 @@ impl MediaStage {
 
 struct Lyric {
     text: String,
+    /// 0 out, 1 in place: opacity when fading, position when sliding.
     opacity: Fade,
 }
 
-/// Port of `LyricLayers`: the new text fades in while the previous fades out
+/// Port of `LyricLayers`: the new text comes in while the previous goes out
 /// from wherever it was, both on one clock; the box persists across them.
 #[derive(Default)]
 struct Lyrics {
@@ -174,17 +214,17 @@ struct Lyrics {
 }
 
 impl Lyrics {
-    fn set(&mut self, text: &str, now: Instant, fade_ms: f32) {
+    fn set(&mut self, text: &str, now: Instant, fade_ms: f32, transition: Transition) {
         if self.current.as_ref().map_or("", |c| c.text.as_str()) == text {
             return;
         }
-        let duration = millis(fade_ms);
+        let duration = millis(duration(transition.kind, fade_ms));
         self.previous = self.current.take().map(|mut lyric| {
-            lyric.opacity.retarget(0.0, now, duration);
+            lyric.opacity.retarget_eased(0.0, now, duration, transition.easing);
             lyric
         });
         let mut opacity = Fade::fixed(0.0, now);
-        opacity.retarget(1.0, now, duration);
+        opacity.retarget_eased(1.0, now, duration, transition.easing);
         self.current = Some(Lyric { text: text.to_string(), opacity });
         self.drop_previous_at = Some(now + duration);
     }
@@ -196,8 +236,9 @@ impl Lyrics {
         }
     }
 
-    fn visible(&self) -> impl Iterator<Item = &Lyric> {
-        self.previous.iter().chain(self.current.iter()).filter(|l| !l.text.is_empty())
+    /// Visible texts with their progress, and whether each is the incoming one.
+    fn visible(&self) -> impl Iterator<Item = (&Lyric, bool)> {
+        self.previous.iter().map(|l| (l, false)).chain(self.current.iter().map(|l| (l, true))).filter(|(l, _)| !l.text.is_empty())
     }
 
     fn running(&self, now: Instant) -> bool {
@@ -216,6 +257,8 @@ pub struct LyricGeometry {
     pub text_style: TextStyle,
     /// Wrapping width for the text.
     pub text_width: f32,
+    /// Shadow, outline and glow in pixels.
+    pub effects: TextEffects,
 }
 
 impl LyricGeometry {
@@ -237,7 +280,13 @@ impl LyricGeometry {
             align: style.align,
         };
         let text_width = (area.w - 2.0 * border - 2.0 * padding_x).max(1.0);
-        Self { area, border, padding_x, padding_y, text_style, text_width }
+        let px = cq / 16.0;
+        let effects = TextEffects {
+            shadow: style.shadow.map(|s| (s.color, s.x * px, s.y * px, s.blur * px)),
+            glow: style.glow.map(|g| (g.color, g.size * px)),
+            outline: style.outline.map(|o| (o.color, o.size * px)),
+        };
+        Self { area, border, padding_x, padding_y, text_style, text_width, effects }
     }
 
     /// The box around text `text_height` tall.
@@ -279,6 +328,7 @@ impl Default for MainRenderer {
 impl MainRenderer {
     pub fn set_scene(&mut self, scene: MainScene, media: &MediaTextures, now: Instant) {
         let fade = scene.transition_ms;
+        self.background.set_transition(scene.transition);
         self.background.set(scene.background.as_ref(), media, now, fade);
         if scene.display == Display::Logo {
             let logo = scene.logo.clone().map(|source| MediaLayer { source, cover: false });
@@ -288,7 +338,7 @@ impl MainRenderer {
             self.logo.clear();
         }
         let text = if scene.display == Display::Live { scene.text.as_str() } else { "" };
-        self.lyrics.set(text, now, fade);
+        self.lyrics.set(text, now, fade, scene.transition);
         self.scene = scene;
     }
 
@@ -322,20 +372,32 @@ impl MainRenderer {
             self.layouts.clear();
             self.layout_key = Some(key);
         }
-        let visible: Vec<(String, f32)> = self.lyrics.visible().map(|l| (l.text.clone(), l.opacity.value(now))).collect();
+        let visible: Vec<(String, f32, bool)> = self.lyrics.visible().map(|(l, incoming)| (l.text.clone(), l.opacity.value(now), incoming)).collect();
         if !visible.is_empty() {
-            let layouts: Vec<(Arc<TextLayout>, f32)> =
-                visible.iter().map(|(text, opacity)| (self.layout(fonts, text, &geometry, style.caps), *opacity)).collect();
-            let text_height = layouts.iter().map(|(l, _)| l.height).fold(0.0, f32::max);
+            let layouts: Vec<(Arc<TextLayout>, f32, bool)> =
+                visible.iter().map(|(text, progress, incoming)| (self.layout(fonts, text, &geometry, style.caps), *progress, *incoming)).collect();
+            let text_height = layouts.iter().map(|(l, ..)| l.height).fold(0.0, f32::max);
             let rect = geometry.text_box(style.vertical, text_height);
             list.fill(rect, style.box_color);
             list.border(rect, geometry.border, style.border_color);
             let (x, y) = (rect.x + geometry.border + geometry.padding_x, rect.y + geometry.border + geometry.padding_y);
-            for (laid, opacity) in &layouts {
-                list.text(laid, x, y, with_alpha(style.color, *opacity));
+            let transition = self.scene.transition;
+            if transition.kind == TransitionKind::Slide {
+                // Texts slide within the box; the box and border stay.
+                let inner = Rect::new(rect.x + geometry.border, rect.y + geometry.border, rect.w - 2.0 * geometry.border, rect.h - 2.0 * geometry.border);
+                list.set_clip(Some(inner));
+                for (laid, progress, incoming) in &layouts {
+                    let (dx, dy) = slide_offset(&transition, *incoming, *progress, inner);
+                    list.text_with_effects(laid, x + dx, y + dy, style.color, geometry.effects);
+                }
+                list.set_clip(None);
+            } else {
+                for (laid, opacity, _) in &layouts {
+                    list.text_with_effects(laid, x, y, with_alpha(style.color, *opacity), geometry.effects.with_alpha(*opacity));
+                }
             }
         }
-        self.layouts.retain(|text, _| visible.iter().any(|(t, _)| t == text));
+        self.layouts.retain(|text, _| visible.iter().any(|(t, ..)| t == text));
 
         if self.scene.display == Display::Logo {
             if self.scene.logo.is_some() {

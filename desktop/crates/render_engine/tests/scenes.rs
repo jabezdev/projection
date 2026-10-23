@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use render_engine::{
-    Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole,
-    PixelFrame, Scene, VideoKey,
+    Capture, ConfidenceGroup, ConfidenceScene, Direction, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole,
+    PixelFrame, Scene, Stroke, Transition, TransitionKind, VideoKey,
 };
 
 const SIZE: (u32, u32) = (640, 360);
@@ -187,7 +187,7 @@ fn a_video_layer_appears_only_with_its_first_frame() {
 fn confidence_video_replaces_the_teleprompter_once_ready() {
     let Some(mut capture) = capture(OutputRole::Confidence) else { return };
     let group = ConfidenceGroup { key: "1".into(), code: "V1".into(), title: "Song".into(), color: [0.3, 0.5, 0.9, 1.0], lines: vec!["line".into()] };
-    let teleprompter = ConfidenceScene { groups: vec![group], active: Some((0, 0)), size: 4.0, video: None, transition_ms: 200.0 };
+    let teleprompter = ConfidenceScene { groups: vec![group], active: Some((0, 0)), size: 4.0, video: None, transition_ms: 200.0, style: Default::default() };
     let t0 = Instant::now();
     capture.set_scene(Scene::Confidence(teleprompter.clone()), t0);
     let lyrics = capture.render(SIZE, t0 + Duration::from_secs(1));
@@ -234,7 +234,7 @@ fn long_service_layout_time() {
         })
         .collect();
     let t0 = Instant::now();
-    let scene = ConfidenceScene { groups, active: Some((150, 2)), size: 4.0, video: None, transition_ms: 200.0 };
+    let scene = ConfidenceScene { groups, active: Some((150, 2)), size: 4.0, video: None, transition_ms: 200.0, style: Default::default() };
     capture.set_scene(Scene::Confidence(scene.clone()), t0);
     let started = Instant::now();
     capture.render((1920, 1080), t0);
@@ -252,4 +252,47 @@ fn long_service_layout_time() {
         capture.render((1920, 1080), t0 + Duration::from_secs(10));
     }
     println!("1800 rows: first layout {first:?}; frame during a rebuild {during:?}; edited rebuild done in {:?}", started.elapsed());
+}
+
+/// Columns (x) in the lower half where text is drawn.
+fn lit_columns(frame: &[u8]) -> Vec<u32> {
+    (0..SIZE.0).filter(|&x| (180..SIZE.1).any(|y| pixel(frame, x, y)[0] > 128)).collect()
+}
+
+#[test]
+fn a_cut_shows_the_new_text_at_once() {
+    let Some(mut capture) = capture(OutputRole::Projection) else { return };
+    let cut = Transition { kind: TransitionKind::Cut, ..Default::default() };
+    let t0 = Instant::now();
+    capture.set_scene(Scene::Main(MainScene { transition: cut, ..main_scene("FIRST") }), t0);
+    assert!(text_brightness(&capture.render(SIZE, t0)) >= 250, "no fade in");
+    assert!(!capture.busy(t0 + Duration::from_millis(1)));
+}
+
+#[test]
+fn a_slide_moves_the_new_text_in_from_behind_the_movement() {
+    let Some(mut capture) = capture(OutputRole::Projection) else { return };
+    let slide = Transition { kind: TransitionKind::Slide, direction: Direction::Left, ..Default::default() };
+    let t0 = Instant::now();
+    capture.set_scene(Scene::Main(MainScene { transition: slide, ..main_scene("I") }), t0);
+    let settled = lit_columns(&capture.render(SIZE, t0 + Duration::from_millis(300)));
+    let middle = capture.render(SIZE, t0 + Duration::from_millis(100));
+    let moving = lit_columns(&middle);
+    assert!(!settled.is_empty() && !moving.is_empty());
+    assert!(moving[0] > settled[0] + 50, "halfway, the text is still right of its place: {} vs {}", moving[0], settled[0]);
+    assert!(text_brightness(&middle) >= 250, "sliding text is opaque");
+}
+
+#[test]
+fn an_outline_surrounds_the_glyphs() {
+    let Some(mut capture) = capture(OutputRole::Projection) else { return };
+    let red = solid_png("outline-red.png", [255, 0, 0]);
+    let background = Some(MediaLayer { source: MediaSource::Image(red.to_str().unwrap().into()), cover: true });
+    let outlined = LyricStyle { size: 8.0, outline: Some(Stroke { color: [0.0, 0.0, 1.0, 1.0], size: 16.0 }), ..Default::default() };
+    let t0 = Instant::now();
+    capture.set_scene(Scene::Main(MainScene { background, style: outlined, ..main_scene("O") }), t0);
+    let (frame, _) = capture.settle(SIZE, t0, Duration::from_secs(5));
+    let blue = frame.chunks_exact(4).filter(|p| p[2] > 200 && p[0] < 60).count();
+    assert!(blue > 100, "an outline in the outline color: {blue} pixels");
+    assert!(text_brightness(&frame) >= 250, "the glyph fill is drawn over it");
 }

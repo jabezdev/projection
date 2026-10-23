@@ -28,8 +28,11 @@ pub use session::{MediaSession, Phase, SessionOptions, SessionStatus};
 pub struct MediaEngine {
     audio: Option<AudioOutput>,
     foreground: Mutex<Option<(u64, Arc<MediaSession>)>>,
-    /// Song backgrounds and logo videos, by file.
-    ambient: Mutex<HashMap<String, Arc<MediaSession>>>,
+    /// Song backgrounds and logo videos, by file, and whether each plays
+    /// (paused ones are prepared: their first frame waits for their cue).
+    ambient: Mutex<HashMap<String, (Arc<MediaSession>, bool)>>,
+    /// The next foreground media, opened paused and not yet heard.
+    prepared: Mutex<Option<(String, Arc<MediaSession>)>>,
 }
 
 impl MediaEngine {
@@ -47,7 +50,7 @@ impl MediaEngine {
     }
 
     pub fn with_audio(audio: Option<AudioOutput>) -> Self {
-        Self { audio, foreground: Mutex::new(None), ambient: Mutex::default() }
+        Self { audio, foreground: Mutex::new(None), ambient: Mutex::default(), prepared: Mutex::default() }
     }
 
     /// The audio device failed and has not been reopened yet.
@@ -59,9 +62,49 @@ impl MediaEngine {
         self.audio.as_ref().map(|a| a.format)
     }
 
-    /// Replaces the foreground session with `id`, preloading it silently.
+    /// Opens `path` paused ahead of its cue: its first frame is decoded and
+    /// its audio buffered without reaching the device, so the cue starts at
+    /// once. One file at a time; `None` releases it.
+    pub fn prepare(&self, path: Option<&str>) {
+        let mut prepared = self.prepared.lock().expect("prepared poisoned");
+        if prepared.as_ref().map(|(p, _)| p.as_str()) == path {
+            return;
+        }
+        if let Some((_, old)) = prepared.take() {
+            old.close();
+        }
+        let Some(path) = path else { return };
+        // Not attached: the device plays only the foreground session.
+        let feed = self.audio.as_ref().map(|output| Arc::new(SessionAudio::new(output.format.rate, output.format.channels)));
+        let options = SessionOptions { clip: Clip { start_us: 0, end_us: None, looping: false }, rate: 1.0, volume: 1.0, muted: false };
+        match MediaSession::open(path, options, feed) {
+            Ok(session) => *prepared = Some((path.to_string(), Arc::new(session))),
+            Err(e) => log::warn!("Preparing {path}: {e:#}"),
+        }
+    }
+
+    /// Replaces the foreground session with `id`, preloading it silently. A
+    /// session prepared for the same file is used instead of a new one.
     pub fn open(&self, id: u64, path: &str, options: SessionOptions) -> anyhow::Result<Arc<MediaSession>> {
         self.close_foreground();
+        let ready = {
+            let mut prepared = self.prepared.lock().expect("prepared poisoned");
+            match prepared.take() {
+                Some((prepared_path, session)) if prepared_path == path => Some(session),
+                other => {
+                    *prepared = other;
+                    None
+                }
+            }
+        };
+        if let Some(session) = ready {
+            session.configure(options, now_us());
+            if let (Some(output), Some(feed)) = (&self.audio, session.audio()) {
+                output.attach(feed.clone());
+            }
+            *self.foreground.lock().expect("foreground poisoned") = Some((id, session.clone()));
+            return Ok(session);
+        }
         let feed = self.audio.as_ref().map(|output| {
             let feed = Arc::new(SessionAudio::new(output.format.rate, output.format.channels));
             output.attach(feed.clone());
@@ -126,18 +169,29 @@ impl MediaEngine {
         session.current_frame(now_us)
     }
 
-    /// Keeps exactly `paths` open as silent, looping, playing sessions.
-    /// Sessions already open continue uninterrupted.
-    pub fn set_ambient(&self, paths: &[String]) {
+    /// Keeps exactly these files open as silent, looping sessions: `playing`
+    /// ones play; `prepared` ones wait paused (a playing loop that becomes
+    /// prepared pauses where it is). Open sessions continue uninterrupted.
+    pub fn set_ambient(&self, playing: &[String], prepared: &[String]) {
         let mut ambient = self.ambient.lock().expect("ambient poisoned");
-        let closing: Vec<String> = ambient.keys().filter(|p| !paths.contains(p)).cloned().collect();
+        let closing: Vec<String> = ambient.keys().filter(|p| !playing.contains(p) && !prepared.contains(p)).cloned().collect();
         for path in closing {
-            if let Some(session) = ambient.remove(&path) {
+            if let Some((session, _)) = ambient.remove(&path) {
                 session.close();
             }
         }
-        for path in paths {
-            if ambient.contains_key(path) {
+        let now = now_us();
+        for path in playing.iter().chain(prepared) {
+            let play = playing.contains(path);
+            if let Some((session, running)) = ambient.get_mut(path) {
+                if *running != play {
+                    if play {
+                        session.play(now);
+                    } else {
+                        session.pause(now);
+                    }
+                    *running = play;
+                }
                 continue;
             }
             let options = SessionOptions {
@@ -148,8 +202,10 @@ impl MediaEngine {
             };
             match MediaSession::open(path, options, None) {
                 Ok(session) => {
-                    session.play(now_us());
-                    ambient.insert(path.clone(), Arc::new(session));
+                    if play {
+                        session.play(now);
+                    }
+                    ambient.insert(path.clone(), (Arc::new(session), play));
                 }
                 Err(e) => log::error!("Opening ambient video {path}: {e:#}"),
             }
@@ -159,13 +215,14 @@ impl MediaEngine {
     /// The ambient frame due now for `path`. Only the renderer's pump should
     /// call this: it consumes due frames.
     pub fn ambient_frame(&self, path: &str, now_us: i64) -> Option<Arc<VideoFrame>> {
-        let session = self.ambient.lock().expect("ambient poisoned").get(path).cloned()?;
+        let session = self.ambient.lock().expect("ambient poisoned").get(path).map(|(s, _)| s.clone())?;
         session.current_frame(now_us)
     }
 
     pub fn shutdown(&self) {
         self.close_foreground();
-        self.set_ambient(&[]);
+        self.prepare(None);
+        self.set_ambient(&[], &[]);
     }
 }
 

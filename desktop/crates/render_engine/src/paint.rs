@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::text::{AtlasFull, Fonts, GlyphAtlas, TextLayout};
+use crate::text::{AtlasFull, Fonts, GlyphAtlas, SdfAtlas, TextLayout, MAX_SPREAD};
 
 /// Straight-alpha sRGB color.
 pub type Rgba = [f32; 4];
@@ -59,12 +59,45 @@ impl GpuTexture {
     }
 }
 
+/// Effects drawn under text, from the glyphs' distance fields. Sizes in pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct TextEffects {
+    /// Color (opacity included), offset and blur radius.
+    pub shadow: Option<(Rgba, f32, f32, f32)>,
+    /// Color (opacity included) and radius.
+    pub glow: Option<(Rgba, f32)>,
+    /// Color and width, outside the glyph.
+    pub outline: Option<(Rgba, f32)>,
+}
+
+impl TextEffects {
+    pub fn is_empty(&self) -> bool {
+        self.shadow.is_none() && self.glow.is_none() && self.outline.is_none()
+    }
+
+    /// How far from the glyph edge the effects reach: the distance field's spread.
+    fn spread(&self) -> u32 {
+        let shadow = self.shadow.map_or(0.0, |(_, _, _, blur)| blur);
+        let glow = self.glow.map_or(0.0, |(_, size)| size);
+        let outline = self.outline.map_or(0.0, |(_, width)| width);
+        (shadow.max(glow).max(outline) + 2.0).ceil().clamp(2.0, MAX_SPREAD as f32) as u32
+    }
+
+    /// Fades every effect with the text.
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        if let Some((color, ..)) = self.shadow.as_mut() { color[3] *= alpha; }
+        if let Some((color, _)) = self.glow.as_mut() { color[3] *= alpha; }
+        if let Some((color, _)) = self.outline.as_mut() { color[3] *= alpha; }
+        self
+    }
+}
+
 pub enum Item {
     Fill { rect: Rect, color: Rgba },
     Image { rect: Rect, uv: [f32; 4], texture: Arc<GpuTexture>, opacity: f32 },
     /// `layout` drawn with its top-left at (x, y), rotated by `angle` radians
-    /// (clockwise on screen) around that point.
-    Text { layout: Arc<TextLayout>, x: f32, y: f32, color: Rgba, angle: f32 },
+    /// (clockwise on screen) around that point, over its `effects`.
+    Text { layout: Arc<TextLayout>, x: f32, y: f32, color: Rgba, angle: f32, effects: TextEffects },
 }
 
 struct Entry {
@@ -112,8 +145,12 @@ impl DrawList {
     }
 
     pub fn text(&mut self, layout: &Arc<TextLayout>, x: f32, y: f32, color: Rgba) {
-        if color[3] > 0.0 && !layout.glyphs.is_empty() {
-            self.push(Item::Text { layout: layout.clone(), x, y, color, angle: 0.0 });
+        self.text_with_effects(layout, x, y, color, TextEffects::default());
+    }
+
+    pub fn text_with_effects(&mut self, layout: &Arc<TextLayout>, x: f32, y: f32, color: Rgba, effects: TextEffects) {
+        if (color[3] > 0.0 || !effects.is_empty()) && !layout.glyphs.is_empty() {
+            self.push(Item::Text { layout: layout.clone(), x, y, color, angle: 0.0, effects });
         }
     }
 
@@ -137,10 +174,13 @@ struct Instance {
 const SOLID: f32 = 0.0;
 const TEXTURE: f32 = 1.0;
 const MASK: f32 = 2.0;
+/// Distance field: `kind.y` is the spread, `kind.zw` the edge band.
+const SDF: f32 = 3.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Binding {
     Atlas,
+    Sdf,
     Texture(u64),
 }
 
@@ -159,6 +199,8 @@ pub struct Painter {
     capacity: usize,
     atlas: GlyphAtlas,
     atlas_group: wgpu::BindGroup,
+    sdf: SdfAtlas,
+    sdf_group: wgpu::BindGroup,
     textures: HashMap<u64, wgpu::BindGroup>,
 }
 
@@ -261,6 +303,8 @@ impl Painter {
         });
         let atlas = GlyphAtlas::new(device);
         let atlas_group = texture_group(device, &texture_layout, &atlas.view);
+        let sdf = SdfAtlas::new(device);
+        let sdf_group = texture_group(device, &texture_layout, &sdf.view);
         let capacity = 1024;
         Self {
             pipeline,
@@ -271,6 +315,8 @@ impl Painter {
             capacity,
             atlas,
             atlas_group,
+            sdf,
+            sdf_group,
             textures: HashMap::new(),
         }
     }
@@ -306,8 +352,9 @@ impl Painter {
         let (instances, batches) = match self.build(queue, fonts, list, size) {
             Ok(built) => built,
             Err(AtlasFull) => {
-                // Too many distinct glyphs: start over with an empty atlas.
+                // Too many distinct glyphs: start over with empty atlases.
                 self.atlas.clear();
+                self.sdf.clear();
                 self.build(queue, fonts, list, size).unwrap_or_default()
             }
         };
@@ -349,6 +396,7 @@ impl Painter {
         for batch in &batches {
             let group = match batch.binding {
                 Binding::Atlas => &self.atlas_group,
+                Binding::Sdf => &self.sdf_group,
                 Binding::Texture(id) => match self.textures.get(&id) {
                     Some(group) => group,
                     None => continue,
@@ -392,8 +440,19 @@ impl Painter {
                     });
                     Some(Binding::Texture(texture.id))
                 }
-                Item::Text { layout, x, y, color, angle } => {
+                Item::Text { layout, x, y, color, angle, effects } => {
                     let (sin, cos) = angle.sin_cos();
+                    let transform = [x.round(), y.round(), cos, sin];
+                    if !effects.is_empty() {
+                        // Effects are one batch under the fill, so a glyph's
+                        // outline never covers its neighbor.
+                        self.effect_instances(queue, fonts, layout, effects, transform, &mut instances)?;
+                        push_batch(&mut batches, Binding::Sdf, scissor, start..instances.len() as u32);
+                    }
+                    let fill_start = instances.len() as u32;
+                    if color[3] <= 0.0 {
+                        continue;
+                    }
                     for glyph in &layout.glyphs {
                         let Some(g) = self.atlas.glyph(fonts, queue, glyph.key)? else { continue };
                         let local = [(glyph.x + g.left) as f32, (glyph.y - g.top) as f32, g.width as f32, g.height as f32];
@@ -406,11 +465,12 @@ impl Painter {
                                 (g.y + g.height) as f32 / atlas_size,
                             ],
                             color: *color,
-                            transform: [x.round(), y.round(), cos, sin],
+                            transform,
                             kind: [MASK, 0.0, 0.0, 0.0],
                         });
                     }
-                    Some(Binding::Atlas)
+                    push_batch(&mut batches, Binding::Atlas, scissor, fill_start..instances.len() as u32);
+                    continue;
                 }
             };
             let end = instances.len() as u32;
@@ -426,6 +486,59 @@ impl Painter {
             }
         }
         Ok((instances, batches))
+    }
+}
+
+impl Painter {
+    /// Shadow, glow and outline instances for every glyph, in that order.
+    fn effect_instances(&mut self, queue: &wgpu::Queue, fonts: &Fonts, layout: &TextLayout, effects: &TextEffects, transform: [f32; 4], instances: &mut Vec<Instance>) -> Result<(), AtlasFull> {
+        let spread = effects.spread();
+        let atlas_size = self.sdf.size();
+        let mut glyphs = Vec::with_capacity(layout.glyphs.len());
+        for glyph in &layout.glyphs {
+            if let Some(g) = self.sdf.glyph(fonts, queue, glyph.key, spread)? {
+                glyphs.push(([(glyph.x + g.left) as f32, (glyph.y - g.top) as f32, g.width as f32, g.height as f32], g));
+            }
+        }
+        // (color, offset, edge band): coverage falls from 1 to 0 across the band.
+        let mut layers = Vec::new();
+        if let Some((color, dx, dy, blur)) = effects.shadow {
+            let soft = blur.max(0.7);
+            layers.push((color, (dx, dy), [-soft, soft]));
+        }
+        if let Some((color, size)) = effects.glow {
+            layers.push((color, (0.0, 0.0), [-size.max(0.7), size.max(0.7)]));
+        }
+        if let Some((color, width)) = effects.outline {
+            layers.push((color, (0.0, 0.0), [width - 0.6, width + 0.6]));
+        }
+        for (color, (dx, dy), band) in layers {
+            if color[3] <= 0.0 {
+                continue;
+            }
+            for (rect, g) in &glyphs {
+                instances.push(Instance {
+                    rect: [rect[0] + dx, rect[1] + dy, rect[2], rect[3]],
+                    uv: [g.x as f32 / atlas_size, g.y as f32 / atlas_size, (g.x + g.width) as f32 / atlas_size, (g.y + g.height) as f32 / atlas_size],
+                    color,
+                    transform,
+                    kind: [SDF, spread as f32, band[0], band[1]],
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Extends the last batch when it draws from the same texture with the same
+/// clip and ends where `range` starts; otherwise starts a new one.
+fn push_batch(batches: &mut Vec<Batch>, binding: Binding, scissor: Option<[u32; 4]>, range: std::ops::Range<u32>) {
+    if range.is_empty() {
+        return;
+    }
+    match batches.last_mut() {
+        Some(last) if last.scissor == scissor && last.binding == binding && last.range.end == range.start => last.range.end = range.end,
+        _ => batches.push(Batch { binding, scissor, range }),
     }
 }
 

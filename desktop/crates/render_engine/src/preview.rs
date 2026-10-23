@@ -35,6 +35,8 @@ pub enum PreviewTarget {
     Confidence,
     /// A main scene for the output settings dialog, at the projection's size.
     Style,
+    /// A confidence scene for the output settings dialog, at the confidence size.
+    ConfidenceStyle,
 }
 
 impl PreviewTarget {
@@ -43,12 +45,13 @@ impl PreviewTarget {
             PreviewTarget::Projection => "projection",
             PreviewTarget::Confidence => "confidence",
             PreviewTarget::Style => "style",
+            PreviewTarget::ConfidenceStyle => "confidence-style",
         }
     }
 
     fn role(self) -> OutputRole {
         match self {
-            PreviewTarget::Confidence => OutputRole::Confidence,
+            PreviewTarget::Confidence | PreviewTarget::ConfidenceStyle => OutputRole::Confidence,
             PreviewTarget::Projection | PreviewTarget::Style => OutputRole::Projection,
         }
     }

@@ -37,6 +37,102 @@ pub enum Vertical {
     Bottom,
 }
 
+/// A text effect in the operator's units: sizes in sixteenths of a `cq`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shadow {
+    /// Color with its opacity.
+    pub color: Rgba,
+    pub x: f32,
+    pub y: f32,
+    pub blur: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stroke {
+    /// Color with its opacity.
+    pub color: Rgba,
+    /// Outline width, or glow radius.
+    pub size: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransitionKind {
+    #[default]
+    Fade,
+    Cut,
+    Slide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Easing {
+    #[default]
+    Linear,
+    Ease,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+impl Easing {
+    /// CSS timing functions (cubic Béziers) at progress `t`.
+    pub fn apply(self, t: f32) -> f32 {
+        if t <= 0.0 {
+            return 0.0;
+        }
+        if t >= 1.0 {
+            return 1.0;
+        }
+        match self {
+            Easing::Linear => t,
+            Easing::Ease => cubic_bezier(0.25, 0.1, 0.25, 1.0, t),
+            Easing::EaseIn => cubic_bezier(0.42, 0.0, 1.0, 1.0, t),
+            Easing::EaseOut => cubic_bezier(0.0, 0.0, 0.58, 1.0, t),
+            Easing::EaseInOut => cubic_bezier(0.42, 0.0, 0.58, 1.0, t),
+        }
+    }
+}
+
+/// `cubic-bezier(x1, y1, x2, y2)` at `x`, solved for its parameter by bisection.
+fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
+    let curve = |a: f32, b: f32, t: f32| 3.0 * (1.0 - t) * (1.0 - t) * t * a + 3.0 * (1.0 - t) * t * t * b + t * t * t;
+    let (mut low, mut high) = (0.0f32, 1.0f32);
+    for _ in 0..24 {
+        let mid = (low + high) / 2.0;
+        if curve(x1, x2, mid) < x { low = mid } else { high = mid }
+    }
+    curve(y1, y2, (low + high) / 2.0)
+}
+
+/// Which way content moves during a slide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl Direction {
+    /// Unit vector of the movement, y down.
+    pub fn vector(self) -> (f32, f32) {
+        match self {
+            Direction::Left => (-1.0, 0.0),
+            Direction::Right => (1.0, 0.0),
+            Direction::Up => (0.0, -1.0),
+            Direction::Down => (0.0, 1.0),
+        }
+    }
+}
+
+/// How the projection changes from one cue to the next.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Transition {
+    pub kind: TransitionKind,
+    pub easing: Easing,
+    pub direction: Direction,
+}
+
 /// Main lyric styling (decision 8's reduced set).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LyricStyle {
@@ -61,6 +157,9 @@ pub struct LyricStyle {
     pub border_color: Rgba,
     /// Box fill, opacity included.
     pub box_color: Rgba,
+    pub shadow: Option<Shadow>,
+    pub outline: Option<Stroke>,
+    pub glow: Option<Stroke>,
 }
 
 impl Default for LyricStyle {
@@ -81,6 +180,9 @@ impl Default for LyricStyle {
             border: 0.0,
             border_color: [1.0, 1.0, 1.0, 1.0],
             box_color: [0.0, 0.0, 0.0, 0.0],
+            shadow: None,
+            outline: None,
+            glow: None,
         }
     }
 }
@@ -95,6 +197,7 @@ pub struct MainScene {
     pub logo: Option<MediaSource>,
     pub style: LyricStyle,
     pub transition_ms: f32,
+    pub transition: Transition,
 }
 
 /// One arrangement occurrence (or one non-song item) in the teleprompter.
@@ -108,6 +211,24 @@ pub struct ConfidenceGroup {
     pub lines: Vec<String>,
 }
 
+/// The teleprompter's own style.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfidenceStyle {
+    pub font: String,
+    /// Multiple of the lyric size.
+    pub line_height: f32,
+    pub caps: bool,
+    pub clock: bool,
+    /// The arrangement tape beside the clock.
+    pub tape: bool,
+}
+
+impl Default for ConfidenceStyle {
+    fn default() -> Self {
+        Self { font: "Segoe UI".into(), line_height: 1.35, caps: false, clock: true, tape: true }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConfidenceScene {
     pub groups: Vec<ConfidenceGroup>,
@@ -118,6 +239,7 @@ pub struct ConfidenceScene {
     /// When set, the foreground video replaces the teleprompter.
     pub video: Option<VideoKey>,
     pub transition_ms: f32,
+    pub style: ConfidenceStyle,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,11 +277,12 @@ pub(crate) struct Fade {
     to: f32,
     start: Instant,
     duration: Duration,
+    easing: Easing,
 }
 
 impl Fade {
     pub fn fixed(value: f32, now: Instant) -> Self {
-        Self { from: value, to: value, start: now, duration: Duration::ZERO }
+        Self { from: value, to: value, start: now, duration: Duration::ZERO, easing: Easing::Linear }
     }
 
     pub fn value(&self, now: Instant) -> f32 {
@@ -167,15 +290,20 @@ impl Fade {
         if elapsed >= self.duration {
             return self.to;
         }
-        let t = elapsed.as_secs_f32() / self.duration.as_secs_f32();
+        let t = self.easing.apply(elapsed.as_secs_f32() / self.duration.as_secs_f32());
         self.from + (self.to - self.from) * t
     }
 
-    pub fn retarget(&mut self, to: f32, now: Instant, duration: Duration) {
+    pub fn retarget_eased(&mut self, to: f32, now: Instant, duration: Duration, easing: Easing) {
         if to == self.to {
             return;
         }
-        *self = Self { from: self.value(now), to, start: now, duration };
+        *self = Self { from: self.value(now), to, start: now, duration, easing };
+    }
+
+    /// The value this fade is heading for.
+    pub fn target(&self) -> f32 {
+        self.to
     }
 
     pub fn running(&self, now: Instant) -> bool {
@@ -195,11 +323,23 @@ mod tests {
     fn retargeting_starts_from_the_current_value() {
         let t0 = Instant::now();
         let mut fade = Fade::fixed(0.0, t0);
-        fade.retarget(1.0, t0, Duration::from_millis(100));
+        fade.retarget_eased(1.0, t0, Duration::from_millis(100), Easing::Linear);
         assert!((fade.value(t0 + Duration::from_millis(50)) - 0.5).abs() < 1e-3);
-        fade.retarget(0.0, t0 + Duration::from_millis(50), Duration::from_millis(100));
+        fade.retarget_eased(0.0, t0 + Duration::from_millis(50), Duration::from_millis(100), Easing::Linear);
         assert!((fade.value(t0 + Duration::from_millis(100)) - 0.25).abs() < 1e-3);
         assert_eq!(fade.value(t0 + Duration::from_millis(200)), 0.0);
         assert!(!fade.running(t0 + Duration::from_millis(200)));
+    }
+
+    #[test]
+    fn easings_follow_the_css_curves() {
+        for easing in [Easing::Linear, Easing::Ease, Easing::EaseIn, Easing::EaseOut, Easing::EaseInOut] {
+            assert_eq!(easing.apply(0.0), 0.0);
+            assert!((easing.apply(1.0) - 1.0).abs() < 1e-4);
+        }
+        assert!(Easing::EaseIn.apply(0.25) < 0.25 && Easing::EaseOut.apply(0.25) > 0.25);
+        assert!((Easing::EaseInOut.apply(0.5) - 0.5).abs() < 1e-3);
+        // CSS `ease` is about 80% done halfway.
+        assert!((Easing::Ease.apply(0.5) - 0.8024).abs() < 0.01, "{}", Easing::Ease.apply(0.5));
     }
 }

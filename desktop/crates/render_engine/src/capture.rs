@@ -43,6 +43,17 @@ impl Capture {
         self.renderer.set_scene(scene, &self.resources.media, now);
     }
 
+    /// Renders one still frame of every shader background the scene uses
+    /// (outputs get theirs from the frame pump, which captures do not run).
+    pub fn render_shaders(&self) {
+        let mut shaders = crate::shader_bg::ShaderBackgrounds::new(&self.resources.gpu.device);
+        for (key, frame) in self.resources.media.videos() {
+            if let crate::VideoKey::Shader(spec) = key {
+                shaders.tick(&self.resources.gpu, &spec, &frame, Instant::now());
+            }
+        }
+    }
+
     /// Whether a transition or loading media is still in progress at `now`.
     pub fn busy(&self, now: Instant) -> bool {
         !self.renderer.activity(now).settled
@@ -129,6 +140,35 @@ pub(crate) fn paint_to_rgba(
         }
         pixels
     }
+}
+
+/// Reads the top-left `size` pixels of an RGBA texture (for tests).
+#[cfg(test)]
+pub(crate) fn read_texture(gpu: &Gpu, texture: &wgpu::Texture, size: (u32, u32)) -> Vec<u8> {
+    let (width, height) = size;
+    let row = (width * 4).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+    let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Texture readback"),
+        size: (row * height) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Texture readback") });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo { texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        wgpu::TexelCopyBufferInfo { buffer: &buffer, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row), rows_per_image: Some(height) } },
+        wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+    );
+    gpu.queue.submit(Some(encoder.finish()));
+    let slice = buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+    let mapped = slice.get_mapped_range().expect("readback is mapped");
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height as usize {
+        pixels.extend_from_slice(&mapped[y * row as usize..y * row as usize + width as usize * 4]);
+    }
+    pixels
 }
 
 impl OutputRole {

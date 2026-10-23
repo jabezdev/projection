@@ -531,6 +531,9 @@ fn error(source: &str, message: impl Into<String>) -> EngineEvent {
 }
 
 fn background_kind(path: &str) -> BackgroundKind {
+    if path.starts_with(protocol::SHADER_PREFIX) {
+        return BackgroundKind::Shader;
+    }
     let lower = path.to_ascii_lowercase();
     if [".mp4", ".mkv", ".mov", ".webm"]
         .iter()
@@ -985,6 +988,7 @@ mod tests {
     fn background_kind_is_inferred_from_extension() {
         assert_eq!(background_kind("clip.MP4"), BackgroundKind::Video);
         assert_eq!(background_kind("still.png"), BackgroundKind::Image);
+        assert_eq!(background_kind("shader:aurora"), BackgroundKind::Shader);
     }
 
     #[test]

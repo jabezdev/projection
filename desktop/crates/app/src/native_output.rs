@@ -64,6 +64,15 @@ impl NativeOutputs {
         }
     }
 
+    /// Loads stills for the neighboring cues ahead of time.
+    pub fn preload(&self, images: &[String]) {
+        if let Ok(guard) = self.0.lock() {
+            if let Some(engine) = guard.as_ref() {
+                engine.preload(images);
+            }
+        }
+    }
+
     /// Renders `scene` as the style preview, delivered like output previews.
     pub fn preview_style(&self, scene: Scene) {
         if let Ok(guard) = self.0.lock() {

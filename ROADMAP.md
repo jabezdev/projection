@@ -120,14 +120,14 @@ Decisions:
 - **One icon set** for the control panel and drawable on the outputs. Color emoji are not planned.
 
 Items:
-- [ ] Settings page revamp: per-screen sections, live preview per screen.
-- [ ] Per-screen parameters for projection and confidence (beyond today's confidence text size).
-- [ ] Shape whole lines (fixes kerning across spaces).
-- [ ] Prepare the next and previous cues ahead of time (images, a video's first frame, the logo video).
-- [ ] Text shadow (blurred glyph pass), cost-checked on the 1050 Ti.
-- [ ] Outline and glow (SDF glyphs).
-- [ ] Transition styles and their parameters.
-- [ ] Shader backgrounds: presets, resource limits, static fallback.
+- [x] Settings page revamp: per-screen sections, live preview per screen.
+- [x] Per-screen parameters for projection and confidence (beyond today's confidence text size).
+- [x] Shape whole lines (fixes kerning across spaces). *Done as kerning restored around spaces after word shaping, left-to-right lines.*
+- [x] Prepare the next and previous cues ahead of time (images, a video's first frame, the logo video).
+- [/] Text shadow, cost-checked on the 1050 Ti. *Built from distance-field glyphs rather than a separate blur pass (see ENGINE.md decision 10); not yet measured on the 1050 Ti.*
+- [x] Outline and glow (SDF glyphs).
+- [x] Transition styles and their parameters.
+- [x] Shader backgrounds: presets, resource limits, static fallback. *Gradient, aurora and bokeh; not yet measured on the 1050 Ti.*
 - [ ] Icon set in the operator UI and an icon element on the outputs. **Open:** which icon set.
 
 ## 6. Operator controls
