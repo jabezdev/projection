@@ -24,7 +24,7 @@ pub struct OutputRoute {
     #[serde(default)] aspect: Option<(u32, u32)>,
 }
 fn yes() -> bool { true }
-pub const OUTPUTS: [(&str, &str); 2] = [("projection", "Projection Output"), ("confidence", "Confidence")];
+pub const OUTPUTS: [(&str, &str); 2] = [("projection", "PAKIT Projection"), ("confidence", "PAKIT Confidence")];
 pub const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 pub struct OutputRoutes {
     pub values: Mutex<std::collections::BTreeMap<String, OutputRoute>>,

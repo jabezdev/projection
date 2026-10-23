@@ -29,7 +29,31 @@ export default function OutputSettings({ config, onChange, onClose }: { config: 
       <fieldset><legend>Square text box</legend>{range('border', 'Border width', 0, 10)}{color('borderColor', 'Border color')}{color('boxColor', 'Box fill')}{range('boxOpacity', 'Box opacity (%)', 0, 100)}</fieldset>
       <fieldset><legend>Logo</legend><label>Logo image or video<input aria-label="Logo media path" value={config.logoPath} placeholder="Choose an image or video for the Logo button" onChange={e => update({ logoPath: e.target.value })}/></label>{isTauri() && <button onClick={() => void invoke<string | null>('choose_media_file', { kind: 'logo' }).then(path => { if (path) update({ logoPath: path }); }).catch(e => setError(String(e)))}>Choose logo media…</button>}{config.logoPath && <button onClick={() => update({ logoPath: '' })}>Clear logo media</button>}<small>Logo videos play muted and loop. The operator preview uses a thumbnail.</small></fieldset>
       <fieldset><legend>Backgrounds & confidence</legend><label>Background fit<select aria-label="Background fit" value={config.backgroundFit} onChange={e => update({ backgroundFit: e.target.value as OutputConfig['backgroundFit'] })}><option value="cover">Fill screen</option><option value="contain">Fit entire image / video</option></select></label>{range('transition', 'Text & background fade (ms)', 0, 1500, 50)}{range('confidenceSize', 'Confidence text size', 2, 8, .1)}</fieldset>
-      {isTauri() && <fieldset><legend>Troubleshooting</legend><button onClick={() => void invoke('open_logs_folder').catch(e => setError(String(e)))}>Open logs folder</button><small>The log files show what happened if something goes wrong during a service.</small></fieldset>}
+      {isTauri() && <SystemSettings onError={setError}/>}
     </div><aside className="settings-preview"><div className="preview-label">Live style preview</div><div className="settings-native-preview"><NativePreview target="style" label="Style preview"/></div><p>Changes apply live to the main output and are saved automatically.</p><button onClick={() => void onChange(defaultOutputConfig).catch(e => setError(String(e)))}>Reset to defaults</button></aside></div>
   </section></div>;
+}
+
+type AppInfo = { version: string; data_dir: string; last_backup_ms: number | null };
+
+/** Version, backups and logs: what the operator needs when something goes wrong. */
+function SystemSettings({ onError }: { onError: (message: string) => void }) {
+  const [info, setInfo] = useState<AppInfo | null>(null);
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void invoke<AppInfo>('get_app_info').then(setInfo).catch(e => onError(String(e))); }, [onError]);
+  const exportBackup = async () => {
+    setBusy(true); setStatus('');
+    try { const path = await invoke<string | null>('export_backup'); if (path) setStatus(`Backup saved to ${path}`); }
+    catch (e) { onError(String(e)); }
+    finally { setBusy(false); }
+  };
+  return <fieldset><legend>System</legend>
+    <small>PAKIT {info?.version} · data in {info?.data_dir}</small>
+    <button disabled={busy} onClick={() => void exportBackup()}>{busy ? 'Exporting…' : 'Export backup…'}</button>
+    <button onClick={() => void invoke('open_backups_folder').catch(e => onError(String(e)))}>Open backups folder</button>
+    <small>{status || `A backup holds the library, services and settings, plus a list of the media files they use (not the files themselves). One is also made automatically each week${info?.last_backup_ms ? `; the last was ${new Date(info.last_backup_ms).toLocaleString()}` : ''}.`}</small>
+    <button onClick={() => void invoke('open_logs_folder').catch(e => onError(String(e)))}>Open logs folder</button>
+    <small>The log files show what happened if something goes wrong during a service.</small>
+  </fieldset>;
 }

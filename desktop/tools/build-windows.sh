@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Cross-builds the Windows installer (NSIS setup.exe) on Linux.
 #
-#   tools/build-windows.sh
+#   tools/build-windows.sh            # bumps the build number first
+#   tools/build-windows.sh --no-bump  # rebuilds the current version
 #
 # The first run fetches its toolchain into ~/.local/share/projection-win and
 # rustup into ~/.cargo, all without sudo; the system Rust stays the default.
@@ -15,6 +16,10 @@ target=x86_64-pc-windows-msvc
 # Must match the ffmpeg-next major.minor in Cargo.toml.
 ffmpeg_build=ffmpeg-n8.1-latest-win64-lgpl-shared-8.1
 nsis_version=3.12-1
+
+if [ "${1:-}" != "--no-bump" ]; then
+    echo "Version $("$here/bump-version.sh")"
+fi
 
 mkdir -p "$tools"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -57,7 +62,7 @@ EOF
 chmod +x "$tools/bin/makensis"
 export PATH="$tools/bin:$PATH"
 
-# The installer places these next to app.exe (tauri.windows.conf.json).
+# The installer places these next to PAKIT.exe (tauri.windows.conf.json).
 dlls="$desktop/crates/app/windows/ffmpeg"
 rm -rf "$dlls"
 mkdir -p "$dlls"

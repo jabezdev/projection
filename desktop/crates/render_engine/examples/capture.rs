@@ -1,9 +1,45 @@
 //! Renders a named scene offscreen to a PNG, for comparison with the parity
 //! references (`capture <scene> <width> <height> <out.png>`).
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use render_engine::{css_color, Capture, ConfidenceGroup, ConfidenceScene, LyricStyle, MainScene, OutputRole, Scene, TextAlign, Vertical};
+use render_engine::{
+    css_color, Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole, PixelFrame, Scene,
+    TextAlign, VideoKey, Vertical,
+};
+
+/// A deterministic gradient: red across, green down, blue fixed.
+fn gradient(width: u32, height: u32) -> Vec<u8> {
+    (0..height).flat_map(|y| (0..width).flat_map(move |x| [(x * 255 / width) as u8, (y * 255 / height) as u8, 160, 255])).collect()
+}
+
+/// The gradient as a PNG in the temporary folder, for image backgrounds and logos.
+fn gradient_png() -> String {
+    let path: PathBuf = std::env::temp_dir().join("magi-parity-gradient.png");
+    image::save_buffer(&path, &gradient(320, 180), 320, 180, image::ColorType::Rgba8).expect("write gradient");
+    path.to_string_lossy().into_owned()
+}
+
+/// One still video frame, standing in for a decoder.
+struct StillFrame(Vec<u8>);
+
+impl PixelFrame for StillFrame {
+    fn id(&self) -> u64 {
+        1
+    }
+    fn size(&self) -> (u32, u32) {
+        (640, 360)
+    }
+    fn stride(&self) -> usize {
+        640 * 4
+    }
+    fn pixels(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+const VIDEO: VideoKey = VideoKey::Session(1);
 
 fn group(key: &str, code: &str, title: &str, color: &str, lines: &[&str]) -> ConfidenceGroup {
     ConfidenceGroup {
@@ -41,6 +77,11 @@ fn scene(name: &str) -> Scene {
             },
             ..Default::default()
         }),
+        "proj-black" => Scene::Main(MainScene { text, display: Display::Black, background: Some(MediaLayer { source: MediaSource::Image(gradient_png()), cover: true }), transition_ms: 250.0, ..Default::default() }),
+        "proj-logo" => Scene::Main(MainScene { text, display: Display::Logo, logo: Some(MediaSource::Image(gradient_png())), transition_ms: 250.0, ..Default::default() }),
+        "proj-logo-fallback" => Scene::Main(MainScene { text, display: Display::Logo, transition_ms: 250.0, ..Default::default() }),
+        "proj-video" => Scene::Main(MainScene { text, background: Some(MediaLayer { source: MediaSource::Video(VIDEO), cover: true }), transition_ms: 250.0, ..Default::default() }),
+        "conf-video" => Scene::Confidence(ConfidenceScene { size: 4.0, video: Some(VIDEO), transition_ms: 250.0, ..Default::default() }),
         "conf-default" => Scene::Confidence(ConfidenceScene {
             groups: vec![
                 group("1-0", "V1", "Amazing Grace", "#4f91e8", &["Amazing grace how sweet the sound\nThat saved a wretch like me", "I once was lost but now am found\nWas blind but now I see"]),
@@ -68,6 +109,11 @@ fn main() -> anyhow::Result<()> {
     let size = (width.parse()?, height.parse()?);
     let scene = scene(name);
     let mut capture = Capture::new(OutputRole::for_scene(&scene))?;
+    // Video scenes show one still frame, uploaded as the frame pump would.
+    if name.ends_with("-video") {
+        capture.media().video(&VIDEO).upload(&capture.gpu().queue, &StillFrame(gradient(640, 360)));
+        capture.gpu().queue.submit(None);
+    }
     let start = Instant::now();
     capture.set_scene(scene, start);
     let (pixels, _) = capture.settle(size, start, Duration::from_secs(5));

@@ -52,13 +52,13 @@ Goal: nothing at church can fail silently or without a way back.
 
 Goal: make the big changes ahead safe. Done right after phase 1.
 
-- [ ] **CI on GitHub Actions:** `cargo test --workspace`, the frontend build/lint/test and the web typecheck/test on every push; Windows cross-build on tags.
-- [ ] **Split `main.rs`** (about 850 lines) into commands, windows/displays and settings modules.
-- [ ] **Split `App.tsx`** into smaller components, ahead of the library and settings revamps.
-- [ ] **End-to-end WebSocket test script** in the repo (cue, transport, display modes, save/load), runnable against a scratch data folder.
-- [ ] **Extend the parity harness** to Black, Logo and video scenes.
-- [ ] **Naming and versioning:** a product name for the installer, Start menu and windows (instead of "projection-rust"); a version scheme bumped every build so installers upgrade in place. **Open:** the name.
-- [ ] **Backup and export:** a one-click export of `app.db`, settings and the media list to a zip, plus an automatic weekly backup (keep the last few). Needed before the data model changes in phase 3.
+- [x] **CI on GitHub Actions:** `cargo test --workspace`, the frontend build/lint/test and the web typecheck/test on every push; Windows cross-build on tags.
+- [x] **Split `main.rs`** (about 850 lines) into commands, windows/displays and settings modules.
+- [x] **Split `App.tsx`** into smaller components, ahead of the library and settings revamps.
+- [x] **End-to-end WebSocket test script** in the repo (cue, transport, display modes, save/load), runnable against a scratch data folder: `bun desktop/tools/e2e/e2e.ts`.
+- [x] **Extend the parity harness** to Black, Logo and video scenes (native references, since the webview had none worth keeping).
+- [x] **Naming and versioning:** the product is **PAKIT** (installer, Start menu, windows); versions are `0.MINOR.BUILD`, with the build number bumped by every `build-windows.sh` run so installers upgrade in place.
+- [x] **Backup and export:** a one-click export of `app.db`, settings and the media list to a zip, plus an automatic weekly backup (keep the last few). Needed before the data model changes in phase 3.
 
 ## 3. Library revamp and data model
 

@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod awake;
+mod backup;
 mod commands;
 mod displays;
 mod engine_host;
@@ -110,6 +111,9 @@ fn main() -> anyhow::Result<()> {
             set_outputs_shown,
             get_startup_warnings,
             open_logs_folder,
+            get_app_info,
+            export_backup,
+            open_backups_folder,
             get_output_state,
             set_output_state,
             resolve_media_path,
@@ -203,6 +207,22 @@ fn main() -> anyhow::Result<()> {
                 })?;
             }
             app.manage(StartupWarnings(warnings));
+            app.manage(DataDir(app_data_dir.clone()));
+            // A weekly automatic backup, checked shortly after start and then
+            // every few hours, so a long-running app still makes one.
+            {
+                let (db, dir, handle) = (db.clone(), app_data_dir.clone(), app.handle().clone());
+                thread::Builder::new().name("backup".into()).spawn(move || loop {
+                    thread::sleep(std::time::Duration::from_secs(30));
+                    let logo = handle.state::<OutputState>().config.lock().map(|c| c.logo_path.clone()).unwrap_or_default();
+                    match db.lock().and_then(|db| backup::automatic_if_due(&db, &dir, &logo, std::time::SystemTime::now())) {
+                        Ok(Some(path)) => info!("Automatic backup written to {}", path.display()),
+                        Ok(None) => {}
+                        Err(e) => error!("Automatic backup failed: {e:#}"),
+                    }
+                    thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
+                })?;
+            }
             app.manage(awake::KeepAwake::start()?);
 
             app.manage(AppState {

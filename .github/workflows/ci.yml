@@ -1,0 +1,82 @@
+# Checks every push; tags starting with "v" also cross-build the Windows
+# installer and attach it to a GitHub release.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop (Rust and operator UI)
+    runs-on: ubuntu-latest
+    # Arch ships FFmpeg 8 and webkit2gtk-4.1, as on the development machine.
+    container: archlinux:latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - name: System packages
+        working-directory: /
+        # ffmpeg also provides the CLI the media tests use to make clips;
+        # vulkan-swrast (lavapipe) lets the offscreen scene tests run on CPU.
+        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Rust toolchain
+        run: rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: desktop-${{ hashFiles('desktop/Cargo.lock') }}
+          restore-keys: desktop-
+      - name: Operator UI build, lint and test
+        working-directory: desktop/crates/app/frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+          bun run lint
+          bun run test
+      - name: Rust tests
+        run: cargo test --workspace --locked
+
+  web:
+    name: Web (typecheck and tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+
+  windows-installer:
+    name: Windows installer
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Cross-build tools
+        run: sudo apt-get update && sudo apt-get install -y clang lld llvm libarchive-tools
+      # The tag's commit already carries the version to release.
+      - name: Build the installer
+        run: desktop/tools/build-windows.sh --no-bump
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe

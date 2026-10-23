@@ -52,7 +52,7 @@ bun install --cwd frontend
 bun run dev        # builds everything and opens the app
 ```
 
-The first build takes several minutes. Three windows exist: **Projection Editor** (the control panel), and the **projection** and **confidence** outputs, which start hidden; show them from Output Settings → Output displays. On Linux, `bun run dev` forces X11 (`GDK_BACKEND=x11`, XWayland under Wayland sessions) because native Wayland output is not supported.
+The first build takes several minutes. Three windows exist: **PAKIT** (the control panel), and the **projection** and **confidence** outputs, which start hidden; show them from Output Settings → Output displays. On Linux, `bun run dev` forces X11 (`GDK_BACKEND=x11`, XWayland under Wayland sessions) because native Wayland output is not supported.
 
 ### How the UI talks to the engine
 
@@ -73,7 +73,12 @@ From `desktop/` unless noted.
 | Regenerate protocol fixtures after a wire change | `UPDATE_PROTOCOL_FIXTURES=1 cargo test -p protocol --test typescript` |
 | Compare outputs with the frozen parity references | `tools/parity/run.sh` (needs ImageMagick) |
 | Build an installable app | `cd crates/app && bun tauri build` |
-| Build the Windows installer from Linux | `tools/build-windows.sh` |
+| Build the Windows installer from Linux (bumps the version) | `tools/build-windows.sh` |
+| Bump the version by hand (`0.MINOR.BUILD`) | `tools/bump-version.sh [minor]` |
+| End-to-end check over the WebSocket (needs a built app) | `bun tools/e2e/e2e.ts` |
+| 30-minute soak (memory, decoders, frames) | `bun tools/e2e/soak.ts --video <file>` |
+
+CI (`.github/workflows/ci.yml`) runs the Rust tests, the UI build/lint/test and the web typecheck/tests on every push; a `v*` tag also cross-builds the Windows installer and attaches it to a GitHub release. The parity check is not in CI because its results depend on the installed fonts.
 
 ### Where your data lives
 
@@ -82,7 +87,9 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments. Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library. Imported media references its original file; keep those files in place. There is no built-in backup yet: copy this folder to back up. One-click export, weekly automatic backups and copying media into the library are planned (roadmap phases 2–3).
+`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments; `session-state.json` the last cue, for crash recovery. `logs/` holds `pakit.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Imported media references its original file; keep those files in place (copying media into the library is planned, roadmap phase 3). `PAKIT_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+
+**Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PAKIT and unzip `app.db` and the settings files into the data folder.
 
 ### Folder layout
 
@@ -99,6 +106,8 @@ desktop/
     network_server/ Remote control over WebSocket
   tools/
     parity/         Output regression check against frozen references
+    e2e/            End-to-end and soak scripts over the WebSocket (Bun)
+    bump-version.sh Version bump (0.MINOR.BUILD)
     build-windows.sh  Cross-builds the Windows installer
   assets/           Sample backgrounds
 ```
@@ -147,7 +156,7 @@ Bundles appear under `desktop/target/release/bundle/`. Platform settings: [tauri
 
 **Windows** (NSIS installer; MSI only when built on Windows). The app links FFmpeg 8 dynamically and needs only `avcodec`, `avformat`, `avutil`, `swresample` and `swscale`; the installer places those DLLs next to `app.exe` and downloads WebView2 (for the control panel) if missing.
 
-*From Linux* (the usual way): `desktop/tools/build-windows.sh`. The installer appears at `desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/projection-rust_<version>_x64-setup.exe`. The script needs `clang`, `lld`, `llvm` and `bsdtar`; it fetches the rest without sudo: rustup into `~/.cargo` (the system Rust stays default), `cargo-xwin` (downloads the MSVC SDK on first use), the BtbN FFmpeg 8.1 LGPL shared build and Debian's NSIS, into `~/.local/share/projection-win`. The installer is unsigned: SmartScreen asks for confirmation (More info → Run anyway).
+*From Linux* (the usual way): `desktop/tools/build-windows.sh`. The installer appears at `desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/PAKIT_<version>_x64-setup.exe` (installed as `PAKIT.exe`; the script bumps the build number first, `--no-bump` skips that). The script needs `clang`, `lld`, `llvm` and `bsdtar`; it fetches the rest without sudo: rustup into `~/.cargo` (the system Rust stays default), `cargo-xwin` (downloads the MSVC SDK on first use), the BtbN FFmpeg 8.1 LGPL shared build and Debian's NSIS, into `~/.local/share/projection-win`. The installer is unsigned: SmartScreen asks for confirmation (More info → Run anyway).
 
 *On Windows* (not yet tried):
 

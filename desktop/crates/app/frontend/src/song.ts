@@ -1,3 +1,4 @@
+import type { SessionItem } from './models';
 export type Part = { id: string; type: string; number: number; lyrics: string; slideTexts?: string[]; color?: string };
 export type SongDocument = { format: 'magi.song.v1'; slideSeparator?: 'blank-line'; parts: Part[]; arrangement: string[]; background: string; authorSinger?: string };
 export const emptySong = (): SongDocument => ({ format: 'magi.song.v1', slideSeparator: 'blank-line', parts: [], arrangement: [], background: '' });
@@ -33,4 +34,11 @@ export function moveArrangement(arrangement: string[], from: number, destination
   const [id] = next.splice(from, 1);
   next.splice(Math.max(0, Math.min(next.length, destination - (from < destination ? 1 : 0))), 0, id);
   return next;
+}
+
+/** The song document of a service item; services saved before songs had parts get one part. */
+export function itemSong(item: SessionItem): SongDocument {
+  if (item.song) return decodeSong(item.song);
+  const steps = item.kind.kind === 'text' ? item.kind.data.steps : [];
+  return { format: 'magi.song.v1', slideSeparator: 'blank-line', background: item.background || '', parts: [{ id: 'legacy', type: 'Verse', number: 1, lyrics: steps.join('\n\n'), slideTexts: steps }], arrangement: ['legacy'] };
 }

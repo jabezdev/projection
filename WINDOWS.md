@@ -29,7 +29,7 @@ Roadmap phase 1. Built and checked on Linux; not yet tested on Windows. The [chu
 ## Later (tracked in the roadmap)
 
 - **Media paths.** Services refer to media by absolute path, so a library copied from Linux cannot find its files on Windows. Until then, re-add media on the church PC. Planned: media copied into the library folder and "relink missing media" ([ROADMAP.md](ROADMAP.md) phase 3).
-- **Installer name and version.** The Start menu shows "projection-rust" and the version stays 0.1.0. Planned: a product name and a version bump every build (phase 2).
+- **Installer name and version.** Done (phase 2): the product is **PAKIT** (`PAKIT.exe`, Start menu, window titles) and `build-windows.sh` bumps the `0.MINOR.BUILD` version every build, so installers upgrade in place. Check the upgrade on the next visit.
 - **Updates.** Installed by hand. Planned: auto-update with confirmation and rollback (phase 11).
 - **Code signing.** Decided to skip for now: SmartScreen warns (More info → Run anyway) and Defender occasionally flags unsigned installers.
 - **Remote over the network.** The WebSocket server binds `127.0.0.1`, so no firewall prompt appears. Planned: a LAN setting, with the installer adding the firewall rule, pairing codes and mDNS names (phase 10).

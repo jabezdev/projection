@@ -277,10 +277,35 @@ impl Repository {
     }
 }
 
+impl Repository {
+    /// Writes a consistent copy of the whole database to `path` (which must
+    /// not exist), safe while the app keeps using this connection.
+    pub fn backup_to(&self, path: &Path) -> Result<()> {
+        let path = path.to_str().ok_or_else(|| anyhow!("backup path is not valid UTF-8"))?;
+        self.conn.execute("VACUUM INTO ?1", params![path]).context("copy database")?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use protocol::MediaKind;
+
+    #[test]
+    fn backups_hold_every_service_and_song() {
+        let dir = std::env::temp_dir().join(format!("magi-backup-{}-{}", std::process::id(), line!()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = Repository::new(dir.join("app.db")).unwrap();
+        repo.create_project("Sunday", 1).unwrap();
+        repo.create_song("Song", "Lyrics").unwrap();
+        let copy = dir.join("copy.db");
+        repo.backup_to(&copy).unwrap();
+        let restored = Repository::new(&copy).unwrap();
+        assert_eq!(restored.list_projects().unwrap()[0].name, "Sunday");
+        assert_eq!(restored.list_songs().unwrap().len(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn media_catalog_retains_each_kind_and_original_path() {

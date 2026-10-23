@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Compares native output captures with frozen references of the webview
-# outputs they replaced.
+# Compares native output captures with frozen references.
 #
 #   tools/parity/run.sh [out-dir]
 #
-# reference/<name>.png are the React output components rendered in headless
-# Chromium on 2026-10-11, the last build that had them. Each scenario is
+# The lyric and teleprompter references (proj-default*, proj-styled,
+# conf-default*) are the React output components rendered in headless
+# Chromium on 2026-10-11, the last build that had them. Black, Logo and video
+# had no webview reference worth keeping; their references are native
+# captures from 2026-10-24, so they catch regressions. Each scenario is
 # rendered natively offscreen (`cargo run -p render_engine --example capture
 # <scene>`) and compared: prints the share of pixels whose gray level differs
 # by more than 25%, writes a red/cyan overlay, and fails if any exceeds its
@@ -30,6 +32,11 @@ scenarios=(
   "proj-styled proj-styled 1920 1080 1.5"
   "conf-default conf-default 1920 1080 1.5"
   "conf-default-small conf-default 960 540 3.5"
+  "proj-black proj-black 960 540 0.1"
+  "proj-logo proj-logo 960 540 0.5"
+  "proj-logo-fallback proj-logo-fallback 960 540 0.5"
+  "proj-video proj-video 960 540 0.5"
+  "conf-video conf-video 960 540 0.5"
 )
 
 mkdir -p "$out/native" "$out/compare"
