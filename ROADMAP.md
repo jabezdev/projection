@@ -128,7 +128,7 @@ Items:
 - [x] Outline and glow (SDF glyphs).
 - [x] Transition styles and their parameters.
 - [x] Shader backgrounds: presets, resource limits, static fallback. *Gradient, aurora and bokeh; not yet measured on the 1050 Ti.*
-- [ ] Icon set in the operator UI and an icon element on the outputs. **Open:** which icon set.
+- [x] Icon set in the operator UI and an icon element on the outputs. *Lucide (decided 2026-10-24): `lucide-react` in the operator UI; on the outputs `:name:` in slide text (e.g. `:heart:`, `:book-open:`) draws that icon from the bundled Lucide font, in the text's color and effects.*
 
 ## 6. Operator controls
 

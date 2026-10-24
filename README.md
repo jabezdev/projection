@@ -130,6 +130,8 @@ desktop/
 
 *Stream Deck on Linux* needs read access to its hidraw device, for example `/etc/udev/rules.d/70-streamdeck.rules` with `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", TAG+="uaccess"`, then replug it. On Windows close Elgato's Stream Deck app, which otherwise holds the device.
 
+**Icons on screen.** Type `:name:` in a slide with a [Lucide](https://lucide.dev/icons) icon name, for example `:heart:`, `:music:` or `:book-open:`; the outputs draw the icon in the lyric style. The operator lists show the code as typed.
+
 **Phone remote.** Settings → Remote → *Allow phones and other computers on this network*. On the phone (same Wi-Fi), open `http://palto.local:8080/` or scan the QR code, then choose *Pair a device* on the operator screen and type the six-digit code on the phone. The phone remote has Next / Previous, Live / Clear / Black / Logo and the current and next slide. Paired devices are listed there and can be removed.
 
 **Companion and OSC.** Settings → Remote → *Accept OSC messages* (UDP 9000). In Bitfocus Companion, add a *Generic: OSC* connection to this computer's address and port 9000, and give buttons actions that send `/palto/next`, `/palto/previous`, `/palto/black`, `/palto/clear`, `/palto/logo`, `/palto/live`, `/palto/next_item`, `/palto/previous_item`, `/palto/play_pause` or `/palto/stop`. Companion on another computer also needs LAN access on and that computer's IP address in the allowed list.
@@ -233,3 +235,5 @@ web/
 ## License
 
 MIT
+
+Bundled third-party assets: [Lucide](https://lucide.dev) icons and font (ISC, see `desktop/crates/render_engine/assets/lucide/LICENSE`).

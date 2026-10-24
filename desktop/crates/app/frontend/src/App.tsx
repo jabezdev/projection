@@ -18,6 +18,7 @@ import { useOutputsLoading, useOutputsShown } from './useOutputs';
 import ServiceBuilder from './ServiceBuilder';
 import { useColumns } from './useColumns';
 import { useEngine, type ProjectHeader } from './useEngine';
+import { Icon } from './Icons';
 import { newItemId, type Media, type SessionItem, type ProjectModel, type SongHeader, type SongModel, type VideoOptions } from './models';
 import { decodeSong, itemSong, songSteps, type SongDocument } from './song';
 
@@ -99,7 +100,7 @@ function App() {
   }
   return <div className="operator-shell">
 
-    {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
+    {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close"/></button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
       <SessionPane project={project} pending={outputsLoading.projection} projectRef={projectRef} projects={projects} program={program} run={run} persist={persist}
         onOpenSettings={() => setSettingsOpen(true)}

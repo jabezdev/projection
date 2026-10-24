@@ -3,6 +3,10 @@
 //! cosmic-text shapes (with font fallback and bidi); layout here adds CSS
 //! letter spacing before wrapping, which cosmic-text's `Buffer` cannot do.
 //! Glyphs are rasterized with swash into a per-output mask atlas.
+//!
+//! Icons: `:name:` in text (a Lucide icon name, such as `:heart:` or
+//! `:book-open:`) is drawn as that icon from the bundled Lucide font, in the
+//! text's color and effects. Unknown names stay as written.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -11,6 +15,54 @@ use cosmic_text::{
     Align, Attrs, AttrsList, CacheKey, Family, FontSystem, Hinting, ShapeLine, Shaping, Style, SwashCache, SwashContent,
     Weight, Wrap,
 };
+
+/// Lucide (https://lucide.dev, ISC license) as a font, and its icon names
+/// with their code points; see `assets/lucide/`.
+const ICON_FONT: &[u8] = include_bytes!("../assets/lucide/lucide.ttf");
+const ICON_FAMILY: &str = "lucide";
+const ICON_NAMES: &str = include_str!("../assets/lucide/names.txt");
+
+fn icon_char(name: &str) -> Option<char> {
+    static ICONS: OnceLock<HashMap<&'static str, char>> = OnceLock::new();
+    let icons = ICONS.get_or_init(|| {
+        ICON_NAMES
+            .lines()
+            .filter_map(|line| line.split_once(' '))
+            .filter_map(|(name, code)| Some((name, char::from_u32(u32::from_str_radix(code, 16).ok()?)?)))
+            .collect()
+    });
+    icons.get(name).copied()
+}
+
+/// Replaces `:name:` icon codes with the icon's character and returns the
+/// byte ranges of those characters, to be shaped with the icon font.
+pub fn expand_icons(text: &str) -> (String, Vec<std::ops::Range<usize>>) {
+    if !text.contains(':') {
+        return (text.to_string(), Vec::new());
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut icons = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find(':') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let name_len = after.find(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')).unwrap_or(after.len());
+        let icon = (name_len > 0 && after[name_len..].starts_with(':')).then(|| icon_char(&after[..name_len])).flatten();
+        match icon {
+            Some(icon) => {
+                icons.push(out.len()..out.len() + icon.len_utf8());
+                out.push(icon);
+                rest = &after[name_len + 1..];
+            }
+            None => {
+                out.push(':');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    (out, icons)
+}
 
 /// The process-wide font database. Loading system fonts is slow, so it starts
 /// on a background thread when the engine starts.
@@ -32,6 +84,7 @@ impl Fonts {
             .spawn(|| {
                 let mut system = FontSystem::new();
                 set_generic_families(&mut system);
+                system.db_mut().load_font_data(ICON_FONT.to_vec());
                 system
             })
             .expect("spawning font loader");
@@ -331,7 +384,7 @@ fn css_weight(desired: u16, available: &[u16]) -> Option<u16> {
 fn layout_with(fonts: &Fonts, system: &mut FontSystem, family: &FamilyChoice, text: &str, style: &TextStyle, width: Option<f32>) -> TextLayout {
     let (name, weight, font_style) = resolve_face(system, family, style.weight.clamp(1, 1000), style.italic);
     let attrs = Attrs::new().family(Family::Name(&name)).weight(weight).style(font_style);
-    let attrs_list = AttrsList::new(&attrs);
+    let icon_attrs = attrs.clone().family(Family::Name(ICON_FAMILY)).weight(Weight::NORMAL).style(Style::Normal);
     let align = match style.align {
         TextAlign::Left => Align::Left,
         TextAlign::Center => Align::Center,
@@ -342,6 +395,12 @@ fn layout_with(fonts: &Fonts, system: &mut FontSystem, family: &FamilyChoice, te
     let mut out = TextLayout::default();
     let mut top = 0.0f32;
     for paragraph in text.replace("\r\n", "\n").split('\n') {
+        let (expanded, icons) = expand_icons(paragraph);
+        let paragraph = expanded.as_str();
+        let mut attrs_list = AttrsList::new(&attrs);
+        for range in &icons {
+            attrs_list.add_span(range.clone(), &icon_attrs);
+        }
         let mut shaped = ShapeLine::new(system, paragraph, &attrs_list, Shaping::Advanced, 8);
         if spacing_em != 0.0 {
             for glyph in shaped.spans.iter_mut().flat_map(|s| s.words.iter_mut()).flat_map(|w| w.glyphs.iter_mut()) {
@@ -359,7 +418,9 @@ fn layout_with(fonts: &Fonts, system: &mut FontSystem, family: &FamilyChoice, te
             line.w += kerned;
             // CSS half-leading with the primary font's metrics: its ascent and
             // descent are centered in the line box; `normal` adds the line gap.
-            let primary = line.glyphs.first().and_then(|g| fonts.line_metrics(system, g.font_id, g.font_weight, size));
+            // An icon at the start of a line does not set the line's metrics.
+            let first = line.glyphs.iter().find(|g| !icons.iter().any(|r| r.contains(&g.start))).or(line.glyphs.first());
+            let primary = first.and_then(|g| fonts.line_metrics(system, g.font_id, g.font_weight, size));
             let (ascent, descent, gap) = primary.unwrap_or((line.max_ascent, line.max_descent, 0.0));
             let content = ascent + descent;
             let line_height = if style.line_height > 0.0 { style.line_height } else { content + gap };
@@ -675,6 +736,22 @@ mod tests {
         let laid = layout(&fonts(), text, &style, Some(400.0));
         assert!(laid.lines > 1);
         assert!(laid.width <= 400.0 + 0.5, "{}", laid.width);
+    }
+
+    #[test]
+    fn icon_codes_become_lucide_glyphs() {
+        let (expanded, icons) = expand_icons("Pray :hand-heart: at 10:30: or :nope:");
+        assert_eq!(icons.len(), 1);
+        assert_eq!(&expanded[icons[0].clone()], "\u{e5bd}");
+        assert!(expanded.starts_with("Pray \u{e5bd} at 10:30: or :nope:"), "{expanded:?}");
+        let style = TextStyle::new("sans-serif", 48.0);
+        let fonts = fonts();
+        let laid = layout(&fonts, ":heart:", &style, None);
+        assert_eq!(laid.glyphs.len(), 1);
+        let font = laid.glyphs[0].key.font_id;
+        let family = fonts.with(|system| system.db().face(font).map(|f| f.families[0].0.clone()));
+        assert_eq!(family.as_deref(), Some("lucide"));
+        assert!(laid.width > 30.0, "an icon is about one em wide: {}", laid.width);
     }
 
     #[test]

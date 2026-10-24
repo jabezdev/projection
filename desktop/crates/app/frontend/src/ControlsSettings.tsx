@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke, listen } from './tauri';
 import { actionLabels, inputActions, keyTrigger, sameTrigger, triggerLabel, type InputAction, type InputBindings, type InputTrigger } from './input';
+import { Icon } from './Icons';
 
 type Devices = { midi: string[]; stream_decks: string[] };
 
@@ -63,7 +64,7 @@ export default function ControlsSettings({ bindings }: { bindings: InputBindings
       <p className="controls-help">Keys work while the operator window is focused and no dialog is open (typing in a field never triggers them). Presenter clickers usually send Page Up / Page Down.</p>
       {inputActions.map(action => <div className="control-row" key={action}>
         <span className="control-action">{actionLabels[action]}</span>
-        <span className="control-triggers">{bindings.bindings.filter(b => b.action === action).map(b => <span className="control-chip" key={JSON.stringify(b.trigger)}>{triggerLabel(b.trigger)}<button aria-label={`Remove ${triggerLabel(b.trigger)} from ${actionLabels[action]}`} onClick={() => void save({ ...bindings, bindings: bindings.bindings.filter(x => !sameTrigger(x.trigger, b.trigger)) })}>×</button></span>)}</span>
+        <span className="control-triggers">{bindings.bindings.filter(b => b.action === action).map(b => <span className="control-chip" key={JSON.stringify(b.trigger)}>{triggerLabel(b.trigger)}<button aria-label={`Remove ${triggerLabel(b.trigger)} from ${actionLabels[action]}`} onClick={() => void save({ ...bindings, bindings: bindings.bindings.filter(x => !sameTrigger(x.trigger, b.trigger)) })}><Icon name="close"/></button></span>)}</span>
         <button className={learning === action ? 'is-learning' : ''} onClick={() => setLearning(learning === action ? null : action)}>{learning === action ? 'Press a key or button… (Esc cancels)' : 'Add'}</button>
       </div>)}
       {message && <small role="status">{message}</small>}
