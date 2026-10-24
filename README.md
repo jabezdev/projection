@@ -77,6 +77,7 @@ From `desktop/` unless noted.
 | Bump the version by hand (`0.MINOR.BUILD`) | `tools/bump-version.sh [minor]` |
 | End-to-end check over the WebSocket (needs a built app) | `bun tools/e2e/e2e.ts` |
 | 30-minute soak (memory, decoders, frames) | `bun tools/e2e/soak.ts --video <file>` |
+| Per-stage video timings, CPU and memory, software vs hardware decoding | `bun tools/e2e/profile.ts --video <file> --compare` |
 
 CI (`.github/workflows/ci.yml`) runs the Rust tests, the UI build/lint/test and the web typecheck/tests on every push; a `v*` tag also cross-builds the Windows installer and attaches it to a GitHub release. The parity check is not in CI because its results depend on the installed fonts.
 
@@ -87,7 +88,7 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the WebSocket host/port; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+`app.db` holds the library and services; `app-config.json` the WebSocket host/port and the video decoder (Settings → System); `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
 
 **Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PALTO and unzip `app.db` and the settings files into the data folder.
 
@@ -106,7 +107,7 @@ desktop/
     network_server/ Remote control over WebSocket
   tools/
     parity/         Output regression check against frozen references
-    e2e/            End-to-end and soak scripts over the WebSocket (Bun)
+    e2e/            End-to-end, soak and profile scripts over the WebSocket (Bun)
     bump-version.sh Version bump (0.MINOR.BUILD)
     build-windows.sh  Cross-builds the Windows installer
   assets/           Sample backgrounds

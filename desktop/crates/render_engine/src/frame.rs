@@ -2,15 +2,23 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::paint::GpuTexture;
+use crate::yuv::{YuvPixels, YuvPlanes};
+use crate::Gpu;
 
-/// A decoded RGBA frame supplied by [`VideoFrames`].
+/// A frame's pixels as decoded.
+pub enum FramePixels<'a> {
+    /// 8-bit RGBA; `stride` (bytes per row) may exceed `width * 4`.
+    Rgba { data: &'a [u8], stride: usize },
+    /// Converted on the GPU; may be larger than the texture (it is scaled to fit).
+    Yuv(YuvPixels<'a>),
+}
+
+/// A decoded frame supplied by [`VideoFrames`].
 pub trait PixelFrame: Send + Sync {
     /// Unique per decoded frame; an unchanged id is not uploaded again.
     fn id(&self) -> u64;
     fn size(&self) -> (u32, u32);
-    /// Bytes per row; may exceed `width * 4`.
-    fn stride(&self) -> usize;
-    fn pixels(&self) -> &[u8];
+    fn pixels(&self) -> FramePixels<'_>;
 }
 
 /// Which playing video a texture follows. A foreground session is addressed
@@ -45,6 +53,8 @@ pub struct SharedFrame {
     generation: AtomicU64,
     /// Id of the last uploaded frame.
     last_id: AtomicU64,
+    /// Plane textures for YUV frames, written only by the frame pump.
+    yuv: std::sync::Mutex<Option<YuvPlanes>>,
 }
 
 impl SharedFrame {
@@ -69,6 +79,7 @@ impl SharedFrame {
             content: AtomicU64::new(0),
             generation: AtomicU64::new(0),
             last_id: AtomicU64::new(0),
+            yuv: std::sync::Mutex::new(None),
         }
     }
 
@@ -108,22 +119,40 @@ impl SharedFrame {
         self.generation.fetch_add(1, Ordering::AcqRel);
     }
 
-    /// Uploads `frame` into the top-left corner. Frames larger than the
-    /// texture are rejected; decoders scale to fit beforehand.
-    pub fn upload(&self, queue: &wgpu::Queue, frame: &dyn PixelFrame) -> bool {
+    /// Uploads `frame` into the top-left corner. RGBA frames larger than the
+    /// texture are rejected (decoders scale them to fit); YUV frames are
+    /// converted on the GPU and scaled down to fit.
+    pub fn upload(&self, gpu: &Gpu, frame: &dyn PixelFrame) -> bool {
         let (width, height) = frame.size();
-        let stride = frame.stride();
-        let pixels = frame.pixels();
+        self.last_id.store(frame.id(), Ordering::Release);
+        let shown = match frame.pixels() {
+            FramePixels::Rgba { data, stride } => self.upload_rgba(&gpu.queue, (width, height), data, stride),
+            FramePixels::Yuv(pixels) => {
+                let out = fit_within((width, height), self.capacity);
+                let converted = width > 0
+                    && height > 0
+                    && YuvPlanes::convert(&mut self.yuv.lock().expect("yuv planes poisoned"), gpu, &pixels, (width, height), &self.texture, out);
+                converted.then_some(out)
+            }
+        };
+        let Some((width, height)) = shown else {
+            log::error!("Rejected a {width}x{height} frame with missing pixels");
+            return false;
+        };
+        self.content.store((width as u64) << 32 | height as u64, Ordering::Release);
+        self.generation.fetch_add(1, Ordering::AcqRel);
+        true
+    }
+
+    fn upload_rgba(&self, queue: &wgpu::Queue, (width, height): (u32, u32), pixels: &[u8], stride: usize) -> Option<(u32, u32)> {
         let fits = width > 0
             && height > 0
             && width <= self.capacity.0
             && height <= self.capacity.1
             && stride >= width as usize * 4
             && pixels.len() >= stride * (height as usize - 1) + width as usize * 4;
-        self.last_id.store(frame.id(), Ordering::Release);
         if !fits {
-            log::error!("Rejected a {width}x{height} frame (stride {stride}, {} bytes)", pixels.len());
-            return false;
+            return None;
         }
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -136,8 +165,12 @@ impl SharedFrame {
             wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(stride as u32), rows_per_image: Some(height) },
             wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
-        self.content.store((width as u64) << 32 | height as u64, Ordering::Release);
-        self.generation.fetch_add(1, Ordering::AcqRel);
-        true
+        Some((width, height))
     }
+}
+
+/// Largest size within `max` with the same aspect ratio, never scaled up.
+fn fit_within((width, height): (u32, u32), max: (u32, u32)) -> (u32, u32) {
+    let scale = (max.0 as f64 / width.max(1) as f64).min(max.1 as f64 / height.max(1) as f64).min(1.0);
+    (((width as f64 * scale).round() as u32).clamp(1, max.0), ((height as f64 * scale).round() as u32).clamp(1, max.1))
 }

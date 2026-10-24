@@ -66,6 +66,23 @@ export default function OutputSettings({ config, onChange, onClose, extraTabs }:
 }
 
 type AppInfo = { version: string; data_dir: string; last_backup_ms: number | null };
+type VideoDecoding = { choice: string; available: { name: string; label: string }[] };
+
+/** Software decoding, automatic hardware decoding, or one accelerator found on this computer. */
+function VideoDecodingSettings({ onError }: { onError: (message: string) => void }) {
+  const [decoding, setDecoding] = useState<VideoDecoding | null>(null);
+  useEffect(() => { void invoke<VideoDecoding>('get_video_decoding').then(setDecoding).catch(e => onError(String(e))); }, [onError]);
+  const choose = (choice: string) => {
+    void invoke('set_video_decoder', { choice }).then(() => setDecoding(d => d && { ...d, choice })).catch(e => onError(String(e)));
+  };
+  const options: [string, string][] = [['software', 'Software (CPU)'], ...(decoding?.available.length ? [['auto', 'Automatic (hardware when possible)'] as [string, string]] : []), ...(decoding?.available.map(d => [d.name, d.label] as [string, string]) ?? [])];
+  // A saved accelerator that is missing now still shows, so the choice is visible.
+  if (decoding && !options.some(([name]) => name === decoding.choice)) options.push([decoding.choice, `${decoding.choice} (not available here)`]);
+  return <fieldset><legend>Video decoding</legend>
+    <label>Decoder<select aria-label="Video decoder" disabled={!decoding} value={decoding?.choice ?? 'software'} onChange={e => choose(e.target.value)}>{options.map(([name, label]) => <option key={name} value={name}>{label}</option>)}</select></label>
+    <small>{!decoding ? 'Looking for hardware decoders…' : decoding.available.length ? 'Hardware decoding takes video work off the processor. It applies to videos started after the change; a video the hardware cannot decode plays in software instead. Check videos on the church PC after changing this.' : 'No hardware decoder was found on this computer, so videos decode in software.'}</small>
+  </fieldset>;
+}
 
 /** Version, backups and logs: what the operator needs when something goes wrong. */
 function SystemSettings({ onError }: { onError: (message: string) => void }) {
@@ -86,6 +103,7 @@ function SystemSettings({ onError }: { onError: (message: string) => void }) {
       <button onClick={() => void invoke('open_backups_folder').catch(e => onError(String(e)))}>Open backups folder</button>
       <small>{status || `A backup holds the library, services and settings, plus a list of the media files they use (not the files themselves). One is also made automatically each week${info?.last_backup_ms ? `; the last was ${new Date(info.last_backup_ms).toLocaleString()}` : ''}.`}</small>
     </fieldset>
+    <VideoDecodingSettings onError={onError}/>
     <fieldset><legend>Troubleshooting</legend>
       <button onClick={() => void invoke('open_logs_folder').catch(e => onError(String(e)))}>Open logs folder</button>
       <small>The log files show what happened if something goes wrong during a service.</small>

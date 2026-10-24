@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::{PixelFrame, VideoFrames, VideoKey};
+use crate::{FramePixels, PixelFrame, VideoFrames, VideoKey};
 
 /// Synthetic 30 fps frames for checking outputs without media. A sweeping bar
 /// and binary frame counter make shared-frame identity visible: every output
@@ -25,11 +25,8 @@ impl PixelFrame for PatternFrame {
     fn size(&self) -> (u32, u32) {
         self.size
     }
-    fn stride(&self) -> usize {
-        self.size.0 as usize * 4
-    }
-    fn pixels(&self) -> &[u8] {
-        &self.pixels
+    fn pixels(&self) -> FramePixels<'_> {
+        FramePixels::Rgba { data: &self.pixels, stride: self.size.0 as usize * 4 }
     }
 }
 

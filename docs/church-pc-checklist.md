@@ -7,7 +7,7 @@ Date: ____________  Version installed: ____________  Displays connected: _______
 ## Before leaving
 
 - [ ] Build the installer on Linux: `desktop/tools/build-windows.sh` (bumps the version). Copy `PALTO_<version>_x64-setup.exe` to a USB stick.
-- [ ] Also copy: a typical worship video with sound, a logo image, `desktop/tools/e2e/` (for the soak) and the Bun installer for Windows (https://bun.sh).
+- [ ] Also copy: a typical worship video with sound, a logo image, `desktop/tools/e2e/` (for the soak and profile) and the Bun installer for Windows (https://bun.sh).
 
 ## On the church PC
 
@@ -26,6 +26,8 @@ Date: ____________  Version installed: ____________  Displays connected: _______
 | ☐ | Backup | Settings → **Export backup…** writes a zip. The weekly automatic backup folder exists under `%APPDATA%\com.magi.projection\backups`. | |
 | ☐ | Effects and animated backgrounds | Settings → Projection: turn on shadow, outline and glow; give a song the Aurora background (song editor). Advance lyrics for a minute with both outputs shown. `palto.log` should keep near 60 fps on both outputs and must not say a shader background "cannot keep up". Note anything that stutters. | |
 | ☐ | Keys and controllers | → / ← / B / C / L work with the operator window focused; a presenter clicker advances. If a MIDI controller or Stream Deck is available, bind one button in Settings → Controls and use it. | |
+| ☐ | Video profile | For each video you plan to use: `bun tools\e2e\profile.ts --video <file> --compare --app "<PALTO folder>\PALTO.exe"` (about 1 min 20 s each). It plays the video with software and then hardware decoding and writes `profile-*.md`. Keep the reports; they decide the decoder setting and fill in [docs/media-profile.md](media-profile.md). | |
+| ☐ | Hardware decoding | Settings → System → Video decoding lists the accelerators found (expect Direct3D 11 and NVIDIA). Choose **Automatic**, then play each video on both outputs: picture correct (no green or corrupted frames), sound in sync, seeking and looping work. If anything looks wrong, set it back to **Software** and note which video. | |
 | ☐ | Soak (30 min) | `bun tools\e2e\soak.ts --video <file> --app "<PALTO folder>\PALTO.exe"` (the folder: Start menu → PALTO → Open file location; usually `%LOCALAPPDATA%\PALTO`). Passes; keep the CSV. | |
 | ☐ | Full rehearsal | The seven steps in README.md → MVP rehearsal, with the real songs, media and displays. | |
 | ☐ | Exit | Closing the operator window closes everything; no PALTO process remains in Task Manager. | |

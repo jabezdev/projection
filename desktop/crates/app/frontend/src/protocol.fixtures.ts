@@ -3,6 +3,7 @@
 import type { MediaAction, MediaDirective, PlaybackReport, PlaybackState } from './playback';
 import type { SessionItem } from './models';
 import type { OutputConfig } from './outputState';
+import type { InputBindings } from './input';
 
 export const videoPlayback = {
   "session_id": 7,
@@ -312,3 +313,164 @@ export const outputConfig = {
   "confidenceTransition": 250.0,
   "logoPath": ""
 } satisfies OutputConfig;
+export const inputBindings = {
+  "version": 1,
+  "bindings": [
+    {
+      "trigger": {
+        "device": "key",
+        "key": "ArrowRight",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "next"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "Space",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "next"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "PageDown",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "next"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "ArrowLeft",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "previous"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "PageUp",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "previous"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "ArrowDown",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "next_item"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "ArrowUp",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "previous_item"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "Escape",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "live"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "b",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "black"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": ".",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "black"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "c",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "clear"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "l",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "logo"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "p",
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      },
+      "action": "play_pause"
+    },
+    {
+      "trigger": {
+        "device": "midi",
+        "message": "control",
+        "channel": 2,
+        "number": 64
+      },
+      "action": "stop"
+    },
+    {
+      "trigger": {
+        "device": "stream_deck",
+        "button": 3
+      },
+      "action": "logo"
+    },
+    {
+      "trigger": {
+        "device": "key",
+        "key": "k",
+        "ctrl": true,
+        "alt": false,
+        "shift": true
+      },
+      "action": "clear"
+    }
+  ]
+} satisfies InputBindings;

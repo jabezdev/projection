@@ -8,7 +8,9 @@ mod audio;
 mod clock;
 mod decoder;
 mod frames;
+pub mod hwaccel;
 mod poster;
+pub mod profile;
 mod ring;
 mod session;
 
@@ -17,8 +19,8 @@ use std::sync::{Arc, Mutex};
 
 pub use audio::{audio_recoveries, opened_outputs, AudioOutput, DeviceFormat, SessionAudio};
 pub use clock::now_us;
-pub use decoder::{active_decoders, fit_within, Clip, MAX_FRAME};
-pub use frames::{FrameStats, VideoFrame};
+pub use decoder::{active_decoders, fit_within, Clip, MAX_FRAME, MAX_YUV_FRAME};
+pub use frames::{FrameFormat, FrameStats, Plane, VideoFrame, YuvMatrix};
 pub use poster::{poster, Poster};
 pub use session::{MediaSession, Phase, SessionOptions, SessionStatus};
 

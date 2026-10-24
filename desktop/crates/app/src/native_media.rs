@@ -7,9 +7,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use core_engine::MediaBackend;
-use media_engine::{now_us, Clip, MediaEngine, Phase, SessionOptions, VideoFrame};
+use media_engine::{now_us, Clip, FrameFormat, MediaEngine, Phase, SessionOptions, VideoFrame, YuvMatrix};
 use protocol::{MediaDirective, PlaybackPhase, PlaybackReport, PlaybackState};
-use render_engine::{PixelFrame, VideoFrames, VideoKey};
+use render_engine::{FramePixels, PixelFrame, VideoFrames, VideoKey, YuvLayout, YuvPixels};
 
 use crate::engine_host::EngineHandle;
 
@@ -75,8 +75,13 @@ impl NativeMedia {
 fn report_loop(engine: &MediaEngine, tracked: &Mutex<Option<Tracked>>, running: &AtomicBool, reports: &EngineHandle) {
     let mut last: Option<(u64, u64, PlaybackPhase, Instant)> = None;
     let mut telemetry_at = Instant::now();
+    let mut profile_at = Instant::now();
     while running.load(Ordering::Acquire) {
         std::thread::sleep(REPORT_POLL);
+        if profile_at.elapsed() >= TELEMETRY_INTERVAL {
+            profile_at = Instant::now();
+            log_profile();
+        }
         let Some(target) = *tracked.lock().expect("tracked session poisoned") else { continue };
         let Some(session) = engine.session(target.session_id) else { continue };
         let status = session.status(now_us());
@@ -120,6 +125,20 @@ fn report_loop(engine: &MediaEngine, tracked: &Mutex<Option<Tracked>>, running: 
             }),
         });
         last = Some((target.session_id, target.generation, phase, Instant::now()));
+    }
+}
+
+/// Logs the per-frame stage timings of the last window, when anything was
+/// decoded or drawn. `tools/e2e/profile.ts` reads these lines.
+fn log_profile() {
+    let [decode, transfer, convert] = media_engine::profile::take();
+    let render = render_engine::profile::take();
+    let busy = [decode, transfer, convert].iter().any(|s| s.count > 0) || render.upload.count > 0 || render.draw.iter().any(|s| s.count > 0);
+    if busy {
+        log::info!(
+            "profile: decode {decode}; transfer {transfer}; convert {convert}; upload {}; projection draw {} gpu {}; confidence draw {} gpu {}",
+            render.upload, render.draw[0], render.gpu[0], render.draw[1], render.gpu[1],
+        );
     }
 }
 
@@ -205,11 +224,27 @@ impl PixelFrame for Frame {
     fn size(&self) -> (u32, u32) {
         (self.0.width, self.0.height)
     }
-    fn stride(&self) -> usize {
-        self.0.stride
-    }
-    fn pixels(&self) -> &[u8] {
-        &self.0.data
+    fn pixels(&self) -> FramePixels<'_> {
+        let frame = &self.0;
+        let layout = match frame.format {
+            FrameFormat::Rgba => {
+                let (data, stride) = frame.plane(0);
+                return FramePixels::Rgba { data, stride };
+            }
+            FrameFormat::I420 => YuvLayout::I420,
+            FrameFormat::Nv12 => YuvLayout::Nv12,
+        };
+        let plane = |i: usize| if i < frame.format.planes() { frame.plane(i) } else { (&[][..], 0) };
+        FramePixels::Yuv(YuvPixels {
+            layout,
+            planes: [plane(0), plane(1), plane(2)],
+            matrix: match frame.matrix {
+                YuvMatrix::Bt601 => render_engine::YuvMatrix::Bt601,
+                YuvMatrix::Bt709 => render_engine::YuvMatrix::Bt709,
+                YuvMatrix::Bt2020 => render_engine::YuvMatrix::Bt2020,
+            },
+            full_range: frame.full_range,
+        })
     }
 }
 

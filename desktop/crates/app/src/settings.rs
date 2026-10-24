@@ -53,10 +53,13 @@ pub fn load_or_set_aside<T: DeserializeOwned + Default>(path: &Path, now_ms: i64
 pub const CONFIG_FILENAME: &str = "app-config.json";
 pub const DB_FILENAME: &str = "app.db";
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub ws_bind_host: String,
     pub ws_port: u16,
     pub projection_size: Option<(u32, u32)>,
+    /// `software`, `auto` or an FFmpeg hardware device name.
+    pub video_decoder: String,
 }
 
 impl Default for AppConfig {
@@ -65,8 +68,68 @@ impl Default for AppConfig {
             ws_bind_host: "127.0.0.1".to_string(),
             ws_port: 8080,
             projection_size: None,
+            video_decoder: "software".to_string(),
         }
     }
+}
+
+/// `app-config.json`, shared by startup, the window handlers and the
+/// System settings. Settings changes save at once; the window size at exit.
+pub struct ConfigStore {
+    pub value: std::sync::Arc<std::sync::RwLock<AppConfig>>,
+    pub path: PathBuf,
+}
+
+impl ConfigStore {
+    pub fn update(&self, change: impl FnOnce(&mut AppConfig)) -> Result<AppConfig, String> {
+        let mut config = self.value.write().map_err(|e| e.to_string())?;
+        change(&mut config);
+        write_atomic(&self.path, &*config).map_err(|e| format!("Saving {}: {e}", self.path.display()))?;
+        Ok(config.clone())
+    }
+
+    pub fn get(&self) -> AppConfig {
+        self.value.read().map(|c| c.clone()).unwrap_or_default()
+    }
+}
+
+#[derive(Serialize)]
+pub struct DecoderOption {
+    name: String,
+    label: String,
+}
+
+#[derive(Serialize)]
+pub struct VideoDecoding {
+    /// The saved choice.
+    choice: String,
+    /// Accelerators that open on this computer.
+    available: Vec<DecoderOption>,
+}
+
+/// The saved video decoder and the accelerators found here (probed once,
+/// which can take a moment, so off the UI thread).
+#[tauri::command]
+pub async fn get_video_decoding(config: tauri::State<'_, ConfigStore>) -> Result<VideoDecoding, String> {
+    let choice = config.get().video_decoder;
+    let available = tauri::async_runtime::spawn_blocking(media_engine::hwaccel::available).await.map_err(|e| e.to_string())?;
+    Ok(VideoDecoding {
+        choice,
+        available: available.into_iter().map(|(name, label)| DecoderOption { name: name.into(), label: label.into() }).collect(),
+    })
+}
+
+/// Saves and applies the decoder for videos started from now on.
+#[tauri::command]
+pub fn set_video_decoder(config: tauri::State<ConfigStore>, choice: String) -> Result<(), String> {
+    let parsed = media_engine::hwaccel::DecoderChoice::parse(&choice);
+    if parsed == media_engine::hwaccel::DecoderChoice::Software && choice != "software" {
+        return Err(format!("Unknown video decoder {choice}"));
+    }
+    config.update(|c| c.video_decoder = choice.clone())?;
+    log::info!("Video decoder set to {choice}");
+    media_engine::hwaccel::set_choice(parsed);
+    Ok(())
 }
 
 /// Overrides the data folder (library, settings and logs), so test scripts

@@ -12,7 +12,7 @@ use crate::clock::{now_us, MonotonicClock};
 use crate::decoder::{self, Clip, Control, DecoderParams, DecoderShared};
 use crate::frames::{FrameQueue, FrameStats, VideoFrame};
 
-/// Decoded frames held ahead of presentation (~8 MB each at 1080p).
+/// Decoded frames held ahead of presentation (~3 MB each at 1080p YUV).
 const FRAME_QUEUE: usize = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

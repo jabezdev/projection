@@ -14,7 +14,7 @@ All crates are under [desktop/crates/](desktop/crates/).
 |---|---|---|
 | `protocol` | Every command, event and data shape (projects, songs, program and playback state, output settings). Serialized as JSON for the UI and WebSocket. | GPU handles, frames, windows. |
 | `core_engine` | The state machine: selection, cues, display modes, media sessions and their generations, song normalization (`magi.song.v1`). Builds and tests without GPU, audio or FFmpeg. | Rendering, decoding, platform event loops, blocking I/O. |
-| `media_engine` | Demux and decode workers, bounded frame queues, transport, playback clocks, the audio output, poster thumbnails. | Windows or layout. |
+| `media_engine` | Demux and decode workers (software or hardware), bounded frame queues, transport, playback clocks, the audio output, poster thumbnails. | Windows or layout. |
 | `render_engine` | One GPU device, a presentation thread per output, scene layout (main and confidence), text shaping, painting, still previews. | Decoders or audio. |
 | `app` | Tauri integration: windows, operator commands, the bounded engine queue, the storage worker, settings files, wiring the crates together. | A second idea of what is on air. |
 | `persistence` | SQLite library and services (schema v2). | Runtime state. |
@@ -71,14 +71,16 @@ A song's own background carries over to items without one; a foreground video or
 
 ## Media
 
-- **One decoder per session.** A worker thread demuxes the file and decodes video and audio. Video becomes RGBA, scaled down to fit 1920×1080 (never up). Timestamps are normalized to the container start; decoders are drained at end of file.
+- **One decoder per session.** A worker thread demuxes the file and decodes video and audio; software video decoding uses up to four frame threads. Timestamps are normalized to the container start; decoders are drained at end of file.
+- **YUV frames.** 8-bit 4:2:0 video (I420, or NV12 from hardware decoders) up to 4096×2304 is passed on as decoded: its planes are copied once into a shared buffer, uploaded as R8/RG8 textures, and one GPU pass converts them into the video's RGBA texture with the frame's matrix (BT.601, BT.709 or BT.2020; unspecified means BT.709 from 720 lines up) and range, scaling down to fit 1920×1080 (never up). Other formats (4:2:2, 4:4:4, 10-bit) are converted to I420 by swscale first, and larger frames are scaled down there; sources with transparency stay RGBA. This uploads about 40% of the bytes RGBA did and removes the CPU color conversion.
+- **Hardware decoding** ([hwaccel.rs](desktop/crates/media_engine/src/hwaccel.rs)). Settings → System → Video decoding: Software (the default until it is checked on the church PC), Automatic, or one accelerator found on this computer (Windows: D3D11VA, NVDEC, DXVA2, D3D12, Vulkan; Linux: VA-API, NVDEC, VDPAU, Vulkan). Intel Quick Sync and AMD AMF are reached through D3D11VA and VA-API, since FFmpeg offers them only as separate decoders. One device per accelerator is opened on first use and shared. Decoded frames are copied back to system memory as NV12 and continue as above, so hardware decoding takes the decoding off the CPU, not the upload. A stream the accelerator cannot decode (codec, profile, size) decodes in software in the same session; a hardware failure midway replaces the decoder with a software one and continues after the last frame shown, without decoding the queued audio again. The choice applies to sessions opened after it changes.
 - **One texture per source.** The renderer's frame pump asks the session for the frame due now and uploads it once; both outputs sample it. Turning on a video's Confidence option adds no decoder and no audio.
 - **Ambient sessions.** Song and Logo video backgrounds are muted looping sessions keyed by file. They decode no audio and survive lyric changes while the file stays the same.
 - **One audio output.** A CPAL stream on the system default device, opened once for the app's lifetime. Its callback reads a lock-free ring (1 s) and never decodes, allocates or blocks. After a device error it retries the default device every 500 ms and converts rate and channels if the new device differs; the media card shows "reconnecting" meanwhile.
 - **Clock.** With audio: the samples the device has been handed, projected to its playback timestamp. Without audio: a monotonic clock anchored at the transport position. During an underrun the clock holds rather than running ahead.
 - **Rate.** 0.5–2×; pitch follows rate (audio is resampled).
-- **Seek, stop, loop.** Each restart gets an epoch; queued audio and frames are flushed and the current frame stays up until the new epoch's first frame, so there is no black gap. Clip bounds are `[start, end)`. Looping seeks to the clip start; it is not guaranteed seamless.
-- **Backpressure.** The frame queue holds 6 frames chosen by presentation time. Video packets are stashed (up to 64 MB) so audio never waits behind video, and frames the clock has passed are dropped, so a throttled output never slows decoding.
+- **Seek, stop, loop.** Each restart gets an epoch; queued audio and frames are flushed and the current frame stays up until the new epoch's first frame, so there is no black gap. Clip bounds are `[start, end)`. **Looping** keeps the clip's first frames (up to 6, covering up to 250 ms) from the first pass; at each wrap they are queued again at once, sharing their pixels, while the decoder seeks back and skips past them, so the loop point never waits on a seek or a keyframe decode. Audio plays straight through the wrap.
+- **Backpressure.** The frame queue holds 6 frames chosen by presentation time (about 3 MB each at 1080p YUV). Video packets are stashed (up to 64 MB) so audio never waits behind video, and frames the clock has passed are dropped, so a throttled output never slows decoding.
 - **Preload.** Opening a session decodes the first frame and fills the audio ring while paused. Nothing is audible until play.
 - **Posters.** Thumbnails are the first frame, 640 px wide, decoded in-process and cached as JPEG. No `ffmpeg` executable is needed; the app links only `avcodec`, `avformat`, `avutil`, `swresample` and `swscale`.
 
@@ -116,7 +118,7 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 3. **The engine owns playback state.** Outputs and the UI report and request; they never decide. One state machine with session and generation IDs makes stale or out-of-order input harmless.
 4. **React stays for editing and controls.** It is the fastest way to build the operator UI, and it is off the live path: a slow UI cannot disturb the outputs, which present from their own threads.
 5. **Platforms.** Develop on Omarchy Linux (Hyprland, run under XWayland). Users run Windows 10/11, which is the acceptance platform. Displays attached to different GPUs are not supported.
-6. **Target hardware: Ryzen 3 2200G, 8 GB RAM, GTX 1050 Ti (4 GB).** Features are judged against this machine. CPU decode plus RGBA upload is the measured baseline (about 27% of one core for 1080p on a Ryzen 5 5500U); hardware decoding comes after profiling on the target (roadmap phase 7), as a selectable option with software decoding as the fallback.
+6. **Target hardware: Ryzen 3 2200G, 8 GB RAM, GTX 1050 Ti (4 GB).** Features are judged against this machine. CPU decode plus RGBA upload was the baseline (about 27% of one core for 1080p on a Ryzen 5 5500U). YUV upload with GPU conversion and selectable hardware decoding came in roadmap phase 7 (2026-10-24): on the 5500U a looping 1080p30 H.264 video with sound and the confidence output presenting measured 25% of one thread in software and 20% with VA-API ([docs/media-profile.md](docs/media-profile.md)). Software decoding stays the default and the fallback until the church PC has been profiled.
 7. **Audio uses the system default device** with automatic reconnect. Venue routing is done in the OS sound settings, which operators already know. Pitch follows rate because it is the simplest correct behavior.
 8. **Display policy as in the table above.** Logo is a picture override, so it pauses video but not walk-in music; Black and Clear keep transport running so the operator controls audio explicitly; a previous video never silently becomes a background.
 9. **Previews are still images from the real renderer.** No second layout engine to keep in step and no second decoder; low frequency keeps the operator light.
@@ -131,7 +133,8 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 - Only one foreground file is prepared at a time (the next item, else the previous); jumping elsewhere decodes on cue as before. Prepared sessions and paused loops each hold a decoder and a few frames of memory.
 - Text effects and shader backgrounds have not been measured on the GTX 1050 Ti yet.
 - When both output windows are covered, uploads wait behind their throttled presents and update about once a second; one visible output still runs at full rate.
-- Looping is not measured as seamless. *Phase 7: prepare the loop point.*
+- Hardware decoding copies frames back to system memory (about 6 ms per 1080p frame through VA-API on the 5500U's integrated GPU); handing decoded GPU textures straight to wgpu would avoid it but needs per-API interop (D3D11, Vulkan), not planned unless profiling shows the need.
+- 10-bit and 4:2:2/4:4:4 video is converted to 8-bit 4:2:0 on the CPU.
 - Windows items still to check on the church PC are in [WINDOWS.md](WINDOWS.md).
 
 ## What comes next for the engine
@@ -139,7 +142,7 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 From [ROADMAP.md](ROADMAP.md), the parts that change this document:
 
 - **Phase 6, operator controls:** one input layer for keyboard bindings, presenter clickers, MIDI, Stream Deck and OSC/Companion, all sending the same engine commands.
-- **Phase 7, media:** profiling on the church PC, YUV upload with shader conversion, selectable hardware decoding (D3D11VA, DXVA2, NVDEC, QSV, AMF on Windows; VA-API, VDPAU, NVDEC, Vulkan Video on Linux).
+- **Phase 7, media:** profiling on the church PC and a documented media profile; displays on two GPUs only if the setup needs it.
 - **Phase 8, screen capture:** a window or screen as an output source, captured once for both screens, with the capture API chosen per platform and switchable; a feed from another device's browser over WebRTC, with its audio through the one audio output.
 - **Phase 9, presentations:** web pages (the Canva player and other browser presentations) rendered off screen and shown as a source, so the outputs stay native; PDF and PowerPoint as slides.
 
@@ -155,7 +158,7 @@ From [ROADMAP.md](ROADMAP.md), the parts that change this document:
 | Simulate a slow confidence output | `MAGI_CONFIDENCE_STALL_MS=<ms>` |
 | Run the ignored media repro against a real file | `MAGI_MEDIA=<file> cargo test -p media_engine -- --ignored paused_seek` |
 
-Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens. Logs go to stderr and to `logs/palto.log` in the data folder (5 × 5 MB, rotated); `RUST_LOG` sets the filter.
+Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens, and a `profile:` line with per-frame stage timings: decode (wall time inside the video decoder; with threaded software decoding most work happens on its threads, so read CPU use instead), transfer (copy from a hardware decoder), convert (plane packing and any swscale conversion), upload (texture writes and YUV conversion on the frame pump), and per output draw (layout and encoding) and gpu (submit until the GPU finished it, including queued work; about 4 ms resolution). Logs go to stderr and to `logs/palto.log` in the data folder (5 × 5 MB, rotated); `RUST_LOG` sets the filter.
 
 | Test aid | What it does |
 |---|---|
@@ -163,3 +166,4 @@ Every 5 s the app logs active decoders, opened audio outputs, frames presented a
 | `PALTO_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
 | `bun tools/e2e/e2e.ts` | End-to-end WebSocket check against a scratch data folder (cue, navigation, display modes, transport, save, restart and crash recovery) |
 | `bun tools/e2e/soak.ts --video <file>` | 30-minute soak: looping video with confidence; fails if memory, decoders or audio outputs grow or frames stop |
+| `bun tools/e2e/profile.ts --video <file> [--compare]` | Plays a looping video with confidence for a minute (with `--compare`, once in software and once with automatic hardware decoding) and writes a Markdown report: stage timings, frame rates, CPU and memory |

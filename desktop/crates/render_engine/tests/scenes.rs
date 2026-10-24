@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use render_engine::{
     Capture, ConfidenceGroup, ConfidenceScene, Direction, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole,
-    PixelFrame, Scene, Stroke, Transition, TransitionKind, VideoKey,
+    FramePixels, PixelFrame, Scene, Stroke, Transition, TransitionKind, VideoKey,
 };
 
 const SIZE: (u32, u32) = (640, 360);
@@ -143,16 +143,13 @@ fn upload(capture: &Capture, key: &VideoKey, rgba: [u8; 4]) {
         fn size(&self) -> (u32, u32) {
             (16, 9)
         }
-        fn stride(&self) -> usize {
-            64
-        }
-        fn pixels(&self) -> &[u8] {
-            &self.0
+        fn pixels(&self) -> FramePixels<'_> {
+            FramePixels::Rgba { data: &self.0, stride: 64 }
         }
     }
     let frame = Frame((0..16 * 9).flat_map(|_| rgba).collect(), 1);
     let texture = capture.media().video(key);
-    assert!(texture.upload(&capture.gpu().queue, &frame));
+    assert!(texture.upload(capture.gpu(), &frame));
     capture.gpu().queue.submit(None);
 }
 

@@ -5,21 +5,33 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use crossbeam::channel::{Receiver, RecvTimeoutError};
 use ffmpeg_next as ffmpeg;
 
 use crate::audio::SessionAudio;
-use crate::frames::{FrameQueue, VideoFrame};
+use crate::frames::{FrameFormat, FrameQueue, Plane, VideoFrame, YuvMatrix};
+use crate::hwaccel::{self, HwDecoder};
+use crate::profile;
 
 /// Compressed video held while the frame queue is full, so audio decoding
 /// (which drives the clock) never waits behind video.
 const STASH_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
-/// Decoded frames are scaled down to fit this box; outputs are 1080p.
+/// RGBA frames are scaled down to fit this box; outputs are 1080p.
 pub const MAX_FRAME: (u32, u32) = (1920, 1080);
+
+/// YUV frames up to this size go to the GPU as decoded, which converts and
+/// scales them; larger ones are scaled down to [`MAX_FRAME`] first.
+pub const MAX_YUV_FRAME: (u32, u32) = (4096, 2304);
+
+/// A looping clip keeps its first frames (up to this many, covering up to
+/// [`LOOP_HEAD_US`]) to show again at each wrap while the decoder seeks back
+/// and catches up, so the loop point has no gap.
+const LOOP_HEAD_FRAMES: usize = 6;
+const LOOP_HEAD_US: i64 = 250_000;
 
 static ACTIVE_DECODERS: AtomicUsize = AtomicUsize::new(0);
 
@@ -110,7 +122,87 @@ struct VideoStream {
     index: usize,
     decoder: ffmpeg::decoder::Video,
     time_base: f64,
-    scaler: Option<(ffmpeg::software::scaling::Context, (ffmpeg::format::Pixel, u32, u32))>,
+    /// Converter and the (input format, size, output format) it was built for.
+    scaler: Option<(ffmpeg::software::scaling::Context, (ffmpeg::format::Pixel, u32, u32, ffmpeg::format::Pixel))>,
+    hw: Option<HwDecoder>,
+    /// Whether the first frame's decoder (hardware or software) was logged.
+    reported: bool,
+}
+
+/// Software decoders use up to this many threads each.
+fn decode_threads() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get()).min(4)
+}
+
+/// Opens stream `index`'s decoder, with the chosen hardware accelerator
+/// when `hardware` and one applies; falls back to software if that fails.
+fn open_video(input: &ffmpeg::format::context::Input, index: usize, hardware: bool) -> anyhow::Result<(ffmpeg::decoder::Video, Option<HwDecoder>)> {
+    let stream = input.stream(index).context("Missing video stream")?;
+    let context = || ffmpeg::codec::context::Context::from_parameters(stream.parameters());
+    if hardware {
+        let mut hw_context = context()?;
+        let codec = ffmpeg::decoder::find(hw_context.id());
+        if let Some(hw) = codec.and_then(|codec| hwaccel::attach(&mut hw_context, unsafe { codec.as_ptr() })) {
+            match hw_context.decoder().video() {
+                Ok(decoder) => return Ok((decoder, Some(hw))),
+                Err(e) => log::warn!("Opening the {} decoder failed ({e}); decoding in software", hw.name),
+            }
+        }
+    }
+    let mut context = context()?;
+    context.set_threading(ffmpeg::codec::threading::Config {
+        kind: ffmpeg::codec::threading::Type::Frame,
+        count: decode_threads(),
+        ..Default::default()
+    });
+    Ok((context.decoder().video()?, None))
+}
+
+fn has_alpha(format: ffmpeg::format::Pixel) -> bool {
+    let descriptor = unsafe { ffmpeg::ffi::av_pix_fmt_desc_get(format.into()) };
+    !descriptor.is_null() && unsafe { (*descriptor).flags } & ffmpeg::ffi::AV_PIX_FMT_FLAG_ALPHA as u64 != 0
+}
+
+/// The matrix a frame declares, else the usual one for its size.
+fn yuv_matrix(frame: &ffmpeg::frame::Video) -> YuvMatrix {
+    use ffmpeg::color::Space;
+    match frame.color_space() {
+        Space::BT709 => YuvMatrix::Bt709,
+        Space::BT470BG | Space::SMPTE170M | Space::FCC | Space::SMPTE240M => YuvMatrix::Bt601,
+        Space::BT2020NCL | Space::BT2020CL => YuvMatrix::Bt2020,
+        _ if frame.height() >= 720 => YuvMatrix::Bt709,
+        _ => YuvMatrix::Bt601,
+    }
+}
+
+/// A frame's pixels ready for upload, before it gets an id and a time.
+struct Packed {
+    width: u32,
+    height: u32,
+    format: FrameFormat,
+    matrix: YuvMatrix,
+    full_range: bool,
+    planes: [Plane; 3],
+    data: Arc<[u8]>,
+}
+
+/// Copies the first `count` planes of `frame` into one shared buffer.
+fn copy_planes(frame: &ffmpeg::frame::Video, count: usize) -> ([Plane; 3], Arc<[u8]>) {
+    let mut planes = [Plane::default(); 3];
+    let mut total = 0;
+    for (i, plane) in planes.iter_mut().enumerate().take(count) {
+        *plane = Plane { offset: total, stride: frame.stride(i) };
+        total += frame.data(i).len();
+    }
+    let mut data = Arc::<[u8]>::new_uninit_slice(total);
+    let buffer = Arc::get_mut(&mut data).expect("new buffer is unique");
+    for (i, plane) in planes.iter().enumerate().take(count) {
+        let source = frame.data(i);
+        // SAFETY: the planes were laid out back to back within `total` bytes.
+        unsafe { std::ptr::copy_nonoverlapping(source.as_ptr(), buffer.as_mut_ptr().add(plane.offset) as *mut u8, source.len()) };
+    }
+    // SAFETY: every byte was written above.
+    (planes, unsafe { data.assume_init() })
 }
 
 struct AudioStream {
@@ -135,8 +227,11 @@ struct Worker {
     shared: Arc<DecoderShared>,
     controls: Receiver<Control>,
     clock: Clock,
-    /// Media positions before this are decoded but not presented.
-    discard_before_us: i64,
+    /// Media positions before these are decoded but not presented.
+    video_discard_before_us: i64,
+    audio_discard_before_us: i64,
+    /// End of the audio sent to the ring in this pass, media µs.
+    audio_end_us: i64,
     /// Added to media time to get timeline time; grows by one loop per wrap.
     timeline_offset_us: i64,
     /// End of the furthest content decoded in this pass, media µs.
@@ -149,6 +244,18 @@ struct Worker {
     video_stash: VecDeque<ffmpeg::Packet>,
     stash_bytes: usize,
     pending_frames: VecDeque<VideoFrame>,
+    /// The clip's first frames (media µs, pixels) for the next loop wrap.
+    head: Vec<(i64, VideoFrame)>,
+    /// `head` holds the clip's start; while capturing it is still filling.
+    head_complete: bool,
+    capturing_head: bool,
+    /// Loop-head frames still in `pending_frames`; decoding continues
+    /// behind them instead of waiting for the queue.
+    head_pending: usize,
+    /// Set when the hardware decoder fails; the next step continues in software.
+    hw_failure: Option<String>,
+    /// Time spent in the video decoder since the last decoded frame.
+    decode_time: Duration,
 }
 
 enum Flow {
@@ -169,13 +276,8 @@ impl Worker {
 
         let video = match input.streams().best(ffmpeg::media::Type::Video) {
             Some(stream) => {
-                let context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())?;
-                Some(VideoStream {
-                    index: stream.index(),
-                    decoder: context.decoder().video()?,
-                    time_base: f64::from(stream.time_base()),
-                    scaler: None,
-                })
+                let (decoder, hw) = open_video(&input, stream.index(), true)?;
+                Some(VideoStream { index: stream.index(), decoder, time_base: f64::from(stream.time_base()), scaler: None, hw, reported: false })
             }
             None => None,
         };
@@ -208,7 +310,9 @@ impl Worker {
             shared: params.shared,
             controls: params.controls,
             clock: params.clock,
-            discard_before_us: 0,
+            video_discard_before_us: 0,
+            audio_discard_before_us: 0,
+            audio_end_us: 0,
             timeline_offset_us: 0,
             content_end_us: 0,
             clip_end_reached: false,
@@ -217,6 +321,12 @@ impl Worker {
             video_stash: VecDeque::new(),
             stash_bytes: 0,
             pending_frames: VecDeque::new(),
+            head: Vec::new(),
+            head_complete: false,
+            capturing_head: false,
+            head_pending: 0,
+            hw_failure: None,
+            decode_time: Duration::ZERO,
         };
         worker.restart(0, params.clip.start_us, params.rate)?;
         worker.shared.opened.store(true, Ordering::Release);
@@ -229,6 +339,9 @@ impl Worker {
                 if let Flow::Close = self.apply(control)? {
                     return Ok(());
                 }
+            }
+            if let Some(reason) = self.hw_failure.take() {
+                self.fall_back_to_software(&reason)?;
             }
             if self.shared.finished.load(Ordering::Acquire) {
                 // Idle at the end of the clip, presenting what is left.
@@ -275,6 +388,9 @@ impl Worker {
             }
             Control::SetClip(clip) => {
                 let was_finished = self.shared.finished.load(Ordering::Acquire);
+                if clip.start_us != self.clip.start_us || !clip.looping {
+                    self.forget_head();
+                }
                 self.clip = clip;
                 // Turning looping on at the end resumes from the clip start.
                 if was_finished && clip.looping {
@@ -299,6 +415,11 @@ impl Worker {
             audio.resampler = None;
         }
         self.seek_media(position_us)?;
+        self.head_pending = 0;
+        if !self.head_complete {
+            self.head.clear();
+            self.capturing_head = self.clip.looping && position_us == self.clip.start_us;
+        }
         self.timeline_offset_us = 0;
         self.shared.loop_len_us.store(-1, Ordering::Release);
         self.shared.finished.store(false, Ordering::Release);
@@ -320,7 +441,9 @@ impl Worker {
         if let Some(audio) = &mut self.audio {
             audio.decoder.flush();
         }
-        self.discard_before_us = position_us;
+        self.video_discard_before_us = position_us;
+        self.audio_discard_before_us = position_us;
+        self.audio_end_us = position_us;
         self.content_end_us = position_us;
         self.last_video_us = None;
         self.video_stash.clear();
@@ -349,25 +472,82 @@ impl Worker {
             while let Some(frame) = self.pending_frames.pop_front() {
                 if let Err(frame) = self.frames.try_push(frame, (self.clock)()) {
                     self.pending_frames.push_front(frame);
-                    return Ok(());
+                    break;
                 }
+                self.head_pending = self.head_pending.saturating_sub(1);
             }
-            if self.shared.interrupted() {
+            // Only loop-head frames waiting: keep decoding what follows them.
+            if self.pending_frames.len() > self.head_pending || self.shared.interrupted() || self.hw_failure.is_some() {
                 return Ok(());
             }
             let Some(packet) = self.video_stash.pop_front() else { return Ok(()) };
             self.stash_bytes -= packet.size();
-            self.video.as_mut().unwrap().decoder.send_packet(&packet)?;
+            let started = Instant::now();
+            let video = self.video.as_mut().unwrap();
+            let sent = video.decoder.send_packet(&packet);
+            self.decode_time += started.elapsed();
+            match sent {
+                Ok(()) => {}
+                Err(e) if video.hw.is_some() => {
+                    self.hw_failure = Some(e.to_string());
+                    return Ok(());
+                }
+                Err(e) => return Err(e.into()),
+            }
             self.receive_video()?;
         }
     }
 
     fn receive_video(&mut self) -> anyhow::Result<()> {
         let mut decoded = ffmpeg::frame::Video::empty();
-        while !self.shared.interrupted() && self.video.as_mut().unwrap().decoder.receive_frame(&mut decoded).is_ok() {
-            self.handle_video(&decoded)?;
+        while !self.shared.interrupted() && self.hw_failure.is_none() {
+            let started = Instant::now();
+            let video = self.video.as_mut().unwrap();
+            let received = video.decoder.receive_frame(&mut decoded);
+            self.decode_time += started.elapsed();
+            match received {
+                Ok(()) => {
+                    profile::DECODE.record(std::mem::take(&mut self.decode_time));
+                    self.handle_video(&decoded)?;
+                }
+                Err(ffmpeg::Error::Other { errno }) if errno == ffmpeg::util::error::EAGAIN => break,
+                Err(ffmpeg::Error::Eof) => break,
+                Err(e) if video.hw.is_some() => self.hw_failure = Some(e.to_string()),
+                Err(_) => break,
+            }
         }
         Ok(())
+    }
+
+    /// Replaces a failed hardware decoder with a software one and continues
+    /// after the last frame it produced. Audio already queued is not
+    /// decoded again, so playback continues without a jump.
+    fn fall_back_to_software(&mut self, reason: &str) -> anyhow::Result<()> {
+        let Some(index) = self.video.as_ref().filter(|v| v.hw.is_some()).map(|v| v.index) else { return Ok(()) };
+        log::warn!("Hardware decoding failed ({reason}); continuing in software");
+        let (decoder, _) = open_video(&self.input, index, false)?;
+        let video = self.video.as_mut().unwrap();
+        video.decoder = decoder;
+        video.hw = None;
+        video.scaler = None;
+        let resume = self.last_video_us.map_or(self.video_discard_before_us, |last| last + 1);
+        let target = resume + self.origin_us;
+        self.input.seek(target, ..target).context("Seeking")?;
+        if let Some(audio) = &mut self.audio {
+            audio.decoder.flush();
+        }
+        self.video_discard_before_us = resume;
+        self.audio_discard_before_us = self.audio_discard_before_us.max(self.audio_end_us);
+        self.video_stash.clear();
+        self.stash_bytes = 0;
+        self.clip_end_reached = false;
+        Ok(())
+    }
+
+    fn forget_head(&mut self) {
+        self.head.clear();
+        self.head_complete = false;
+        self.capturing_head = false;
     }
 
     fn receive_audio(&mut self) -> anyhow::Result<()> {
@@ -391,36 +571,58 @@ impl Worker {
             self.clip_end_reached = true;
             return Ok(());
         }
-        if media_us < self.discard_before_us {
+        if media_us < self.video_discard_before_us {
             return Ok(());
         }
-        let (width, height) = fit_within(decoded.width(), decoded.height(), MAX_FRAME);
         let video = self.video.as_mut().unwrap();
-        let key = (decoded.format(), decoded.width(), decoded.height());
-        if video.scaler.as_ref().is_none_or(|(_, k)| *k != key) {
-            let scaler = ffmpeg::software::scaling::Context::get(
-                decoded.format(),
-                decoded.width(),
-                decoded.height(),
-                ffmpeg::format::Pixel::RGBA,
-                width,
-                height,
-                ffmpeg::software::scaling::Flags::BILINEAR,
-            )?;
-            video.scaler = Some((scaler, key));
+        let on_gpu = video.hw.is_some_and(|hw| ffmpeg::ffi::AVPixelFormat::from(decoded.format()) == hw.format);
+        if !video.reported {
+            video.reported = true;
+            match video.hw {
+                Some(hw) if on_gpu => log::info!("Decoding {}x{} video with {}", decoded.width(), decoded.height(), hw.name),
+                _ => log::info!("Decoding {}x{} {:?} video in software", decoded.width(), decoded.height(), decoded.format()),
+            }
         }
-        let mut rgba = ffmpeg::frame::Video::empty();
-        video.scaler.as_mut().unwrap().0.run(decoded, &mut rgba)?;
-        let stride = rgba.stride(0);
+        let downloaded;
+        let source = if on_gpu {
+            let started = Instant::now();
+            match hwaccel::download(decoded) {
+                Ok(frame) => {
+                    profile::TRANSFER.record(started.elapsed());
+                    downloaded = frame;
+                    &downloaded
+                }
+                Err(e) => {
+                    self.hw_failure = Some(format!("copying a frame from the GPU: {e}"));
+                    return Ok(());
+                }
+            }
+        } else {
+            decoded
+        };
+        let started = Instant::now();
+        let packed = pack(video, source)?;
+        profile::CONVERT.record(started.elapsed());
         let frame = VideoFrame {
             id: VideoFrame::next_id(),
             epoch: self.epoch,
             pts_us: media_us + self.timeline_offset_us,
-            width,
-            height,
-            stride,
-            data: rgba.data(0)[..stride * height as usize].into(),
+            width: packed.width,
+            height: packed.height,
+            format: packed.format,
+            matrix: packed.matrix,
+            full_range: packed.full_range,
+            planes: packed.planes,
+            data: packed.data,
         };
+        if self.capturing_head {
+            if self.head.len() < LOOP_HEAD_FRAMES && media_us - self.clip.start_us < LOOP_HEAD_US {
+                self.head.push((media_us, frame.retimed(0, 0)));
+            } else {
+                self.capturing_head = false;
+                self.head_complete = !self.head.is_empty();
+            }
+        }
         if let Some(previous) = self.last_video_us.filter(|&p| media_us > p) {
             self.video_interval_us = media_us - previous;
         }
@@ -477,7 +679,7 @@ impl Worker {
 
         // Output frame k carries media time start + k / output_rate.
         let us_per_frame = 1e6 / output_rate as f64;
-        let skip = (((self.discard_before_us - start_us) as f64 / us_per_frame).ceil().max(0.0) as usize).min(frames);
+        let skip = (((self.audio_discard_before_us - start_us) as f64 / us_per_frame).ceil().max(0.0) as usize).min(frames);
         let keep = match self.clip.end_us {
             Some(end) => {
                 let until = (((end - start_us) as f64 / us_per_frame).floor().max(0.0) as usize).min(frames);
@@ -492,7 +694,9 @@ impl Worker {
         if skip >= keep {
             return Ok(());
         }
-        self.content_end_us = self.content_end_us.max(start_us + (keep as f64 * us_per_frame) as i64);
+        let end_us = start_us + (keep as f64 * us_per_frame) as i64;
+        self.content_end_us = self.content_end_us.max(end_us);
+        self.audio_end_us = self.audio_end_us.max(end_us);
         let mut pending = &all[skip * channels..keep * channels];
         while !pending.is_empty() {
             if self.shared.interrupted() {
@@ -567,6 +771,24 @@ impl Worker {
         };
         self.seek_media(start)?;
         self.timeline_offset_us = next_offset;
+        if self.capturing_head {
+            // The whole clip fit in the head.
+            self.capturing_head = false;
+            self.head_complete = !self.head.is_empty();
+        }
+        if self.head_complete {
+            // Show the prepared start at once; the decoder skips past it.
+            for (media_us, frame) in &self.head {
+                self.pending_frames.push_back(frame.retimed(self.epoch, media_us + next_offset));
+            }
+            self.head_pending = self.head.len();
+            let last = self.head.last().map_or(start, |(media_us, _)| *media_us);
+            self.video_discard_before_us = last + 1;
+            self.last_video_us = Some(last);
+            self.content_end_us = last + self.video_interval_us;
+        } else {
+            self.capturing_head = self.clip.looping;
+        }
         self.shared.loop_len_us.store(loop_len, Ordering::Release);
         self.shared.finished.store(false, Ordering::Release);
         if let Some(audio) = &mut self.audio {
@@ -575,6 +797,55 @@ impl Worker {
         }
         Ok(())
     }
+}
+
+/// Packs `source` for upload: 8-bit 4:2:0 YUV as decoded when it fits
+/// [`MAX_YUV_FRAME`], sources with transparency as RGBA, anything else
+/// converted (and if needed scaled down) to 4:2:0 YUV.
+fn pack(video: &mut VideoStream, source: &ffmpeg::frame::Video) -> anyhow::Result<Packed> {
+    use ffmpeg::format::Pixel;
+    let (width, height) = (source.width(), source.height());
+    let fits = width <= MAX_YUV_FRAME.0 && height <= MAX_YUV_FRAME.1;
+    let matrix = yuv_matrix(source);
+    let declared_full = source.color_range() == ffmpeg::color::Range::JPEG;
+    let direct = match source.format() {
+        Pixel::YUV420P if fits => Some((FrameFormat::I420, declared_full)),
+        Pixel::YUVJ420P if fits => Some((FrameFormat::I420, true)),
+        Pixel::NV12 if fits => Some((FrameFormat::Nv12, declared_full)),
+        _ => None,
+    };
+    if let Some((format, full_range)) = direct {
+        let (planes, data) = copy_planes(source, format.planes());
+        return Ok(Packed { width, height, format, matrix, full_range, planes, data });
+    }
+    let alpha = has_alpha(source.format());
+    let (target, format, (out_width, out_height)) = if alpha {
+        (Pixel::RGBA, FrameFormat::Rgba, fit_within(width, height, MAX_FRAME))
+    } else if fits {
+        (Pixel::YUV420P, FrameFormat::I420, (width, height))
+    } else {
+        (Pixel::YUV420P, FrameFormat::I420, fit_within(width, height, MAX_FRAME))
+    };
+    let key = (source.format(), width, height, target);
+    if video.scaler.as_ref().is_none_or(|(_, k)| *k != key) {
+        let scaler = ffmpeg::software::scaling::Context::get(
+            source.format(),
+            width,
+            height,
+            target,
+            out_width,
+            out_height,
+            ffmpeg::software::scaling::Flags::BILINEAR,
+        )?;
+        video.scaler = Some((scaler, key));
+    }
+    let mut converted = ffmpeg::frame::Video::empty();
+    video.scaler.as_mut().unwrap().0.run(source, &mut converted)?;
+    let (planes, data) = copy_planes(&converted, format.planes());
+    // The scaler maps full-range "J" formats to limited range; other inputs keep theirs.
+    let jpeg_format = matches!(source.format(), Pixel::YUVJ420P | Pixel::YUVJ422P | Pixel::YUVJ444P | Pixel::YUVJ440P | Pixel::YUVJ411P);
+    let full_range = alpha || (declared_full && !jpeg_format);
+    Ok(Packed { width: out_width, height: out_height, format, matrix, full_range, planes, data })
 }
 
 /// Largest size within `max` with the same aspect ratio, never upscaled, even.

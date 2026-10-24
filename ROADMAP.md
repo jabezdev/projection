@@ -157,11 +157,11 @@ Decisions:
 - **Hardware decoding is selectable**, with automatic detection and a setting to pick or disable an accelerator (in case of driver problems). Candidates: Windows D3D11VA, DXVA2, NVDEC, Intel QSV, AMD AMF; Linux VA-API, VDPAU, NVDEC, Vulkan Video. Software decoding always remains as the fallback.
 
 Items:
-- [ ] Profiling harness: decode, convert, upload and render times, logged; run on the church PC.
-- [ ] Upload YUV planes and convert in a shader (halves upload size and CPU conversion).
-- [ ] Detect available hardware decoders per platform; setting to choose one or turn it off; fall back to software on failure.
-- [ ] Seamless background loops (prepare the loop point instead of seeking at the end).
-- [ ] Supported media profile: tested codecs, resolutions and bitrates, documented.
+- [/] Profiling harness: decode, convert, upload and render times, logged; run on the church PC. *A `profile:` log line every 5 s and `bun tools/e2e/profile.ts --video <file> --compare`, which writes a report; not yet run on the church PC.*
+- [x] Upload YUV planes and convert in a shader (halves upload size and CPU conversion). *8-bit 4:2:0 up to 4K goes to the GPU as decoded and is scaled there; colors now follow the file's matrix (BT.709 for HD).*
+- [x] Detect available hardware decoders per platform; setting to choose one or turn it off; fall back to software on failure. *Settings → System → Video decoding; Software stays the default until checked on the church PC. QSV and AMF are reached through D3D11VA/VA-API.*
+- [x] Seamless background loops (prepare the loop point instead of seeking at the end). *The clip's first frames are kept and queued again at each wrap.*
+- [/] Supported media profile: tested codecs, resolutions and bitrates, documented: [docs/media-profile.md](docs/media-profile.md). *Measured on the development laptop; the church PC table is still empty.*
 - [ ] Displays on two GPUs (1050 Ti plus the 2200G's output), only if the display setup needs it.
 
 ## 8. Screen capture

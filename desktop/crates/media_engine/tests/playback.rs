@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use media_engine::{active_decoders, now_us, Clip, MediaSession, Phase, SessionAudio, SessionOptions};
+use media_engine::{active_decoders, hwaccel, now_us, Clip, FrameFormat, MediaSession, Phase, SessionAudio, SessionOptions, YuvMatrix};
 
 const DEVICE_RATE: u32 = 48_000;
 const CHANNELS: u16 = 2;
@@ -467,4 +467,70 @@ fn posters_are_the_first_frame_scaled_down_with_even_sizes() {
     assert_eq!((large.width, large.height), (320, 240), "never upscaled");
     let Some(audio) = audio_fixture() else { return };
     assert!(media_engine::poster(audio.to_str().unwrap(), 640).is_err(), "audio has no poster");
+}
+
+#[test]
+fn software_frames_upload_as_decoded_yuv() {
+    let _serial = serial();
+    let Some((_, video)) = fixtures() else { return };
+    let session = MediaSession::open(video.to_str().unwrap(), options(whole()), None).expect("open");
+    wait_for(&session, Phase::Ready, Duration::from_secs(5));
+    let frame = session.current_frame(now_us()).expect("first frame");
+    assert_eq!((frame.format, frame.width, frame.height), (FrameFormat::I420, 320, 240));
+    assert_eq!(frame.matrix, YuvMatrix::Bt601, "standard definition without a declared matrix");
+    assert!(!frame.full_range);
+    let (y, stride) = frame.plane(0);
+    assert!(stride >= 320 && y.len() >= stride * 240);
+}
+
+#[test]
+fn a_loop_shows_its_prepared_start_again_at_each_wrap() {
+    let _serial = serial();
+    let Some((_, video)) = fixtures() else { return };
+    let clip = Clip { start_us: 0, end_us: None, looping: true };
+    let session = MediaSession::open(video.to_str().unwrap(), options(clip), None).expect("open");
+    wait_for(&session, Phase::Ready, Duration::from_secs(5));
+    let first = session.current_frame(now_us()).expect("first frame");
+    session.play(now_us());
+    // (wall time, timeline pts) of every newly shown frame across one wrap.
+    let mut shown: Vec<(Instant, i64)> = Vec::new();
+    let mut wrapped = None;
+    let deadline = Instant::now() + Duration::from_millis(3_000);
+    while Instant::now() < deadline {
+        if let Some(frame) = session.current_frame(now_us()) {
+            if shown.last().is_none_or(|&(_, pts)| pts != frame.pts_us) {
+                if frame.pts_us >= 2_000_000 && wrapped.is_none() {
+                    wrapped = Some(frame.clone());
+                }
+                shown.push((Instant::now(), frame.pts_us));
+            }
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let wrapped = wrapped.expect("the 2 s clip wrapped");
+    assert_eq!(wrapped.pts_us, first.pts_us + 2_000_000, "the next loop starts one clip length later");
+    assert!(std::sync::Arc::ptr_eq(&wrapped.data, &first.data), "the wrap reuses the prepared first frame");
+    let worst = shown.windows(2).map(|w| w[1].0 - w[0].0).max().unwrap();
+    assert!(worst < Duration::from_millis(120), "no gap at the loop point (worst {worst:?} at 25 fps)");
+}
+
+#[test]
+fn hardware_decoding_is_used_when_chosen_and_available() {
+    let _serial = serial();
+    let Some((_, video)) = fixtures() else { return };
+    let available = hwaccel::available();
+    if available.is_empty() {
+        eprintln!("No hardware decoder here; skipping");
+        return;
+    }
+    hwaccel::set_choice(hwaccel::DecoderChoice::Auto);
+    let session = MediaSession::open(video.to_str().unwrap(), options(whole()), None).expect("open");
+    wait_for(&session, Phase::Ready, Duration::from_secs(5));
+    let frame = session.current_frame(now_us()).expect("first frame");
+    session.play(now_us());
+    let shown = run_for(&session, Duration::from_millis(500));
+    hwaccel::set_choice(hwaccel::DecoderChoice::Software);
+    // 320x240 H.264 decodes on every accelerator that opened ({available:?}).
+    assert_eq!(frame.format, FrameFormat::Nv12, "hardware frames arrive as NV12 ({available:?})");
+    assert!(shown.len() >= 8, "and keep playing: {shown:?}");
 }

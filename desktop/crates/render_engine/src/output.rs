@@ -423,6 +423,7 @@ impl Presenter {
                 }
             };
             let now = Instant::now();
+            let drawing = now;
             // The acquired texture's own size: draws never exceed the target,
             // even if the window resized since the last configure.
             let area = crate::fit_aspect((texture.texture.width(), texture.texture.height()), *pending.aspect.lock().expect("output aspect poisoned"));
@@ -442,6 +443,9 @@ impl Presenter {
             let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
             painter.paint_in(&gpu.device, &gpu.queue, &resources.fonts, &list, &view, area, &mut encoder);
             gpu.queue.submit(Some(encoder.finish()));
+            let submitted = Instant::now();
+            crate::profile::draw(role).record(submitted - drawing);
+            gpu.queue.on_submitted_work_done(move || crate::profile::gpu(role).record(submitted.elapsed()));
             gpu.queue.present(texture);
             // Reconfigure only after presenting: the acquired texture must be
             // released first. The new swapchain starts empty, so draw again.

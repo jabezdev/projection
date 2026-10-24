@@ -6,8 +6,45 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-/// One decoded RGBA frame. `pts_us` is on the session timeline, which keeps
-/// increasing across loops.
+/// How a frame's pixels are laid out in [`VideoFrame::data`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameFormat {
+    /// One plane of 8-bit RGBA, for sources with transparency.
+    Rgba,
+    /// 8-bit Y, U and V planes, chroma at half width and height.
+    I420,
+    /// 8-bit Y plane and one interleaved UV plane (hardware decoders' output).
+    Nv12,
+}
+
+impl FrameFormat {
+    pub fn planes(self) -> usize {
+        match self {
+            FrameFormat::Rgba => 1,
+            FrameFormat::I420 => 3,
+            FrameFormat::Nv12 => 2,
+        }
+    }
+}
+
+/// The YUV to RGB matrix a frame was encoded with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YuvMatrix {
+    Bt601,
+    Bt709,
+    Bt2020,
+}
+
+/// Where one plane starts in [`VideoFrame::data`] and its bytes per row.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Plane {
+    pub offset: usize,
+    pub stride: usize,
+}
+
+/// One decoded frame, RGBA or YUV. YUV frames keep their decoded size (up
+/// to 4K); the renderer converts and scales them on the GPU. `pts_us` is on
+/// the session timeline, which keeps increasing across loops.
 pub struct VideoFrame {
     /// Unique per decoded frame, so the renderer uploads each frame once.
     pub id: u64,
@@ -15,15 +52,43 @@ pub struct VideoFrame {
     pub pts_us: i64,
     pub width: u32,
     pub height: u32,
-    /// Bytes per row; may exceed `width * 4`.
-    pub stride: usize,
-    pub data: Box<[u8]>,
+    pub format: FrameFormat,
+    pub matrix: YuvMatrix,
+    /// Full (0–255) rather than limited (16–235) YUV range.
+    pub full_range: bool,
+    /// The first `format.planes()` entries are used.
+    pub planes: [Plane; 3],
+    /// Shared so the loop point can show the same pixels again.
+    pub data: Arc<[u8]>,
 }
 
 impl VideoFrame {
     pub fn next_id() -> u64 {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         NEXT.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Plane `index`'s bytes (from its start to the end of the data) and its
+    /// bytes per row.
+    pub fn plane(&self, index: usize) -> (&[u8], usize) {
+        let plane = self.planes[index];
+        (&self.data[plane.offset..], plane.stride)
+    }
+
+    /// The same pixels at another time, as a new frame.
+    pub fn retimed(&self, epoch: u64, pts_us: i64) -> VideoFrame {
+        VideoFrame {
+            id: Self::next_id(),
+            epoch,
+            pts_us,
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            matrix: self.matrix,
+            full_range: self.full_range,
+            planes: self.planes,
+            data: self.data.clone(),
+        }
     }
 }
 
@@ -34,6 +99,7 @@ impl std::fmt::Debug for VideoFrame {
             .field("epoch", &self.epoch)
             .field("pts_us", &self.pts_us)
             .field("size", &(self.width, self.height))
+            .field("format", &self.format)
             .finish()
     }
 }
@@ -181,7 +247,18 @@ mod tests {
     use super::*;
 
     fn frame(epoch: u64, pts_us: i64) -> VideoFrame {
-        VideoFrame { id: VideoFrame::next_id(), epoch, pts_us, width: 2, height: 2, stride: 8, data: vec![0; 16].into() }
+        VideoFrame {
+            id: VideoFrame::next_id(),
+            epoch,
+            pts_us,
+            width: 2,
+            height: 2,
+            format: FrameFormat::Rgba,
+            matrix: YuvMatrix::Bt709,
+            full_range: true,
+            planes: [Plane { offset: 0, stride: 8 }, Plane::default(), Plane::default()],
+            data: vec![0; 16].into(),
+        }
     }
 
     fn pts(frame: Option<Arc<VideoFrame>>) -> Option<i64> {

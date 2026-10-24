@@ -164,3 +164,23 @@ export async function residentBytes(pid: number): Promise<number | null> {
     return null;
   }
 }
+
+/** CPU time `pid` has used so far (all threads), in seconds, or null. */
+export async function cpuSeconds(pid: number): Promise<number | null> {
+  try {
+    if (process.platform === 'linux') {
+      // Fields after the parenthesized name: utime and stime are 14th and 15th overall.
+      const fields = readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' ');
+      return (Number(fields[11]) + Number(fields[12])) / 100;
+    }
+    const command = process.platform === 'win32'
+      ? ['powershell', '-NoProfile', '-Command', `(Get-Process -Id ${pid}).TotalProcessorTime.TotalSeconds`]
+      : ['ps', '-o', 'time=', '-p', String(pid)];
+    const text = (await new Response(Bun.spawn(command, { stdout: 'pipe' }).stdout).text()).trim();
+    if (process.platform === 'win32') return Number.isFinite(Number(text)) && text ? Number(text) : null;
+    const parts = text.split(/[:-]/).map(Number);
+    return parts.reduce((total, part) => total * 60 + part, 0);
+  } catch {
+    return null;
+  }
+}

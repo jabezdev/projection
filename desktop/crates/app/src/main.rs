@@ -116,6 +116,8 @@ fn main() -> anyhow::Result<()> {
             get_startup_warnings,
             open_logs_folder,
             get_app_info,
+            get_video_decoding,
+            set_video_decoder,
             export_backup,
             open_backups_folder,
             list_missing_media,
@@ -177,6 +179,8 @@ fn main() -> anyhow::Result<()> {
             app.manage(OutputRoutes { values: Mutex::new(saved_routes.value), path: routes_path, shown: AtomicBool::new(false) });
             let config_path = app_data_dir.join(CONFIG_FILENAME);
             let config = Arc::new(RwLock::new(load_config(&config_path)));
+            media_engine::hwaccel::set_choice(media_engine::hwaccel::DecoderChoice::parse(&config.read().expect("config lock poisoned").video_decoder));
+            app.manage(ConfigStore { value: config.clone(), path: config_path.clone() });
             let db = Db(Arc::new(Mutex::new(Repository::new(
                 app_data_dir.join(DB_FILENAME),
             )?)));

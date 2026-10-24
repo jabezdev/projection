@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use render_engine::{
-    css_color, Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole, PixelFrame, Scene,
+    css_color, Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole, FramePixels, PixelFrame, Scene,
     Shadow, ShaderSpec, Stroke, TextAlign, VideoKey, Vertical,
 };
 
@@ -31,11 +31,8 @@ impl PixelFrame for StillFrame {
     fn size(&self) -> (u32, u32) {
         (640, 360)
     }
-    fn stride(&self) -> usize {
-        640 * 4
-    }
-    fn pixels(&self) -> &[u8] {
-        &self.0
+    fn pixels(&self) -> FramePixels<'_> {
+        FramePixels::Rgba { data: &self.0, stride: 640 * 4 }
     }
 }
 
@@ -131,7 +128,7 @@ fn main() -> anyhow::Result<()> {
     let mut capture = Capture::new(OutputRole::for_scene(&scene))?;
     // Video scenes show one still frame, uploaded as the frame pump would.
     if name.ends_with("-video") {
-        capture.media().video(&VIDEO).upload(&capture.gpu().queue, &StillFrame(gradient(640, 360)));
+        capture.media().video(&VIDEO).upload(capture.gpu(), &StillFrame(gradient(640, 360)));
         capture.gpu().queue.submit(None);
     }
     let start = Instant::now();

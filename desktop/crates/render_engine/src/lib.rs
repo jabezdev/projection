@@ -13,10 +13,12 @@ mod media;
 mod output;
 mod paint;
 mod preview;
+pub mod profile;
 pub mod scene;
 mod shader_bg;
 mod test_source;
 pub mod text;
+mod yuv;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -24,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Context;
 
 pub use capture::Capture;
-pub use frame::{PixelFrame, SharedFrame, VideoFrames, VideoKey};
+pub use frame::{FramePixels, PixelFrame, SharedFrame, VideoFrames, VideoKey};
 pub use main_scene::LyricGeometry;
 pub use media::MediaTextures;
 pub use output::{OutputRole, OutputStats, StatusSink};
@@ -37,6 +39,7 @@ pub use scene::{
 pub use shader_bg::{ShaderSpec, SHADER_SIZE};
 pub use test_source::TestPatternSource;
 pub use text::{Fonts, TextAlign};
+pub use yuv::{YuvLayout, YuvMatrix, YuvPixels};
 
 use output::{OutputWorker, Resources};
 use preview::Previews;
@@ -47,6 +50,7 @@ pub struct Gpu {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    yuv: std::sync::OnceLock<yuv::YuvPipeline>,
 }
 
 impl Gpu {
@@ -63,7 +67,7 @@ impl Gpu {
             },
         ))?;
         device.on_uncaptured_error(Arc::new(|error| log::error!("GPU error: {error}")));
-        Ok(Self { instance, adapter, device, queue })
+        Ok(Self { instance, adapter, device, queue, yuv: std::sync::OnceLock::new() })
     }
 
     /// A device without surfaces, for captures and tests.
@@ -395,7 +399,9 @@ impl FramePump {
                             // A stopped source keeps its last frame for fading layers.
                             _ => {
                                 if let Some(next) = frames.frame(key).filter(|f| f.id() != texture.last_id()) {
-                                    uploaded |= texture.upload(&gpu.queue, next.as_ref());
+                                    let started = std::time::Instant::now();
+                                    uploaded |= texture.upload(&gpu, next.as_ref());
+                                    profile::UPLOAD.record(started.elapsed());
                                 }
                             }
                         }
