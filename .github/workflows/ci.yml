@@ -25,8 +25,9 @@ jobs:
       - name: System packages
         working-directory: /
         # ffmpeg also provides the CLI the media tests use to make clips;
-        # vulkan-swrast (lavapipe) lets the offscreen scene tests run on CPU.
-        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip
+        # vulkan-swrast (lavapipe) lets the offscreen scene tests run on CPU;
+        # pipewire provides the headers for Wayland screen capture.
+        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip pipewire
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Rust toolchain
@@ -69,25 +70,40 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+      # A release published from a local build (tools/release.sh) already
+      # has its signed installer; building again would replace it.
+      - name: Already released?
+        id: existing
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -q -- '-setup.exe$'; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: oven-sh/setup-bun@v2
+        if: steps.existing.outputs.released != 'true'
       - name: Cross-build tools
+        if: steps.existing.outputs.released != 'true'
         run: sudo apt-get update && sudo apt-get install -y clang lld llvm libarchive-tools
       # The annotated tag's message is the release notes, shown in PALTO
       # before an update installs.
       - name: Release notes
+        if: steps.existing.outputs.released != 'true'
         run: |
           git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
           git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.txt
       # The tag's commit already carries the version to release. The signing
       # key (repository secret) lets installed copies update to it.
       - name: Build the installer
+        if: steps.existing.outputs.released != 'true'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: RELEASE_NOTES="$(cat release-notes.txt)" desktop/tools/build-windows.sh --no-bump
       - uses: softprops/action-gh-release@v2
+        if: steps.existing.outputs.released != 'true'
         with:
           body_path: release-notes.txt
           files: |

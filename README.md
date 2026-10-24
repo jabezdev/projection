@@ -1,6 +1,52 @@
 # Magi Projection
 
-Software for a church worship team: a song library the team prepares during the week, and a projection app that puts it on screen on Saturday and Sunday.
+Software for a church worship team: a song library the team prepares during the week, and a projection app (**PALTO**) that puts it on screen on Saturday and Sunday.
+
+**Download:** the newest Windows installer is on the [Releases page](https://github.com/jabezdev/projection/releases/latest). Run `PALTO_<version>_x64-setup.exe`; Windows may warn because the installer is not signed (More info → Run anyway). After that, PALTO updates itself.
+
+## What PALTO does
+
+**Running a service**
+- Shows song lyrics, pictures, videos, music and slide presentations on the projector, one cue at a time.
+- Moves between slides with a soft fade, a cut or a slide, whichever you prefer.
+- One button each for **Black** (screen off), **Clear** (hide the words, keep the background), **Logo** (your church logo or a looping logo video) and **Live**.
+- Gets the next picture or video ready ahead of time, so it appears straight away when you move on.
+- Shows which cue is waiting for its video to load, so you never wonder what the audience sees.
+
+**The screens**
+- A **projection screen** for the audience and a **confidence screen** for the stage, each with its own style.
+- The confidence screen shows the current and coming lyrics, the song's parts (verse, chorus, bridge) and the time. A video can be shown there too.
+- Lyric styling: any installed font, size, color, spacing, position, a box behind the words, and shadow, outline or glow.
+- Backgrounds: a picture, a looping video, or a built-in moving background (gradient, aurora, bokeh lights) that stays light on the computer.
+- Symbols in the lyrics: type a code like `:heart:` or `:music:` and a clean icon appears on screen.
+- Live screen sharing: show another screen or a window of this computer (for example a sermon PowerPoint) on the projector, the stage screen or both. If that window closes, the screen goes black instead of freezing.
+- Live previews in the control panel of exactly what each screen shows.
+
+**Songs, media and presentations**
+- A song library with verses, choruses and the order they are sung in; each service keeps its own arrangement.
+- Quick search (Ctrl+K) to find any song or media file and add it to the service.
+- Import songs from OpenLyrics files, picture groups as slides, and **PDF files** (each page becomes a slide).
+- Videos: play, pause, seek, loop, trim the start and end, change the speed and volume. Smooth looping backgrounds.
+- Media you add is copied into PALTO's own library folder, and missing files can be found again by searching a folder.
+
+**Controls**
+- Keyboard shortcuts you can change, presenter clickers, MIDI controllers and Stream Deck buttons.
+- **Phone remote:** open a page on a phone on the church Wi-Fi, pair it once with a code, and go next/previous or switch to Black, Clear or Logo while seeing the current and next slide.
+- Works with Bitfocus Companion and other show controllers (OSC).
+- Asks before risky actions (loading another service, removing an item) while the audience can see the screens.
+
+**Safe and dependable on Sunday**
+- Works fully offline; nothing on screen depends on the internet.
+- Reopens the service at the same slide if the computer or PALTO crashes; screens stay hidden until you show them.
+- Keeps the displays awake while showing, reconnects sound if the HDMI audio device drops, and remembers which display each screen goes to.
+- Automatic weekly backups and one-click backup export.
+- Updates download in the background and install only when you choose, never while the screens are shown; you can go back to the previous version.
+- Uses the graphics card to play video (hardware decoding can be switched on in Settings) so older computers keep up.
+
+**During the week (web app)**
+- A phone-friendly website where the lyric team enters songs, the song leader arranges services and singers read the arrangement, with team roles. (Not yet connected to PALTO; that comes next.)
+
+## Documentation
 
 | Doc | What |
 |---|---|
@@ -8,6 +54,8 @@ Software for a church worship team: a song library the team prepares during the 
 | [ENGINE.md](ENGINE.md) | How the projection app's outputs, media and engine work, and why |
 | [ROADMAP.md](ROADMAP.md) | What's done and what's next |
 | [WINDOWS.md](WINDOWS.md) | Windows release checklist for the church PC |
+| [docs/church-pc-checklist.md](docs/church-pc-checklist.md) | One printable page of checks for the next visit to the church PC |
+| [docs/media-profile.md](docs/media-profile.md) | Which video and audio files play best |
 | [docs/records/](docs/records/) | Frozen design records (history) |
 
 The repo holds two separate projects that share one git history. Each has its own dependencies, lockfile, tooling and deploys.
@@ -52,7 +100,7 @@ bun install --cwd frontend
 bun run dev        # builds everything and opens the app
 ```
 
-The first build takes several minutes. Three windows exist: **PALTO** (the control panel), and the **projection** and **confidence** outputs, which start hidden; show them from Output Settings → Output displays. On Linux, `bun run dev` forces X11 (`GDK_BACKEND=x11`, XWayland under Wayland sessions) because native Wayland output is not supported.
+The first build takes several minutes. Three windows exist: **PALTO** (the control panel), and the **projection** and **confidence** outputs, which start hidden; show them from the Screens panel (right column). On Linux, `bun run dev` forces X11 (`GDK_BACKEND=x11`, XWayland under Wayland sessions) because native Wayland output is not supported.
 
 ### How the UI talks to the engine
 
@@ -74,13 +122,14 @@ From `desktop/` unless noted.
 | Compare outputs with the frozen parity references | `tools/parity/run.sh` (needs ImageMagick) |
 | Build an installable app | `cd crates/app && bun tauri build` |
 | Build the Windows installer from Linux (bumps the version) | `tools/build-windows.sh` |
+| Publish that installer as a GitHub release (installed copies update to it) | `tools/release.sh` |
 | Bump the version by hand (`0.MINOR.BUILD`) | `tools/bump-version.sh [minor]` |
 | End-to-end check over the WebSocket (needs a built app) | `bun tools/e2e/e2e.ts` |
 | Remote access: phone page, pairing, LAN refusals, rate limit, OSC, `palto.local` | `bun tools/e2e/remote.ts` |
 | 30-minute soak (memory, decoders, frames) | `bun tools/e2e/soak.ts --video <file>` |
 | Per-stage video timings, CPU and memory, software vs hardware decoding | `bun tools/e2e/profile.ts --video <file> --compare` |
 
-CI (`.github/workflows/ci.yml`) runs the Rust tests, the UI build/lint/test and the web typecheck/tests on every push; a `v*` tag also cross-builds the Windows installer and attaches it to a GitHub release. The parity check is not in CI because its results depend on the installed fonts.
+CI (`.github/workflows/ci.yml`) runs the Rust tests, the UI build/lint/test and the web typecheck/tests on every push; a `v*` tag also cross-builds the Windows installer and attaches it to the GitHub release, unless the release already has one (published with `tools/release.sh`). The parity check is not in CI because its results depend on the installed fonts.
 
 ### Where your data lives
 
@@ -110,7 +159,8 @@ desktop/
     parity/         Output regression check against frozen references
     e2e/            End-to-end, remote, soak and profile scripts over the WebSocket (Bun)
     bump-version.sh Version bump (0.MINOR.BUILD)
-    build-windows.sh  Cross-builds the Windows installer
+    build-windows.sh  Cross-builds the Windows installer (signed for updates)
+    release.sh      Publishes that installer as a GitHub release
   assets/           Sample backgrounds
 ```
 
@@ -189,7 +239,10 @@ Bundles appear under `desktop/target/release/bundle/`. Platform settings: [tauri
 
 Install on a machine without FFmpeg or developer tools, then run the rehearsal. Remaining Windows checks are in [WINDOWS.md](WINDOWS.md).
 
-**Releases and updates.** Installed copies update themselves from GitHub Releases (Settings → System → Updates). To publish a version: commit the bumped version, then push an annotated tag whose message is the release notes operators see before installing, e.g. `git tag -a v0.1.2 -m "Fixes the logo fade"` and `git push origin v0.1.2`. CI builds the installer, signs it for the updater and attaches `PALTO_<version>_x64-setup.exe`, its `.sig` and `latest.json` to the release. The signing key lives in `~/.tauri/palto-updater.key` on the build machine (local builds use it automatically) and must be added to the repository's Actions secrets as `TAURI_SIGNING_PRIVATE_KEY` (with an empty `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Keep a copy of the key somewhere safe: installed copies only accept updates signed with it (its public half is in [tauri.conf.json](desktop/crates/app/tauri.conf.json)). Without a key the installer still builds but cannot be offered as an update.
+**Releases and updates.** Installed copies update themselves from GitHub Releases (Settings → System → Updates). Updates must be signed with the key in `~/.tauri/palto-updater.key` (its public half is in [tauri.conf.json](desktop/crates/app/tauri.conf.json)); keep a copy somewhere safe, since installed copies accept no other.
+
+- *From this computer* (the usual way): `RELEASE_NOTES="What changed, for the operator" desktop/tools/build-windows.sh`, commit and push the bumped version, then `desktop/tools/release.sh`. It tags the pushed commit and publishes the installer, its `.sig` and `latest.json` (which carries the notes shown before installing).
+- *From CI:* push an annotated tag whose message is the release notes (`git tag -a v0.1.3 -m "Fixes the logo fade"`, `git push origin v0.1.3`). CI builds, signs and publishes, once the key is in the repository's Actions secrets as `TAURI_SIGNING_PRIVATE_KEY` (and an empty `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); without it the installer builds but cannot be offered as an update.
 
 ---
 

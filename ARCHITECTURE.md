@@ -112,7 +112,7 @@ The library becomes the reference artifact: editing a service never changes the 
 | Change text effects, transitions or shader backgrounds | `desktop/crates/render_engine/src/` (`paint.rs` + `paint.wgsl`, `main_scene.rs`, `shader_bg.rs` + `shader_bg.wgsl`) |
 | Change how songs and services are stored | `desktop/crates/persistence/src/repo.rs` |
 | Change screen capture or add a capture method | `desktop/crates/app/src/capture/` (`mod.rs` manager and routing, one file per platform method) |
-| Change updates or releases | `desktop/crates/app/src/updates.rs`, `desktop/tools/build-windows.sh` (signing, `latest.json`), `.github/workflows/ci.yml` |
+| Change updates or releases | `desktop/crates/app/src/updates.rs`, `desktop/tools/build-windows.sh` (signing, `latest.json`), `desktop/tools/release.sh`, `.github/workflows/ci.yml` |
 | Change the phone remote, pairing or OSC | `desktop/crates/network_server/` (`remote/` is the phone page) and `desktop/crates/app/src/remote.rs` |
 | Change the song library web app | `web/app/src/pages/` |
 | Change the cloud data model or server rules | `web/backend/convex/` (`schema.ts`, tests in `services.test.ts`) |

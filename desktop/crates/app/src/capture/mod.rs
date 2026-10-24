@@ -175,8 +175,8 @@ pub struct Captures {
     /// The chosen method's name; empty for the default (the first).
     choice: Mutex<String>,
     running: Mutex<HashMap<String, (CaptureSource, Box<dyn CaptureStream>, FrameSlot)>>,
-    /// Sources that could not start, by id, with the reason.
-    failed: Mutex<HashMap<String, (CaptureSource, String)>>,
+    /// Sources that could not start, by id, with the reason; they show black.
+    failed: Mutex<HashMap<String, (CaptureSource, String, FrameSlot)>>,
 }
 
 impl Captures {
@@ -226,7 +226,9 @@ impl Captures {
                 }
                 Err(e) => {
                     log::error!("Cannot capture {}: {e:#}", source.name);
-                    failed.insert(source.id.clone(), (source.clone(), format!("{e:#}")));
+                    let reason = format!("{e:#}");
+                    slot.lose(reason.clone());
+                    failed.insert(source.id.clone(), (source.clone(), reason, slot));
                 }
             }
         }
@@ -235,6 +237,7 @@ impl Captures {
     /// The frame to show for capture `id`; black when it failed to start.
     pub fn frame(&self, id: &str) -> Option<Arc<dyn PixelFrame>> {
         let slot = self.running.lock().expect("captures poisoned").get(id).map(|(_, _, slot)| slot.clone());
+        let slot = slot.or_else(|| self.failed.lock().expect("captures poisoned").get(id).map(|(.., slot)| slot.clone()));
         match slot {
             Some(slot) => slot.frame(Instant::now()).map(|f| f as Arc<dyn PixelFrame>),
             None => None,
@@ -248,7 +251,7 @@ impl Captures {
         running
             .values()
             .map(|(source, _, slot)| CaptureStatus { id: source.id.clone(), name: source.name.clone(), error: slot.lost() })
-            .chain(failed.values().map(|(source, error)| CaptureStatus { id: source.id.clone(), name: source.name.clone(), error: Some(error.clone()) }))
+            .chain(failed.values().map(|(source, error, _)| CaptureStatus { id: source.id.clone(), name: source.name.clone(), error: Some(error.clone()) }))
             .collect()
     }
 
@@ -292,6 +295,8 @@ mod tests {
         assert!(captures.frame("a").is_some());
         let status = captures.status();
         assert_eq!(status.iter().find(|s| s.id == "missing").unwrap().error.as_deref(), Some("not found"));
+        let black = captures.frame("missing").expect("a source that cannot start shows black");
+        assert!(matches!(black.pixels(), FramePixels::Bgra { data, .. } if data.iter().all(|&b| b == 0)));
         captures.set_active(&[]);
         assert!(captures.frame("a").is_none() && captures.status().is_empty(), "stopped when no longer on air");
     }

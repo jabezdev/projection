@@ -6,7 +6,7 @@ Date: ____________  Version installed: ____________  Displays connected: _______
 
 ## Before leaving
 
-- [ ] Build the installer on Linux: `desktop/tools/build-windows.sh` (bumps the version). Copy `PALTO_<version>_x64-setup.exe` to a USB stick.
+- [ ] Download the newest installer from https://github.com/jabezdev/projection/releases/latest (or build and publish one: `desktop/tools/build-windows.sh`, then `desktop/tools/release.sh`). Copy `PALTO_<version>_x64-setup.exe` to a USB stick in case the church has no internet.
 - [ ] Also copy: a typical worship video with sound, a logo image, `desktop/tools/e2e/` (for the soak and profile) and the Bun installer for Windows (https://bun.sh).
 
 ## On the church PC

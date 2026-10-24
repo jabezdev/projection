@@ -23,7 +23,11 @@ Intended display setup (all at once, any resolution, aspect ratio or DPI):
 
 Check the 1050 Ti's ports and simultaneous display limit. Using the 2200G's integrated output as well would put displays on two GPUs, which the engine does not support yet.
 
-## Where things stand (MVP, 2026-10-11)
+## Where things stand (2026-10-24)
+
+Release `v0.1.2` carries phases 1–2, most of 5–7, phase 8's local screen capture, PDF import, phase 10 without a native phone app, and phase 11's updater; the items below say what is still open in each. What it has not had yet is time on the church PC: hardware decoding, effects, screen capture on Windows, the firewall rule, MIDI/Stream Deck and the updater all wait for the next visit ([checklist](docs/church-pc-checklist.md)). Phases 3 and 4 (data model, cloud sync) wait on design.
+
+## Where things stood (MVP, 2026-10-11)
 
 - [x] Native projection and confidence outputs on one GPU device; no webview on either. Runs on Omarchy Linux and Windows 10.
 - [x] Lyrics with crossfades and a persistent border card; images, image presentations, foreground video with audio, standalone audio, muted looping song/Logo video backgrounds.
@@ -231,7 +235,7 @@ Decisions:
 
 Items:
 - [x] Updater with background download, install confirmation and a "roll back to previous version" option. *Settings → System → Updates; refuses to install while outputs are shown; keeps the last three installers. Needs the signing key as a CI secret before the first release.*
-- [x] Release notes shown before installing. *From the annotated tag's message.*
+- [x] Release notes shown before installing. *From `RELEASE_NOTES` when built locally (`tools/release.sh` publishes it) or the annotated tag's message in CI.*
 - [ ] macOS: a separate validation pass before claiming support.
 - [ ] Native Wayland on Linux (a Wayland subsurface for the outputs); XWayland works today.
 

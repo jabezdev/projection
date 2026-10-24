@@ -1,10 +1,11 @@
 # Windows
 
-End users run Windows 10/11; Windows is the acceptance platform. Builds are cross-compiled on Linux with `desktop/tools/build-windows.sh` (see Packaging in [README.md](README.md#packaging)) and tested on the church PC, so test time there is short. Batch fixes into one build per visit.
+End users run Windows 10/11; Windows is the acceptance platform. Builds are cross-compiled on Linux with `desktop/tools/build-windows.sh`, published with `desktop/tools/release.sh` (see Packaging in [README.md](README.md#packaging)) and tested on the church PC, so test time there is short. Batch fixes into one release per visit; once one version is installed, later ones arrive through the in-app updater.
 
 ## Done
 
 - [x] Cross-built NSIS installer from Linux (2026-10-11). First release: `v0.1.0-win-test` on GitHub.
+- [x] First release with the updater, phone remote, screen capture and hardware decoding: `v0.1.2` (2026-10-24), not yet installed on the church PC.
 - [x] Native outputs, video and audio run on Windows 10 (confirmed 2026-10-11). There is no webview fallback for the outputs.
 - [x] No console window: release builds use the Windows GUI subsystem (`windows_subsystem = "windows"` in `crates/app/src/main.rs`). Built, not yet tested on Windows.
 - [x] One taskbar entry: projection and confidence windows skip the taskbar, re-applied each time an output is shown. Built, not yet tested on Windows.
