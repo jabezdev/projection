@@ -16,19 +16,25 @@ jobs:
   desktop:
     name: Desktop (Rust and operator UI)
     runs-on: ubuntu-latest
-    # Arch ships FFmpeg 8 and webkit2gtk-4.1, as on the development machine.
-    container: archlinux:latest
+    # Arch ships webkit2gtk-4.1 as on the development machine. FFmpeg 9 reached
+    # Arch on 2026-08-04, but the ffmpeg-next bindings (and the Windows
+    # build) are on FFmpeg 8.1, so packages come from the last snapshot
+    # before it. Move both forward together when upgrading ffmpeg-next.
+    container: archlinux:base-20260802.0.566770
     defaults:
       run:
         working-directory: desktop
     steps:
+      - name: Pin packages to the 2026-08-02 Arch snapshot (FFmpeg 8.1)
+        working-directory: /
+        run: echo 'Server = https://archive.archlinux.org/repos/2026/08/02/$repo/os/$arch' > /etc/pacman.d/mirrorlist
       - name: System packages
         working-directory: /
         # ffmpeg also provides the CLI the media tests use to make clips;
         # vulkan-swrast (lavapipe) lets the offscreen scene tests run on CPU;
         # pipewire provides the headers for Wayland screen capture; nodejs
         # runs the UI unit tests (node --test).
-        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip pipewire nodejs
+        run: pacman -Syyuu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip pipewire nodejs
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Rust toolchain
