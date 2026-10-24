@@ -13,7 +13,7 @@ End users run Windows 10/11; Windows is the acceptance platform. Builds are cros
 
 Roadmap phase 1. Built and checked on Linux; not yet tested on Windows. The [church PC checklist](docs/church-pc-checklist.md) covers each on the next visit.
 
-- [/] **Log file.** Without the console, log output would be lost on Windows. Logs go to `%APPDATA%\com.magi.projection\logs\pakit.log`, rotated at 5 MB with four older files kept; panics are logged. Settings → Troubleshooting → Open logs folder.
+- [/] **Log file.** Without the console, log output would be lost on Windows. Logs go to `%APPDATA%\com.magi.projection\logs\palto.log`, rotated at 5 MB with four older files kept; panics are logged. Settings → Troubleshooting → Open logs folder.
 - [/] **Keep the display awake.** While any output is shown, the app calls `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)` from a dedicated thread and clears it when outputs are hidden.
 - [/] **Crash recovery.** After a crash the next start reopens the last service at the last cue, media paused, outputs hidden.
 
@@ -29,7 +29,7 @@ Roadmap phase 1. Built and checked on Linux; not yet tested on Windows. The [chu
 ## Later (tracked in the roadmap)
 
 - **Media paths.** Services refer to media by absolute path, so a library copied from Linux cannot find its files on Windows. Copy the media folder onto the church PC, then Library → Missing → Search a folder… relinks everything by file name. New imports are copied into the library's own `media` folder.
-- **Installer name and version.** Done (phase 2): the product is **PAKIT** (`PAKIT.exe`, Start menu, window titles) and `build-windows.sh` bumps the `0.MINOR.BUILD` version every build, so installers upgrade in place. Check the upgrade on the next visit.
+- **Installer name and version.** Done (phase 2): the product is **PALTO** (`PALTO.exe`, Start menu, window titles) and `build-windows.sh` bumps the `0.MINOR.BUILD` version every build, so installers upgrade in place. Check the upgrade on the next visit.
 - **Updates.** Installed by hand. Planned: auto-update with confirmation and rollback (phase 11).
 - **Code signing.** Decided to skip for now: SmartScreen warns (More info → Run anyway) and Defender occasionally flags unsigned installers.
 - **Remote over the network.** The WebSocket server binds `127.0.0.1`, so no firewall prompt appears. Planned: a LAN setting, with the installer adding the firewall rule, pairing codes and mDNS names (phase 10).

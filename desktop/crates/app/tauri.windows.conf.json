@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "mainBinaryName": "PAKIT",
+  "mainBinaryName": "PALTO",
   "bundle": {
     "targets": ["nsis", "msi"],
     "resources": {

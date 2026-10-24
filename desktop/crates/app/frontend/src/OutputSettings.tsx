@@ -80,7 +80,7 @@ function SystemSettings({ onError }: { onError: (message: string) => void }) {
     finally { setBusy(false); }
   };
   return <>
-    <fieldset><legend>About</legend><small>PAKIT {info?.version}</small><small>Data folder: {info?.data_dir}</small></fieldset>
+    <fieldset><legend>About</legend><small>PALTO {info?.version}</small><small>Data folder: {info?.data_dir}</small></fieldset>
     <fieldset><legend>Backups</legend>
       <button disabled={busy} onClick={() => void exportBackup()}>{busy ? 'Exporting…' : 'Export backup…'}</button>
       <button onClick={() => void invoke('open_backups_folder').catch(e => onError(String(e)))}>Open backups folder</button>

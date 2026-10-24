@@ -49,7 +49,7 @@ const items: Json[] = [
   ...(video ? [{ id: 3, title: 'Clip', kind: { kind: 'video', data: { path: video, options: videoOptions() } } }] : []),
 ];
 
-console.log(`PAKIT end-to-end (${appPath}, data in ${dataDir})`);
+console.log(`PALTO end-to-end (${appPath}, data in ${dataDir})`);
 let app = await App.start(appPath, dataDir, port);
 const serviceId = app.seedService('E2E service', items);
 let remote = await Remote.connect(port);

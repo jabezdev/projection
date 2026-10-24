@@ -102,7 +102,7 @@ A song's own background carries over to items without one; a foreground video or
 - `output-settings.json`: typed as `protocol::OutputConfig`. Missing fields take defaults; fields this version does not know (from newer versions, or outline/shadow/glow from older ones) survive a round trip. Saved atomically; an unreadable file is kept as `*.invalid-<ms>.json` and reported.
 - `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: WebSocket host/port and the last projection window size.
 - `session-state.json`: crash recovery. Marked running from start to a clean exit, with the current service, item and step. A start that finds it still running reopens that cue with media paused and outputs hidden; if the run that restored a cue crashes again before moving on, the next start does not restore it again.
-- `logs/`: `pakit.log` and up to four rotated files. The displays are kept awake while any output is shown (`SetThreadExecutionState` on Windows, the `org.freedesktop.ScreenSaver` idle inhibitor on Linux).
+- `logs/`: `palto.log` and up to four rotated files. The displays are kept awake while any output is shown (`SetThreadExecutionState` on Windows, the `org.freedesktop.ScreenSaver` idle inhibitor on Linux).
 - Media is referenced by absolute path. Imports (library media, presentation images, the logo) copy the file into `media/` first, reusing an identical file; older media still points at its original location until the phase 3 migration moves it in. Relinking rewrites matching paths in the media table, every service (including song documents inside items), library songs and the logo; the loaded service is saved through the engine. *Next (roadmap phase 3): IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
 - Each screen has its own parameters: the flat fields of `OutputConfig` style the projection, `confidence*` fields the confidence screen (font, size, line height, caps, clock, tape, video fade). Settings are organized by screen, each tab with a native preview of that screen's style (`style` and `confidence-style` preview targets).
 - **Prepared cues.** The scene feed plans media for the cues either side of the current one (`MediaPlan`): stills of neighboring images, slides and song backgrounds load into textures ahead of time; the next (else previous) video or audio item opens paused as a prepared session whose audio is buffered but not attached to the device, and a cue for the same file adopts it instead of opening a decoder; neighboring song background videos and the logo video open as paused ambient sessions on their first frame. Nothing prepared is audible or drawn until its cue.
@@ -155,11 +155,11 @@ From [ROADMAP.md](ROADMAP.md), the parts that change this document:
 | Simulate a slow confidence output | `MAGI_CONFIDENCE_STALL_MS=<ms>` |
 | Run the ignored media repro against a real file | `MAGI_MEDIA=<file> cargo test -p media_engine -- --ignored paused_seek` |
 
-Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens. Logs go to stderr and to `logs/pakit.log` in the data folder (5 × 5 MB, rotated); `RUST_LOG` sets the filter.
+Every 5 s the app logs active decoders, opened audio outputs, frames presented and late, audio underruns and device reopens. Logs go to stderr and to `logs/palto.log` in the data folder (5 × 5 MB, rotated); `RUST_LOG` sets the filter.
 
 | Test aid | What it does |
 |---|---|
-| `PAKIT_DATA_DIR=<dir>` | Uses `<dir>` as the data folder (library, settings, logs) |
-| `PAKIT_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
+| `PALTO_DATA_DIR=<dir>` | Uses `<dir>` as the data folder (library, settings, logs) |
+| `PALTO_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
 | `bun tools/e2e/e2e.ts` | End-to-end WebSocket check against a scratch data folder (cue, navigation, display modes, transport, save, restart and crash recovery) |
 | `bun tools/e2e/soak.ts --video <file>` | 30-minute soak: looping video with confidence; fails if memory, decoders or audio outputs grow or frames stop |

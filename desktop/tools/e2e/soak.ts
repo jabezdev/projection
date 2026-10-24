@@ -47,7 +47,7 @@ const median = (values: number[]) => { const sorted = [...values].sort((a, b) =>
 
 const dataDir = scratchDir('soak');
 const csv = join(process.cwd(), `soak-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
-const app = await App.start(typeof args.app === 'string' ? args.app : defaultAppPath(), dataDir, port, args['manual-show'] ? {} : { PAKIT_SHOW_OUTPUTS: '1' });
+const app = await App.start(typeof args.app === 'string' ? args.app : defaultAppPath(), dataDir, port, args['manual-show'] ? {} : { PALTO_SHOW_OUTPUTS: '1' });
 const failures: string[] = [];
 try {
   const serviceId = app.seedService('Soak test', [

@@ -1,4 +1,4 @@
-// Shared helpers for the end-to-end and soak scripts: start PAKIT against a
+// Shared helpers for the end-to-end and soak scripts: start PALTO against a
 // scratch data folder, seed services into its database, and drive the engine
 // over the same WebSocket protocol remote clients use.
 //
@@ -38,7 +38,7 @@ export function parseArgs(argv = process.argv.slice(2)): Record<string, string |
 }
 
 export function scratchDir(prefix: string): string {
-  return mkdtempSync(join(tmpdir(), `pakit-${prefix}-`));
+  return mkdtempSync(join(tmpdir(), `palto-${prefix}-`));
 }
 
 export class App {
@@ -51,7 +51,7 @@ export class App {
     const saved = existsSync(config) ? JSON.parse(readFileSync(config, 'utf8')) : {};
     writeFileSync(config, JSON.stringify({ projection_size: null, ...saved, ws_bind_host: '127.0.0.1', ws_port: port }));
     const child = Bun.spawn([appPath], {
-      env: { ...process.env, ...env, PAKIT_DATA_DIR: dataDir },
+      env: { ...process.env, ...env, PALTO_DATA_DIR: dataDir },
       stdout: 'ignore',
       stderr: 'ignore',
     });
@@ -66,7 +66,7 @@ export class App {
   }
 
   get pid(): number { return this.process.pid; }
-  get logPath(): string { return join(this.dataDir, 'logs', 'pakit.log'); }
+  get logPath(): string { return join(this.dataDir, 'logs', 'palto.log'); }
 
   private async waitForSocket(timeoutMs = 60_000) {
     const deadline = Date.now() + timeoutMs;

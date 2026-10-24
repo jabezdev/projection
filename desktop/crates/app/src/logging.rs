@@ -1,6 +1,6 @@
 //! The log file. Release builds on Windows have no console, so everything is
-//! written to `logs/pakit.log` in the app-data folder (and echoed to stderr),
-//! rotated by size: `pakit.log` plus `pakit.1.log` … `pakit.4.log`, 5 MB each.
+//! written to `logs/palto.log` in the app-data folder (and echoed to stderr),
+//! rotated by size: `palto.log` plus `palto.1.log` … `palto.4.log`, 5 MB each.
 //! Panics are logged before the default hook runs, so a crash leaves a trace.
 
 use std::fs::{File, OpenOptions};
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// Tauri's bundle identifier: the app-data folder's name.
 pub const IDENTIFIER: &str = "com.magi.projection";
-const FILE_STEM: &str = "pakit";
+const FILE_STEM: &str = "palto";
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
 /// The current file plus this many older ones.
 const KEEP: usize = 4;
@@ -117,10 +117,10 @@ mod tests {
         }
         let mut names: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
         names.sort();
-        assert_eq!(names, ["pakit.1.log", "pakit.2.log", "pakit.log"]);
+        assert_eq!(names, ["palto.1.log", "palto.2.log", "palto.log"]);
         // Two 50-byte lines per file; the newest lines are in the current file.
-        assert_eq!(std::fs::read_to_string(dir.join("pakit.log")).unwrap().lines().last().unwrap(), format!("{:0>49}", 9));
-        assert_eq!(std::fs::read_to_string(dir.join("pakit.2.log")).unwrap().lines().count(), 2);
+        assert_eq!(std::fs::read_to_string(dir.join("palto.log")).unwrap().lines().last().unwrap(), format!("{:0>49}", 9));
+        assert_eq!(std::fs::read_to_string(dir.join("palto.2.log")).unwrap().lines().count(), 2);
 
         // Reopening appends to the current file instead of truncating it.
         drop(log);

@@ -71,7 +71,7 @@ impl Default for AppConfig {
 
 /// Overrides the data folder (library, settings and logs), so test scripts
 /// run against a scratch copy on any platform.
-pub const DATA_DIR_ENV: &str = "PAKIT_DATA_DIR";
+pub const DATA_DIR_ENV: &str = "PALTO_DATA_DIR";
 
 /// All runtime state lives in the OS app-data dir, never the workspace. An
 /// existing MVP library under the pre-release identifier stays in use.

@@ -62,7 +62,7 @@ EOF
 chmod +x "$tools/bin/makensis"
 export PATH="$tools/bin:$PATH"
 
-# The installer places these next to PAKIT.exe (tauri.windows.conf.json).
+# The installer places these next to PALTO.exe (tauri.windows.conf.json).
 dlls="$desktop/crates/app/windows/ffmpeg"
 rm -rf "$dlls"
 mkdir -p "$dlls"

@@ -101,7 +101,7 @@ pub fn write(db: &Repository, data_dir: &Path, logo_path: &str, dest: &Path) -> 
             zip.start_file("media.json", options)?;
             zip.write_all(&serde_json::to_vec_pretty(&media)?)?;
             let manifest = serde_json::json!({
-                "app": "PAKIT",
+                "app": "PALTO",
                 "version": env!("CARGO_PKG_VERSION"),
                 "created": chrono::Local::now().to_rfc3339(),
                 "missing_media": media.iter().filter(|m| !m.exists).count(),
@@ -119,7 +119,7 @@ pub fn write(db: &Repository, data_dir: &Path, logo_path: &str, dest: &Path) -> 
 
 /// The suggested name for an exported backup.
 pub fn export_name() -> String {
-    format!("PAKIT backup {}.zip", chrono::Local::now().format("%Y-%m-%d %H%M"))
+    format!("PALTO backup {}.zip", chrono::Local::now().format("%Y-%m-%d %H%M"))
 }
 
 /// Automatic backups in `dir`, newest first, with their modification times.

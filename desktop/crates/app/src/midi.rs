@@ -11,7 +11,7 @@ use tauri::Manager;
 use crate::input::{self, InputState};
 
 const RESCAN: Duration = Duration::from_secs(2);
-const CLIENT: &str = "PAKIT";
+const CLIENT: &str = "PALTO";
 
 /// The trigger in one MIDI message, if it is a press: note on with velocity,
 /// a control rising to 64 or more (from below), or a program change.
@@ -62,7 +62,7 @@ fn run(app: tauri::AppHandle) {
                     let Ok(input) = midir::MidiInput::new(CLIENT) else { continue };
                     let handle = app.clone();
                     let mut controls = HashMap::new();
-                    match input.connect(&port, "pakit-input", move |_, message, _| {
+                    match input.connect(&port, "palto-input", move |_, message, _| {
                         if let Some(trigger) = parse(message, &mut controls) {
                             input::triggered(&handle, trigger);
                         }

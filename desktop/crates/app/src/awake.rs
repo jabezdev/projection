@@ -93,7 +93,7 @@ mod platform {
 
     fn inhibit() -> Result<(gio::DBusConnection, u32), glib::Error> {
         let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)?;
-        let args = ("PAKIT", "Projection outputs are shown").to_variant();
+        let args = ("PALTO", "Projection outputs are shown").to_variant();
         let reply = bus.call_sync(Some(SERVICE), PATH, SERVICE, "Inhibit", Some(&args), Some(glib::VariantTy::new("(u)").expect("valid type")), gio::DBusCallFlags::NONE, 2000, gio::Cancellable::NONE)?;
         let (cookie,) = reply.get::<(u32,)>().unwrap_or((0,));
         Ok((bus, cookie))

@@ -57,7 +57,7 @@ Goal: make the big changes ahead safe. Done right after phase 1.
 - [x] **Split `App.tsx`** into smaller components, ahead of the library and settings revamps.
 - [x] **End-to-end WebSocket test script** in the repo (cue, transport, display modes, save/load), runnable against a scratch data folder: `bun desktop/tools/e2e/e2e.ts`.
 - [x] **Extend the parity harness** to Black, Logo and video scenes (native references, since the webview had none worth keeping).
-- [x] **Naming and versioning:** the product is **PAKIT** (installer, Start menu, windows); versions are `0.MINOR.BUILD`, with the build number bumped by every `build-windows.sh` run so installers upgrade in place.
+- [x] **Naming and versioning:** the product is **PALTO** (installer, Start menu, windows); versions are `0.MINOR.BUILD`, with the build number bumped by every `build-windows.sh` run so installers upgrade in place.
 - [x] **Backup and export:** a one-click export of `app.db`, settings and the media list to a zip, plus an automatic weekly backup (keep the last few). Needed before the data model changes in phase 3.
 
 ## 3. Library revamp and data model

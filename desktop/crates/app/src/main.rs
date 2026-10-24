@@ -84,7 +84,7 @@ impl AppState {
 }
 fn main() -> anyhow::Result<()> {
     logging::init();
-    info!("Starting PAKIT {}", env!("CARGO_PKG_VERSION"));
+    info!("Starting PALTO {}", env!("CARGO_PKG_VERSION"));
 
     native_output::prepare_platform();
 
@@ -194,16 +194,16 @@ fn main() -> anyhow::Result<()> {
                             for command in recovery::restore_commands(&state, &project) {
                                 let _ = engine.command(command);
                             }
-                            warnings.push(format!("PAKIT did not close normally. \"{}\" was reopened at its last cue with media paused. Outputs stay hidden until you show them.", project.name));
+                            warnings.push(format!("PALTO did not close normally. \"{}\" was reopened at its last cue with media paused. Outputs stay hidden until you show them.", project.name));
                         }
-                        _ => warnings.push("PAKIT did not close normally, and the last service could not be reopened.".into()),
+                        _ => warnings.push("PALTO did not close normally, and the last service could not be reopened.".into()),
                     }
                 }
                 recovery::Previous::RepeatedCrash => {
                     warn!("Previous run crashed right after a recovery; not restoring again");
-                    warnings.push("PAKIT closed unexpectedly twice in a row, so the last service was not reopened automatically. Open it from the service list. The log folder (Settings) has details.".into());
+                    warnings.push("PALTO closed unexpectedly twice in a row, so the last service was not reopened automatically. Open it from the service list. The log folder (Settings) has details.".into());
                 }
-                recovery::Previous::Crashed => warnings.push("PAKIT did not close normally last time.".into()),
+                recovery::Previous::Crashed => warnings.push("PALTO did not close normally last time.".into()),
             }
             let recovery = Arc::new(recovery);
             app.manage(recovery.clone());

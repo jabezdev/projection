@@ -24,7 +24,7 @@ pub struct OutputRoute {
     #[serde(default)] aspect: Option<(u32, u32)>,
 }
 fn yes() -> bool { true }
-pub const OUTPUTS: [(&str, &str); 2] = [("projection", "PAKIT Projection"), ("confidence", "PAKIT Confidence")];
+pub const OUTPUTS: [(&str, &str); 2] = [("projection", "PALTO Projection"), ("confidence", "PALTO Confidence")];
 pub const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 pub struct OutputRoutes {
     pub values: Mutex<std::collections::BTreeMap<String, OutputRoute>>,
@@ -164,10 +164,10 @@ pub fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRout
     present_output(&app, &output)?;
     get_output_displays(app, routes)
 }
-/// Test aid (`PAKIT_SHOW_OUTPUTS=1`): shows the outputs at startup, as the
+/// Test aid (`PALTO_SHOW_OUTPUTS=1`): shows the outputs at startup, as the
 /// operator's Show button would, so soak runs need no click.
 pub fn show_outputs_if_requested(app: &tauri::AppHandle) {
-    if std::env::var("PAKIT_SHOW_OUTPUTS").as_deref() != Ok("1") { return; }
+    if std::env::var("PALTO_SHOW_OUTPUTS").as_deref() != Ok("1") { return; }
     app.state::<OutputRoutes>().shown.store(true, Ordering::Release);
     let _ = app.emit("output:shown", true);
     for (output, _) in OUTPUTS {

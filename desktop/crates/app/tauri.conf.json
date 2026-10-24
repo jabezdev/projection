@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PAKIT",
+  "productName": "PALTO",
   "identifier": "com.magi.projection",
   "build": {
     "frontendDist": "frontend/dist",
@@ -12,7 +12,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "PAKIT",
+        "title": "PALTO",
         "width": 800,
         "height": 600,
         "resizable": true,
