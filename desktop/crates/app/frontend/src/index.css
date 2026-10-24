@@ -349,3 +349,9 @@ kbd { padding: 1px 5px; border: 1px solid #454b54; border-bottom-width: 2px; bac
 .control-chip button { padding: 0 4px; color: #9fb2c1; }
 .control-row > button { padding: 6px 10px; border: 1px solid #405360; font-size: 11px; }
 .control-row > button.is-learning { border-color: #47c6bd; color: #98f2e7; }
+
+.remote-url { font-family: monospace; font-size: 12px; color: #d3dde5; user-select: all; overflow-wrap: anywhere; }
+.remote-qr { background: #fff; padding: 8px; width: 216px; border-radius: 6px; } .remote-qr svg { display: block; width: 200px; height: 200px; }
+.pairing-code { font-family: monospace; font-size: 40px; letter-spacing: .2em; color: #f0f4f7; }
+.remote-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } .remote-devices li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; } .remote-devices li span { display: grid; }
+.settings-fields textarea { width: 100%; background: #0e171e; padding: 7px; border: 1px solid #344957; color: inherit; font: inherit; font-family: monospace; }

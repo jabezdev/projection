@@ -1,0 +1,31 @@
+:root { color-scheme: dark; --bg: #111418; --panel: #1b2026; --line: #2c333c; --text: #eef1f4; --muted: #96a0ab; --accent: #3a8fe8; --on: #e8a33a; --error: #ff7a6b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { display: flex; flex-direction: column; gap: 12px; min-height: 100%; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+main[hidden] { display: none; }
+h1 { font-size: 1.4rem; margin: 8px 0 0; }
+form { display: flex; flex-direction: column; gap: 12px; }
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: .9rem; }
+input { font: inherit; font-size: 1.2rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+#code { letter-spacing: .3em; font-size: 1.6rem; text-align: center; }
+button { font: inherit; font-weight: 600; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 14px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:active { filter: brightness(1.4); }
+button:disabled { opacity: .4; }
+form button { background: var(--accent); border-color: var(--accent); }
+header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+#service { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.status.ok { color: #6fcf8f; }
+.slides { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.slide { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; overflow: auto; }
+.slide.current { flex: 3; }
+.slide.next { flex: 2; color: var(--muted); }
+.slide small { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: .75rem; }
+.slide p { margin: 4px 0 0; white-space: pre-wrap; font-size: 1.15rem; }
+.slide.current p { font-size: 1.35rem; }
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.modes button[aria-pressed="true"] { background: var(--on); border-color: var(--on); color: #1a1205; }
+.steps { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+.steps button { padding: 28px 12px; font-size: 1.2rem; }
+#next-button { background: var(--accent); border-color: var(--accent); }
+.error { color: var(--error); min-height: 1.4em; margin: 0; }

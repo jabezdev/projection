@@ -55,20 +55,29 @@ pub const DB_FILENAME: &str = "app.db";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
-    pub ws_bind_host: String,
+    /// The remote's port (WebSocket and phone remote page).
     pub ws_port: u16,
     pub projection_size: Option<(u32, u32)>,
     /// `software`, `auto` or an FFmpeg hardware device name.
     pub video_decoder: String,
+    /// Other devices may connect (after pairing); otherwise this computer only.
+    pub lan_enabled: bool,
+    pub osc_enabled: bool,
+    pub osc_port: u16,
+    /// Other computers allowed to send OSC, as IP addresses.
+    pub osc_allowed: Vec<String>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            ws_bind_host: "127.0.0.1".to_string(),
             ws_port: 8080,
             projection_size: None,
             video_decoder: "software".to_string(),
+            lan_enabled: false,
+            osc_enabled: false,
+            osc_port: 9000,
+            osc_allowed: Vec::new(),
         }
     }
 }
@@ -250,5 +259,7 @@ mod config_tests {
     fn app_configs_saved_with_an_output_backend_still_load() {
         let config: AppConfig = serde_json::from_str(r#"{"ws_bind_host":"0.0.0.0","ws_port":9000,"projection_size":null,"output_backend":"webview"}"#).unwrap();
         assert_eq!(config.ws_port, 9000);
+        assert!(!config.lan_enabled, "an old all-interfaces host no longer opens the remote to the network");
+        assert_eq!(config.video_decoder, "software");
     }
 }

@@ -14,11 +14,11 @@ mod native_media;
 mod native_output;
 mod native_scene;
 mod recovery;
+mod remote;
 mod settings;
 mod storage;
 mod streamdeck;
 use log::{error, info, warn};
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::thread;
@@ -30,7 +30,6 @@ use core_engine::{EngineCommand, EngineEvent, EngineSnapshot, Files};
 use displays::*;
 use engine_host::{EngineHandle, EngineLoop};
 use native_media::{NativeMedia, NativeMediaBackend};
-use network_server::WsServer;
 use persistence::Repository;
 use protocol::ProjectModel;
 use settings::*;
@@ -118,6 +117,11 @@ fn main() -> anyhow::Result<()> {
             get_app_info,
             get_video_decoding,
             set_video_decoder,
+            remote::get_remote_status,
+            remote::set_remote_settings,
+            remote::start_pairing,
+            remote::stop_pairing,
+            remote::remove_remote_device,
             export_backup,
             open_backups_folder,
             list_missing_media,
@@ -279,23 +283,42 @@ fn main() -> anyhow::Result<()> {
                 });
             }
 
-            // Start WS server on Tauri runtime
+            // The remote server (WebSocket and phone remote page) and OSC,
+            // reconfigured live from Settings → Remote.
             {
-                let ws_addr: SocketAddr = {
-                    let cfg = config.read().expect("config lock poisoned");
-                    format!("{}:{}", cfg.ws_bind_host, cfg.ws_port).parse()?
+                let saved = config.read().expect("config lock poisoned").clone();
+                let pairing = Arc::new(network_server::pairing::Pairing::load(app_data_dir.join(network_server::pairing::FILENAME)));
+                let (listen, listen_rx) = watch::channel(remote::listen(&saved));
+                let (osc, osc_rx) = watch::channel(remote::osc_listen(&saved));
+                let commands = engine.clone();
+                let sink: network_server::CommandSink = Arc::new(move |command| commands.command(command));
+                let server = network_server::RemoteServer::new(listen_rx, sink, event_tx.clone(), snapshot_provider.clone(), pairing.clone(), shutdown_rx.clone());
+                let state = remote::RemoteState {
+                    pairing,
+                    listen,
+                    server: server.status(),
+                    osc,
+                    osc_status: Arc::default(),
+                    advertiser: network_server::mdns::Advertiser::default(),
                 };
-
-                let remote = engine.clone();
-                let sink: network_server::CommandSink = Arc::new(move |command| remote.command(command));
-                let server = WsServer::new(ws_addr, sink, event_tx.clone())
-                    .with_snapshot_provider(snapshot_provider.clone())
-                    .with_shutdown(shutdown_rx.clone());
+                let osc_status = state.osc_status.clone();
+                state.apply(&saved);
+                app.manage(state);
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = server.run().await {
                         error!("Network server failed: {}", e);
                     }
                 });
+                let handle = app.handle().clone();
+                let osc_sink: network_server::osc::OscSink = Arc::new(move |address, args| match remote::osc_action(address, args) {
+                    Some(action) => {
+                        if let Err(e) = input::perform(&handle, action) {
+                            warn!("OSC {address}: {e}");
+                        }
+                    }
+                    None => log::debug!("Unhandled OSC {address}"),
+                });
+                tauri::async_runtime::spawn(network_server::osc::run(osc_rx, osc_sink, osc_status, shutdown_rx.clone()));
             }
 
             // Bridge EngineEvent -> Frontend (single stream)
@@ -444,5 +467,9 @@ fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
     if let Some(recovery) = app.try_state::<Arc<recovery::Recovery>>() {
         recovery.clean_exit();
+    }
+    // Tells the network palto.local is going away.
+    if let Some(remote) = app.try_state::<remote::RemoteState>() {
+        remote.advertiser.set(None);
     }
 }

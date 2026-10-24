@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111418">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>PALTO remote</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/remote.css">
+</head>
+<body>
+  <main id="pair" hidden>
+    <h1>PALTO remote</h1>
+    <p>On the PALTO computer, open <b>Settings → Remote</b> and choose <b>Pair a device</b>. Enter the code it shows.</p>
+    <form id="pair-form">
+      <label>Code<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+      <label>Name for this device<input id="name" maxlength="60" placeholder="e.g. Leader's phone"></label>
+      <button type="submit">Pair</button>
+    </form>
+    <p id="pair-error" class="error" role="alert"></p>
+  </main>
+  <main id="remote" hidden>
+    <header>
+      <span id="service">No service loaded</span>
+      <span id="connection" class="status">Connecting…</span>
+    </header>
+    <section class="slides">
+      <div class="slide current"><small id="current-label">Now</small><p id="current"></p></div>
+      <div class="slide next"><small id="next-label">Next</small><p id="next"></p></div>
+    </section>
+    <nav class="modes" aria-label="Display">
+      <button data-display="live">Live</button>
+      <button data-display="clear">Clear</button>
+      <button data-display="black">Black</button>
+      <button data-display="logo">Logo</button>
+    </nav>
+    <nav class="steps">
+      <button id="prev" aria-label="Previous">◀ Previous</button>
+      <button id="next-button" aria-label="Next">Next ▶</button>
+    </nav>
+    <p id="error" class="error" role="alert"></p>
+  </main>
+  <script src="/remote.js"></script>
+</body>
+</html>

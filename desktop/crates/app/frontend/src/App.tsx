@@ -11,6 +11,7 @@ import SongEditor from './SongEditor';
 import LibraryPanel from './LibraryPanel';
 import QuickSearch from './QuickSearch';
 import ControlsSettings from './ControlsSettings';
+import RemoteSettings from './RemoteSettings';
 import { useConfirm } from './ConfirmDialog';
 import { useInputBindings, useKeyboardInput } from './input';
 import { useOutputsLoading, useOutputsShown } from './useOutputs';
@@ -118,7 +119,7 @@ function App() {
       {resizeDivider(1)}
       <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
-    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }]}/>}
+    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }]}/>}
     {presentationEditor && <PresentationEditor images={media} item={presentationEditor === 'new' ? undefined : presentationEditor} onClose={() => setPresentationEditor(null)} onSave={async item => {
       const current = projectRef.current; if (!current) throw new Error('Select a service first.');
       await persist({ ...current, session: { items: presentationEditor === 'new' ? [...current.session.items, item] : current.session.items.map(old => old.id === item.id ? item : old) } });

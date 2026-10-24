@@ -146,7 +146,7 @@ Items:
 - [x] Confirmations while outputs are shown (loading another service, removing an item).
 - [x] MIDI input. *Not yet tried with a physical controller.*
 - [x] Stream Deck (keys only; no key images yet). *Not yet tried with a physical deck.*
-- [ ] OSC / Companion over the network (uses phase 10's network access and pairing).
+- [x] OSC / Companion over the network (uses phase 10's network access and pairing). *`/palto/<action>` on UDP 9000 through the input layer; other computers need LAN access and an allowed-list entry, since OSC cannot pair. Not yet tried with Companion.*
 - [ ] **Stage tools on the confidence screen:** timers, operator text messages and similar. **Open:** design when we get there.
 
 ## 7. Media and performance
@@ -216,11 +216,11 @@ Decisions:
 - **Phone remote as a PWA** served by the app for now; a native app is decided later (Tauri mobile is the likely option and would re-add the `[lib]` crate type and a `lib.rs` entry point to `desktop/crates/app`).
 
 Items:
-- [ ] LAN toggle with configurable port; firewall rule in the installer.
-- [ ] mDNS advertising for the remote and the screen-share page; address and QR code on the operator screen. **Open:** the advertised name, and whether the operator can rename it.
-- [ ] Pairing-code authentication for remote clients.
-- [ ] Phone remote PWA: next/previous, display modes, current and next slide.
-- [ ] Throttle frequent remote commands.
+- [x] LAN toggle with configurable port; firewall rule in the installer. *Settings → Remote; the NSIS hook adds a Private/Domain rule once, with an administrator prompt. Not yet tried on Windows.*
+- [/] mDNS advertising for the remote and the screen-share page; address and QR code on the operator screen. *`palto.local` (decided 2026-10-24) for the remote, with addresses and a QR code in Settings → Remote; the screen-share page waits for phase 8. Renaming is not offered.*
+- [x] Pairing-code authentication for remote clients. *Six-digit code for 5 minutes, token per device, removable; web pages from other sites on this computer are refused too.*
+- [x] Phone remote PWA: next/previous, display modes, current and next slide. *Minimal design, served by the app. Browsers allow installing it only over HTTPS, so on plain HTTP it is added to the home screen as a shortcut.*
+- [x] Throttle frequent remote commands. *15 a second per connection, bursts of 30.*
 - [ ] Native phone app. **Open:** decide the approach.
 
 ## 11. Release and updates

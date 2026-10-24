@@ -49,7 +49,7 @@ export class App {
     mkdirSync(dataDir, { recursive: true });
     const config = join(dataDir, 'app-config.json');
     const saved = existsSync(config) ? JSON.parse(readFileSync(config, 'utf8')) : {};
-    writeFileSync(config, JSON.stringify({ projection_size: null, ...saved, ws_bind_host: '127.0.0.1', ws_port: port }));
+    writeFileSync(config, JSON.stringify({ projection_size: null, lan_enabled: false, ...saved, ws_port: port }));
     const child = Bun.spawn([appPath], {
       env: { ...process.env, ...env, PALTO_DATA_DIR: dataDir },
       stdout: 'ignore',

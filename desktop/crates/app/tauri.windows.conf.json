@@ -2,9 +2,17 @@
   "$schema": "https://schema.tauri.app/config/2",
   "mainBinaryName": "PALTO",
   "bundle": {
-    "targets": ["nsis", "msi"],
+    "targets": [
+      "nsis",
+      "msi"
+    ],
     "resources": {
       "windows/ffmpeg/": ""
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
     }
   }
 }

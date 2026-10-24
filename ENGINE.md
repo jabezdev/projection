@@ -18,7 +18,7 @@ All crates are under [desktop/crates/](desktop/crates/).
 | `render_engine` | One GPU device, a presentation thread per output, scene layout (main and confidence), text shaping, painting, still previews. | Decoders or audio. |
 | `app` | Tauri integration: windows, operator commands, the bounded engine queue, the storage worker, settings files, wiring the crates together. | A second idea of what is on air. |
 | `persistence` | SQLite library and services (schema v2). | Runtime state. |
-| `network_server` | WebSocket remote control with the same commands and events as the UI. | Its own transport logic. |
+| `network_server` | Remote control: the WebSocket (same commands and events as the UI) and the phone remote page on one port, pairing, the `palto.local` name, OSC. | Its own transport logic. |
 | React frontend | Editors, operator layout, transport buttons, preview stills, errors. | Playback, audio, frame timing. |
 
 ```mermaid
@@ -47,7 +47,8 @@ flowchart TB
 - **Saving.** The engine accepts a save immediately; a storage worker writes saves in order and merges adjacent saves of one project. A load waits for queued saves. A failed save is reported, not rolled back.
 - **Input layer** ([input.rs](desktop/crates/app/src/input.rs)). Keyboard, presenter clickers, MIDI and Stream Deck share one vocabulary (`protocol::InputAction`) and one bindings file. The operator UI matches keys and sends the action; MIDI (midir, rescanned every 2 s) and Stream Deck (hidapi, one reader thread per deck) threads match their own triggers. Actions become ordinary engine commands; Black, Clear and Logo toggle back to Live. A learn mode reports the next controller trigger to the bindings editor instead of acting.
 - **On-air status.** Each shown output reports when its scene waits for new media (`Activity::loading`) and when it shows it; the operator marks the selected cue as pending meanwhile.
-- **Remote.** The WebSocket server subscribes before sending its snapshot, resends the full snapshot after falling behind, and binds `127.0.0.1` by default.
+- **Remote** ([network_server](desktop/crates/network_server/src/lib.rs)). One port (8080 by default) serves the WebSocket and the phone remote page (plain HTML and JS compiled into the app). The server subscribes before sending its snapshot and resends the full snapshot after falling behind. With LAN access off (the default) it listens on `127.0.0.1`; with it on, on all interfaces, and settings changes rebind at once. Programs on this computer connect freely, unless they are web pages from another site (any `Origin` other than localhost or `palto.local`). Every other client needs a token: the operator shows a six-digit code (Settings → Remote → Pair a device, valid 5 minutes, withdrawn after 5 wrong tries in a minute), the device sends it to `POST /api/pair` and keeps the token; only its SHA-256 is stored, in `remote-devices.json`. Removing a device or turning LAN access off closes its connections within 2 s. Each connection may send 15 commands a second (bursts of 30); more are refused with an error event. While LAN access is on, mDNS advertises `palto.local` (`_http._tcp`); the operator screen also lists the addresses and a QR code of the first.
+- **OSC** ([osc.rs](desktop/crates/network_server/src/osc.rs)). Off by default; UDP port 9000. `/palto/<action>` performs an input action (`next`, `previous`, `next_item`, `previous_item`, `live`, `black`, `clear`, `logo`, `play_pause`, `stop`) through the input layer; a first argument of 0 or false (a button release) is ignored, and bundles are unpacked. OSC has no pairing of its own: this computer may always send, other computers only with LAN access on and their address on the allowed list.
 
 ### Display and media policy
 
@@ -102,7 +103,7 @@ A song's own background carries over to items without one; a foreground video or
 
 - Library and services: `app.db` (SQLite) in the OS app-data folder (`com.magi.projection`; an existing `com.tauri.dev` library stays in use).
 - `output-settings.json`: typed as `protocol::OutputConfig`. Missing fields take defaults; fields this version does not know (from newer versions, or outline/shadow/glow from older ones) survive a round trip. Saved atomically; an unreadable file is kept as `*.invalid-<ms>.json` and reported.
-- `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: WebSocket host/port and the last projection window size.
+- `output-displays.json`: display assignments and fullscreen choices. `app-config.json`: remote port and LAN access, OSC, the video decoder and the last projection window size. `remote-devices.json`: paired remote devices (token hashes).
 - `session-state.json`: crash recovery. Marked running from start to a clean exit, with the current service, item and step. A start that finds it still running reopens that cue with media paused and outputs hidden; if the run that restored a cue crashes again before moving on, the next start does not restore it again.
 - `logs/`: `palto.log` and up to four rotated files. The displays are kept awake while any output is shown (`SetThreadExecutionState` on Windows, the `org.freedesktop.ScreenSaver` idle inhibitor on Linux).
 - Media is referenced by absolute path. Imports (library media, presentation images, the logo) copy the file into `media/` first, reusing an identical file; older media still points at its original location until the phase 3 migration moves it in. Relinking rewrites matching paths in the media table, every service (including song documents inside items), library songs and the logo; the loaded service is saved through the engine. *Next (roadmap phase 3): IDs become strings shared with the cloud, and every edit is kept in an edit history that powers undo and sync.*
@@ -141,7 +142,6 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 
 From [ROADMAP.md](ROADMAP.md), the parts that change this document:
 
-- **Phase 6, operator controls:** one input layer for keyboard bindings, presenter clickers, MIDI, Stream Deck and OSC/Companion, all sending the same engine commands.
 - **Phase 7, media:** profiling on the church PC and a documented media profile; displays on two GPUs only if the setup needs it.
 - **Phase 8, screen capture:** a window or screen as an output source, captured once for both screens, with the capture API chosen per platform and switchable; a feed from another device's browser over WebRTC, with its audio through the one audio output.
 - **Phase 9, presentations:** web pages (the Canva player and other browser presentations) rendered off screen and shown as a source, so the outputs stay native; PDF and PowerPoint as slides.
@@ -166,4 +166,5 @@ Every 5 s the app logs active decoders, opened audio outputs, frames presented a
 | `PALTO_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
 | `bun tools/e2e/e2e.ts` | End-to-end WebSocket check against a scratch data folder (cue, navigation, display modes, transport, save, restart and crash recovery) |
 | `bun tools/e2e/soak.ts --video <file>` | 30-minute soak: looping video with confidence; fails if memory, decoders or audio outputs grow or frames stop |
+| `bun tools/e2e/remote.ts` | Remote access with LAN on: the phone page, pairing tokens, refusing unpaired devices and other sites' pages, the rate limit, OSC and `palto.local` |
 | `bun tools/e2e/profile.ts --video <file> [--compare]` | Plays a looping video with confidence for a minute (with `--compare`, once in software and once with automatic hardware decoding) and writes a Markdown report: stage timings, frame rates, CPU and memory |

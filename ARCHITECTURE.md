@@ -41,7 +41,7 @@ flowchart LR
 | media_engine | `desktop/crates/media_engine` | Video/audio decoding, playback clocks, the single audio output, thumbnails. |
 | render_engine | `desktop/crates/render_engine` | Draws the projection and confidence screens and the operator preview stills. |
 | persistence | `desktop/crates/persistence` | SQLite: songs, media records, services (each service stored as one JSON document). |
-| network_server | `desktop/crates/network_server` | WebSocket remote control; same machine only for now. LAN access with pairing codes, a phone remote and OSC/Companion control are planned (roadmap phases 6 and 10). Keyboard, MIDI and Stream Deck input go through the app's input layer instead. |
+| network_server | `desktop/crates/network_server` | Remote control: WebSocket and the phone remote page on one port, this computer only unless LAN access is on; other devices pair with a code. Also OSC (Companion and similar). Keyboard, MIDI and Stream Deck input go through the app's input layer instead. |
 
 ### One click, end to end
 

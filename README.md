@@ -76,6 +76,7 @@ From `desktop/` unless noted.
 | Build the Windows installer from Linux (bumps the version) | `tools/build-windows.sh` |
 | Bump the version by hand (`0.MINOR.BUILD`) | `tools/bump-version.sh [minor]` |
 | End-to-end check over the WebSocket (needs a built app) | `bun tools/e2e/e2e.ts` |
+| Remote access: phone page, pairing, LAN refusals, rate limit, OSC, `palto.local` | `bun tools/e2e/remote.ts` |
 | 30-minute soak (memory, decoders, frames) | `bun tools/e2e/soak.ts --video <file>` |
 | Per-stage video timings, CPU and memory, software vs hardware decoding | `bun tools/e2e/profile.ts --video <file> --compare` |
 
@@ -88,7 +89,7 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the WebSocket host/port and the video decoder (Settings → System); `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+`app.db` holds the library and services; `app-config.json` the remote port, LAN access, OSC and the video decoder (Settings → Remote and System); `remote-devices.json` paired phones and tablets; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
 
 **Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PALTO and unzip `app.db` and the settings files into the data folder.
 
@@ -104,10 +105,10 @@ desktop/
     media_engine/   Decoding, audio output and playback clocks (FFmpeg)
     protocol/       The shared list of commands, events and settings
     persistence/    Saving/loading songs and services (SQLite)
-    network_server/ Remote control over WebSocket
+    network_server/ Remote control: WebSocket, phone remote page, pairing, mDNS, OSC
   tools/
     parity/         Output regression check against frozen references
-    e2e/            End-to-end, soak and profile scripts over the WebSocket (Bun)
+    e2e/            End-to-end, remote, soak and profile scripts over the WebSocket (Bun)
     bump-version.sh Version bump (0.MINOR.BUILD)
     build-windows.sh  Cross-builds the Windows installer
   assets/           Sample backgrounds
@@ -129,7 +130,13 @@ desktop/
 
 *Stream Deck on Linux* needs read access to its hidraw device, for example `/etc/udev/rules.d/70-streamdeck.rules` with `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", TAG+="uaccess"`, then replug it. On Windows close Elgato's Stream Deck app, which otherwise holds the device.
 
-**Not there yet.** No undo, no operator-designed service templates, no OSC/Companion control (it needs the LAN access of phase 10); see [ROADMAP.md](ROADMAP.md).
+**Phone remote.** Settings → Remote → *Allow phones and other computers on this network*. On the phone (same Wi-Fi), open `http://palto.local:8080/` or scan the QR code, then choose *Pair a device* on the operator screen and type the six-digit code on the phone. The phone remote has Next / Previous, Live / Clear / Black / Logo and the current and next slide. Paired devices are listed there and can be removed.
+
+**Companion and OSC.** Settings → Remote → *Accept OSC messages* (UDP 9000). In Bitfocus Companion, add a *Generic: OSC* connection to this computer's address and port 9000, and give buttons actions that send `/palto/next`, `/palto/previous`, `/palto/black`, `/palto/clear`, `/palto/logo`, `/palto/live`, `/palto/next_item`, `/palto/previous_item`, `/palto/play_pause` or `/palto/stop`. Companion on another computer also needs LAN access on and that computer's IP address in the allowed list.
+
+**Video decoding.** Settings → System → Video decoding: Software (default), Automatic, or a hardware decoder found on this computer. See [docs/media-profile.md](docs/media-profile.md) for the formats that play best.
+
+**Not there yet.** No undo, no operator-designed service templates; see [ROADMAP.md](ROADMAP.md).
 
 ### MVP rehearsal
 
