@@ -26,8 +26,9 @@ jobs:
         working-directory: /
         # ffmpeg also provides the CLI the media tests use to make clips;
         # vulkan-swrast (lavapipe) lets the offscreen scene tests run on CPU;
-        # pipewire provides the headers for Wayland screen capture.
-        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip pipewire
+        # pipewire provides the headers for Wayland screen capture; nodejs
+        # runs the UI unit tests (node --test).
+        run: pacman -Syu --noconfirm --needed base-devel git clang rustup ffmpeg webkit2gtk-4.1 gtk3 alsa-lib vulkan-swrast vulkan-icd-loader ttf-liberation unzip pipewire nodejs
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Rust toolchain
