@@ -23,6 +23,15 @@ pub fn write_atomic(path: &Path, value: &impl Serialize) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Like [`write_atomic`], for raw bytes.
+pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+    std::fs::write(&temporary, bytes)?;
+    std::fs::rename(&temporary, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temporary);
+    })
+}
+
 pub struct Loaded<T> {
     pub value: T,
     /// Where an unreadable file was moved, so the operator can recover it.
@@ -66,6 +75,8 @@ pub struct AppConfig {
     pub osc_port: u16,
     /// Other computers allowed to send OSC, as IP addresses.
     pub osc_allowed: Vec<String>,
+    /// Screen capture method (`wgc`, `dxgi`, `portal`, `x11`); empty for the default.
+    pub capture_method: String,
 }
 
 impl Default for AppConfig {
@@ -78,6 +89,7 @@ impl Default for AppConfig {
             osc_enabled: false,
             osc_port: 9000,
             osc_allowed: Vec::new(),
+            capture_method: String::new(),
         }
     }
 }

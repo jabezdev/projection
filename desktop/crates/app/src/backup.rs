@@ -53,7 +53,7 @@ pub fn media_list(db: &Repository, logo_path: &str) -> anyhow::Result<Vec<MediaE
                     paths.push(path);
                     paths.extend(slides.iter().map(String::as_str));
                 }
-                SessionItemKind::Text { .. } => {}
+                SessionItemKind::Text { .. } | SessionItemKind::Capture { .. } => {}
             }
             for path in paths.into_iter().filter(|p| !p.is_empty()) {
                 uses.push((path.to_string(), None, Some(project.name.clone())));

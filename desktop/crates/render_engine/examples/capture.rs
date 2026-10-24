@@ -110,6 +110,7 @@ fn scene(name: &str) -> Scene {
             active: Some((1, 1)),
             size: 4.0,
             video: None,
+            video_cover: false,
             transition_ms: 250.0,
             style: Default::default(),
         }),

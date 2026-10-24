@@ -84,6 +84,51 @@ pub enum SessionItemKind {
     /// Standalone audio shares the video transport options; `confidence` is ignored.
     Audio { path: String, #[serde(default)] options: VideoOptions },
     Presentation { path: String, #[serde(default)] slides: Vec<String> },
+    /// A screen or window of this computer, captured live.
+    Capture { source: CaptureSource, #[serde(default)] options: CaptureOptions },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureKind {
+    Screen,
+    Window,
+}
+
+/// What to capture. `id` lets the capture method find it again (a display
+/// name, a window's program and title, or a screen-sharing restore token);
+/// `name` is shown to the operator.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct CaptureSource {
+    pub kind: CaptureKind,
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureFit {
+    /// The whole capture, letterboxed.
+    #[default]
+    Fit,
+    /// Fills the screen, cropping the edges.
+    Fill,
+}
+
+/// Which screens show a capture, and how it fills each.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct CaptureOptions {
+    pub projection: bool,
+    pub confidence: bool,
+    pub projection_fit: CaptureFit,
+    pub confidence_fit: CaptureFit,
+}
+
+impl Default for CaptureOptions {
+    fn default() -> Self {
+        Self { projection: true, confidence: false, projection_fit: CaptureFit::Fit, confidence_fit: CaptureFit::Fit }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

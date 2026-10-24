@@ -262,6 +262,26 @@ export const items = [
         ]
       }
     }
+  },
+  {
+    "id": 6,
+    "title": "Item",
+    "kind": {
+      "kind": "capture",
+      "data": {
+        "source": {
+          "kind": "window",
+          "id": "window:PowerPoint|Sermon",
+          "name": "Sermon - PowerPoint"
+        },
+        "options": {
+          "projection": true,
+          "confidence": true,
+          "projection_fit": "fill",
+          "confidence_fit": "fit"
+        }
+      }
+    }
   }
 ] satisfies SessionItem[];
 export const outputConfig = {

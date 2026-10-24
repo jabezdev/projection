@@ -236,8 +236,10 @@ pub struct ConfidenceScene {
     pub active: Option<(usize, usize)>,
     /// Lyric size in `cq`.
     pub size: f32,
-    /// When set, the foreground video replaces the teleprompter.
+    /// When set, the foreground video (or a capture) replaces the teleprompter.
     pub video: Option<VideoKey>,
+    /// Fill the screen with the video, cropping, rather than fit it whole.
+    pub video_cover: bool,
     pub transition_ms: f32,
     pub style: ConfidenceStyle,
 }

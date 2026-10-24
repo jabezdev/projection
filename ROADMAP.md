@@ -179,10 +179,10 @@ Decisions:
 - **Whole-desktop audio, not only tab audio.** Shared audio plays through the app's one audio output (ENGINE.md decision 2).
 
 Items:
-- [ ] Capture backend detection and selection setting.
-- [ ] Window and screen pickers.
-- [ ] Capture as an output source with per-screen routing and fit/fill.
-- [ ] Shared capture frame for both screens; resolution changes; disconnect fallback.
+- [x] Capture backend detection and selection setting. *Settings → System → Screen capture. Windows: Windows.Graphics.Capture, Desktop Duplication; Linux: screen-cast portal (PipeWire), X11.*
+- [x] Window and screen pickers. *A list on Windows and X11; the system's own dialog on Wayland, remembered with a restore token.*
+- [x] Capture as an output source with per-screen routing and fit/fill. *A capture service item.*
+- [x] Shared capture frame for both screens; resolution changes; disconnect fallback. *A lost source turns black at once and its cue says why. Checked here with a test pattern; Windows only compile-checked, the portal not tried with its dialog.*
 - [ ] Screen-share web page served by the app: tab, window and screen sharing; resolution and bitrate settings; connection status for the presenter.
 - [ ] Receive the feed in the app (WebRTC) and decode it into a capture source; one sender at a time, or a list the operator picks from. **Open:** one or several senders.
 - [ ] Whole-desktop audio from the sending device, mixed into the single audio output with its own volume.
@@ -230,8 +230,8 @@ Decisions:
 - **No code signing** for now (SmartScreen will warn).
 
 Items:
-- [ ] Updater with background download, install confirmation and a "roll back to previous version" option.
-- [ ] Release notes shown before installing.
+- [x] Updater with background download, install confirmation and a "roll back to previous version" option. *Settings → System → Updates; refuses to install while outputs are shown; keeps the last three installers. Needs the signing key as a CI secret before the first release.*
+- [x] Release notes shown before installing. *From the annotated tag's message.*
 - [ ] macOS: a separate validation pass before claiming support.
 - [ ] Native Wayland on Linux (a Wayland subsurface for the outputs); XWayland works today.
 

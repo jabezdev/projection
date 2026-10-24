@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
+import { ScreenShare, ChevronDown, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
 
 // The operator UI's one icon set: Lucide (https://lucide.dev, ISC license).
 const icons = {
@@ -21,6 +21,7 @@ const icons = {
   up: ChevronUp,
   down: ChevronDown,
   close: X,
+  capture: ScreenShare,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

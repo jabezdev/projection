@@ -184,7 +184,7 @@ fn a_video_layer_appears_only_with_its_first_frame() {
 fn confidence_video_replaces_the_teleprompter_once_ready() {
     let Some(mut capture) = capture(OutputRole::Confidence) else { return };
     let group = ConfidenceGroup { key: "1".into(), code: "V1".into(), title: "Song".into(), color: [0.3, 0.5, 0.9, 1.0], lines: vec!["line".into()] };
-    let teleprompter = ConfidenceScene { groups: vec![group], active: Some((0, 0)), size: 4.0, video: None, transition_ms: 200.0, style: Default::default() };
+    let teleprompter = ConfidenceScene { groups: vec![group], active: Some((0, 0)), size: 4.0, video: None, video_cover: false, transition_ms: 200.0, style: Default::default() };
     let t0 = Instant::now();
     capture.set_scene(Scene::Confidence(teleprompter.clone()), t0);
     let lyrics = capture.render(SIZE, t0 + Duration::from_secs(1));
@@ -231,7 +231,7 @@ fn long_service_layout_time() {
         })
         .collect();
     let t0 = Instant::now();
-    let scene = ConfidenceScene { groups, active: Some((150, 2)), size: 4.0, video: None, transition_ms: 200.0, style: Default::default() };
+    let scene = ConfidenceScene { groups, active: Some((150, 2)), size: 4.0, video: None, video_cover: false, transition_ms: 200.0, style: Default::default() };
     capture.set_scene(Scene::Confidence(scene.clone()), t0);
     let started = Instant::now();
     capture.render((1920, 1080), t0);

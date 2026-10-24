@@ -8,7 +8,8 @@ struct Uniforms {
     r: vec4<f32>,
     g: vec4<f32>,
     b: vec4<f32>,
-    // Output size in pixels; x > 0.5 in `flags` means interleaved UV (NV12).
+    // Output size in pixels. flags.x > 0.5: interleaved UV (NV12); flags.y
+    // > 0.5: the first plane is already RGB (a BGRA capture), only scaled.
     size: vec2<f32>,
     flags: vec2<f32>,
 }
@@ -29,7 +30,11 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = position.xy / u.size;
-    let luma = textureSample(y_plane, planes, uv).r;
+    let first = textureSample(y_plane, planes, uv);
+    if (u.flags.y > 0.5) {
+        return vec4<f32>(first.rgb, 1.0);
+    }
+    let luma = first.r;
     let chroma = textureSample(u_plane, planes, uv);
     let cr = select(textureSample(v_plane, planes, uv).r, chroma.g, u.flags.x > 0.5);
     let yuv = vec3<f32>(luma, chroma.r, cr);

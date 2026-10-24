@@ -74,9 +74,23 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Cross-build tools
         run: sudo apt-get update && sudo apt-get install -y clang lld llvm libarchive-tools
-      # The tag's commit already carries the version to release.
+      # The annotated tag's message is the release notes, shown in PALTO
+      # before an update installs.
+      - name: Release notes
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.txt
+      # The tag's commit already carries the version to release. The signing
+      # key (repository secret) lets installed copies update to it.
       - name: Build the installer
-        run: desktop/tools/build-windows.sh --no-bump
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: RELEASE_NOTES="$(cat release-notes.txt)" desktop/tools/build-windows.sh --no-bump
       - uses: softprops/action-gh-release@v2
         with:
-          files: desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          body_path: release-notes.txt
+          files: |
+            desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+            desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json

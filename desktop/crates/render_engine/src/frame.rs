@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::paint::GpuTexture;
-use crate::yuv::{YuvPixels, YuvPlanes};
+use crate::yuv::{YuvLayout, YuvPixels, YuvPlanes};
 use crate::Gpu;
 
 /// A frame's pixels as decoded.
@@ -11,6 +11,8 @@ pub enum FramePixels<'a> {
     Rgba { data: &'a [u8], stride: usize },
     /// Converted on the GPU; may be larger than the texture (it is scaled to fit).
     Yuv(YuvPixels<'a>),
+    /// 8-bit BGRA or BGRx (screen captures); swizzled and scaled on the GPU.
+    Bgra { data: &'a [u8], stride: usize },
 }
 
 /// A decoded frame supplied by [`VideoFrames`].
@@ -31,6 +33,8 @@ pub enum VideoKey {
     /// A built-in animated background, rendered on the GPU rather than
     /// decoded: `shader_bg::ShaderSpec` encoded as a string.
     Shader(String),
+    /// A live screen or window capture, by its source id.
+    Capture(String),
 }
 
 /// Supplies the frame due now for each video. Polled by one pump thread,
@@ -127,6 +131,14 @@ impl SharedFrame {
         self.last_id.store(frame.id(), Ordering::Release);
         let shown = match frame.pixels() {
             FramePixels::Rgba { data, stride } => self.upload_rgba(&gpu.queue, (width, height), data, stride),
+            FramePixels::Bgra { data, stride } => {
+                let pixels = YuvPixels { layout: YuvLayout::Bgra, planes: [(data, stride), (&[][..], 0), (&[][..], 0)], matrix: crate::YuvMatrix::Bt709, full_range: true };
+                let out = fit_within((width, height), self.capacity);
+                let converted = width > 0
+                    && height > 0
+                    && YuvPlanes::convert(&mut self.yuv.lock().expect("yuv planes poisoned"), gpu, &pixels, (width, height), &self.texture, out);
+                converted.then_some(out)
+            }
             FramePixels::Yuv(pixels) => {
                 let out = fit_within((width, height), self.capacity);
                 let converted = width > 0

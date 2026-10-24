@@ -365,7 +365,9 @@ impl Engine {
     /// the intentional song background, never a previous foreground video.
     fn item_background(&self, item: &SessionItem) -> Option<Background> {
         match &item.kind {
-            SessionItemKind::Text { .. } | SessionItemKind::Audio { .. } => self.song_background.clone(),
+            // A capture is drawn over the song background by the scene feed,
+            // on the screens it is routed to.
+            SessionItemKind::Text { .. } | SessionItemKind::Audio { .. } | SessionItemKind::Capture { .. } => self.song_background.clone(),
             SessionItemKind::Image { path } => Some(Background { kind: BackgroundKind::Image, path: path.clone() }),
             SessionItemKind::Video { path, .. } => Some(Background { kind: BackgroundKind::Video, path: path.clone() }),
             SessionItemKind::Presentation { path, slides } => {

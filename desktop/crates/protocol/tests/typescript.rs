@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 
 use protocol::{
-    EngineCommand, EngineEvent, InputBinding, InputBindings, InputTrigger, MediaAction, MediaDirective, MidiMessage, OutputConfig, PlaybackKind,
+    CaptureFit, CaptureKind, CaptureOptions, CaptureSource, EngineCommand, EngineEvent, InputBinding, InputBindings, InputTrigger, MediaAction, MediaDirective, MidiMessage, OutputConfig, PlaybackKind,
     PlaybackPhase, PlaybackReport, PlaybackState, SessionItem, SessionItemKind, VideoOptions,
 };
 use serde::Serialize;
@@ -100,6 +100,13 @@ fn generated() -> String {
                 item(3, SessionItemKind::Video { path: "/media/b.mp4".into(), options: options.clone() }),
                 item(4, SessionItemKind::Audio { path: "/media/c.mp3".into(), options }),
                 item(5, SessionItemKind::Presentation { path: "/media/d.png".into(), slides: vec!["/media/d.png".into()] }),
+                item(
+                    6,
+                    SessionItemKind::Capture {
+                        source: CaptureSource { kind: CaptureKind::Window, id: "window:PowerPoint|Sermon".into(), name: "Sermon - PowerPoint".into() },
+                        options: CaptureOptions { projection: true, confidence: true, projection_fit: CaptureFit::Fill, confidence_fit: CaptureFit::Fit },
+                    },
+                ),
             ],
         ),
         sample("outputConfig", "OutputConfig", OutputConfig::default()),

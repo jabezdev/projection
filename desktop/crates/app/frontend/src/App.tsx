@@ -2,10 +2,12 @@ import LyricStream from './LyricStream';
 import OutputSettings from './OutputSettings';
 import OutputControls from './OutputControls';
 import PresentationEditor from './PresentationEditor';
+import CaptureEditor from './CaptureEditor';
 import PartEditor, { type PartEdit } from './PartEditor';
 import SessionPane from './SessionPane';
 import { defaultOutputConfig, useOutputState } from './outputState';
-import { invoke } from './tauri';
+import { invoke, listen } from './tauri';
+import type { UpdateState } from './UpdateSettings';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SongEditor from './SongEditor';
 import LibraryPanel from './LibraryPanel';
@@ -32,7 +34,14 @@ function App() {
   const outputsLoading = useOutputsLoading();
   const [confirmDialog, confirm] = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateReady, setUpdateReady] = useState<string | null>(null);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<UpdateState>('update:state', event => { if (event.payload.state === 'ready') setUpdateReady(event.payload.version); }).then(u => { unlisten = u; });
+    return () => unlisten?.();
+  }, []);
   const [presentationEditor, setPresentationEditor] = useState<SessionItem | 'new' | null>(null);
+  const [captureEditor, setCaptureEditor] = useState<SessionItem | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const [library, setLibrary] = useState<SongHeader[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -100,6 +109,7 @@ function App() {
   }
   return <div className="operator-shell">
 
+    {updateReady && <div role="status" className="ui-notice">PALTO {updateReady} is ready to install: Settings → System.<button aria-label="Dismiss update notice" onClick={() => setUpdateReady(null)}><Icon name="close"/></button></div>}
     {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close"/></button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
       <SessionPane project={project} pending={outputsLoading.projection} projectRef={projectRef} projects={projects} program={program} run={run} persist={persist}
@@ -110,7 +120,7 @@ function App() {
           await saveQueue.current; await invoke('load_project', { projectId });
         })}
         onOpenService={mode => void run(() => openService(mode))} onOpenLibrary={() => void run(openLibrary)} onNewSong={() => setEditor({})}
-        onEditSong={item => setEditor({ id: item.id, title: item.title || '', song: itemSong(item) })} onEditPresentation={setPresentationEditor} onEditPart={setPartEditor}
+        onEditSong={item => setEditor({ id: item.id, title: item.title || '', song: itemSong(item) })} onEditPresentation={setPresentationEditor} onEditCapture={setCaptureEditor} onEditPart={setPartEditor}
         onCue={selectFromSchedule} onVideoOptions={updateVideoOptions}/>
       {resizeDivider(0)}
       <section className="lyrics-pane" aria-label="Continuous lyrics"><div ref={streamRef} className="pane-scroll lyric-stream">
@@ -121,6 +131,12 @@ function App() {
       <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
     {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }]}/>}
+    {captureEditor && <CaptureEditor item={captureEditor} onClose={() => setCaptureEditor(null)} onSave={async item => {
+      const current = projectRef.current;
+      if (!current) return;
+      await persist({ ...current, session: { items: current.session.items.map(old => old.id === item.id ? item : old) } });
+      setCaptureEditor(null);
+    }}/>}
     {presentationEditor && <PresentationEditor images={media} item={presentationEditor === 'new' ? undefined : presentationEditor} onClose={() => setPresentationEditor(null)} onSave={async item => {
       const current = projectRef.current; if (!current) throw new Error('Select a service first.');
       await persist({ ...current, session: { items: presentationEditor === 'new' ? [...current.session.items, item] : current.session.items.map(old => old.id === item.id ? item : old) } });

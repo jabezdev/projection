@@ -47,8 +47,9 @@ impl NativeMedia {
         Ok(Arc::new(Self { engine, tracked, running, reporter: Mutex::new(Some(reporter)) }))
     }
 
-    pub fn frames(self: &Arc<Self>) -> Arc<dyn VideoFrames> {
-        Arc::new(MediaFrames(self.engine.clone()))
+    /// Decoded video and live captures, for the renderer's frame pump.
+    pub fn frames(self: &Arc<Self>, captures: Arc<crate::capture::Captures>) -> Arc<dyn VideoFrames> {
+        Arc::new(MediaFrames(self.engine.clone(), captures))
     }
 
     /// Keeps exactly these muted looping videos open: `playing` ones play,
@@ -213,7 +214,7 @@ impl MediaBackend for NativeMediaBackend {
     }
 }
 
-struct MediaFrames(Arc<MediaEngine>);
+struct MediaFrames(Arc<MediaEngine>, Arc<crate::capture::Captures>);
 
 struct Frame(Arc<VideoFrame>);
 
@@ -255,6 +256,7 @@ impl VideoFrames for MediaFrames {
             VideoKey::Ambient(path) => self.0.ambient_frame(path, now_us()),
             // Rendered by the frame pump, never decoded.
             VideoKey::Shader(_) => None,
+            VideoKey::Capture(id) => return self.1.frame(id),
         };
         frame.map(|frame| Arc::new(Frame(frame)) as Arc<dyn PixelFrame>)
     }

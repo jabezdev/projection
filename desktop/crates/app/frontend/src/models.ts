@@ -5,7 +5,13 @@ export type Media = { id: number; title: string; kind: MediaKind; path: string }
 export type SessionItemKind =
   | { kind: 'text'; data: { steps: string[] } }
   | { kind: MediaKind; data: { path: string; options?: VideoOptions } }
-  | { kind: 'presentation'; data: { path: string; slides?: string[] } };
+  | { kind: 'presentation'; data: { path: string; slides?: string[] } }
+  | { kind: 'capture'; data: { source: CaptureSource; options?: CaptureOptions } };
+export type CaptureKind = 'screen' | 'window';
+export type CaptureSource = { kind: CaptureKind; id: string; name: string };
+export type CaptureFit = 'fit' | 'fill';
+export type CaptureOptions = { projection: boolean; confidence: boolean; projection_fit: CaptureFit; confidence_fit: CaptureFit };
+export const defaultCaptureOptions: CaptureOptions = { projection: true, confidence: false, projection_fit: 'fit', confidence_fit: 'fit' };
 export type SessionItem = { id: number; title: string | null; kind: SessionItemKind; song?: string; background?: string };
 export type SongHeader = { id: number; title: string };
 export type SongModel = SongHeader & { lyrics: string };

@@ -225,7 +225,7 @@ fn clock_text() -> String {
 
 impl ConfidenceRenderer {
     pub fn set_scene(&mut self, scene: ConfidenceScene, media: &MediaTextures, now: Instant) {
-        let video = scene.video.clone().map(|key| MediaLayer { source: MediaSource::Video(key), cover: false });
+        let video = scene.video.clone().map(|key| MediaLayer { source: MediaSource::Video(key), cover: scene.video_cover });
         self.video.set(video.as_ref(), media, now, scene.transition_ms);
         if scene.groups != self.scene.groups || scene.size != self.scene.size || scene.active != self.scene.active || scene.style != self.scene.style {
             self.revision += 1;

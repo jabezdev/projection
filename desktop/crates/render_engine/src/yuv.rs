@@ -12,6 +12,8 @@ pub enum YuvLayout {
     I420,
     /// Y plane and one interleaved UV plane.
     Nv12,
+    /// Not YUV: one BGRA plane, only swizzled and scaled (screen captures).
+    Bgra,
 }
 
 /// The matrix a frame was encoded with.
@@ -179,6 +181,7 @@ impl YuvPlanes {
                 texture("Y plane", wgpu::TextureFormat::R8Unorm, (width, height)),
                 texture("UV plane", wgpu::TextureFormat::Rg8Unorm, (cw, ch)),
             ],
+            YuvLayout::Bgra => vec![texture("BGRA plane", wgpu::TextureFormat::Bgra8Unorm, (width, height))],
         };
         let views: Vec<_> = textures.iter().map(|t| t.create_view(&wgpu::TextureViewDescriptor::default())).collect();
         let uniforms = gpu.device.create_buffer(&wgpu::BufferDescriptor {
@@ -188,15 +191,16 @@ impl YuvPlanes {
             mapped_at_creation: false,
         });
         let pipeline = gpu.yuv();
-        // NV12 has no V plane; the shader ignores binding 3 then.
-        let v_view = views.get(2).unwrap_or(&views[1]);
+        // NV12 has no V plane and BGRA no chroma; the shader ignores them then.
+        let u_view = views.get(1).unwrap_or(&views[0]);
+        let v_view = views.get(2).unwrap_or(u_view);
         let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("YUV planes"),
             layout: &pipeline.layout,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&views[0]) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&views[1]) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(u_view) },
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(v_view) },
                 wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&pipeline.sampler) },
             ],
@@ -221,6 +225,7 @@ impl YuvPlanes {
             // (width, height, bytes per pixel) of each plane.
             YuvLayout::I420 => &[(width, height, 1), (cw, ch, 1), (cw, ch, 1)],
             YuvLayout::Nv12 => &[(width, height, 1), (cw, ch, 2)],
+            YuvLayout::Bgra => &[(width, height, 4)],
         };
         let valid = planes.iter().zip(pixels.planes).all(|(&(w, h, bpp), (data, stride))| {
             let row = (w * bpp) as usize;
@@ -242,7 +247,7 @@ impl YuvPlanes {
             );
         }
         let [r, g, b] = conversion(pixels.matrix, pixels.full_range);
-        let flags = [if pixels.layout == YuvLayout::Nv12 { 1.0 } else { 0.0 }, 0.0];
+        let flags = [if pixels.layout == YuvLayout::Nv12 { 1.0 } else { 0.0 }, if pixels.layout == YuvLayout::Bgra { 1.0 } else { 0.0 }];
         let uniforms = Uniforms { r, g, b, size: [out.0 as f32, out.1 as f32], flags };
         if state.last != Some(uniforms) {
             gpu.queue.write_buffer(&state.uniforms, 0, bytemuck::bytes_of(&uniforms));
@@ -310,12 +315,15 @@ mod tests {
             self.size
         }
         fn pixels(&self) -> crate::FramePixels<'_> {
+            if self.layout == YuvLayout::Bgra {
+                return crate::FramePixels::Bgra { data: &self.planes[0].0, stride: self.planes[0].1 };
+            }
             let plane = |i: usize| self.planes.get(i).map_or((&[][..], 0), |(data, stride)| (&data[..], *stride));
             crate::FramePixels::Yuv(YuvPixels { layout: self.layout, planes: [plane(0), plane(1), plane(2)], matrix: YuvMatrix::Bt709, full_range: false })
         }
     }
 
-    /// A solid BT.709 limited-range red frame with padded rows.
+    /// A solid red frame with padded rows (BT.709 limited range, or BGRx).
     fn red(layout: YuvLayout, (width, height): (u32, u32)) -> Frame {
         let (cw, ch) = chroma_size(width, height);
         let plane = |w: u32, h: u32, value: &[u8]| {
@@ -326,6 +334,7 @@ mod tests {
         let planes = match layout {
             YuvLayout::I420 => vec![plane(width, height, &[63]), plane(cw, ch, &[102]), plane(cw, ch, &[240])],
             YuvLayout::Nv12 => vec![plane(width, height, &[63]), plane(cw, ch, &[102, 240])],
+            YuvLayout::Bgra => vec![plane(width, height, &[0, 0, 255, 0])],
         };
         Frame { layout, size: (width, height), planes }
     }
@@ -340,6 +349,7 @@ mod tests {
             (YuvLayout::I420, (64, 36), (64, 36)),
             (YuvLayout::Nv12, (65, 37), (65, 37)),
             (YuvLayout::I420, (3840, 2160), (1920, 1080)),
+            (YuvLayout::Bgra, (2560, 1440), (1920, 1080)),
         ] {
             let frame = crate::SharedFrame::new(&gpu.device, 1920, 1080);
             assert!(frame.upload(&gpu, &red(layout, size)), "{layout:?} {size:?} uploads");

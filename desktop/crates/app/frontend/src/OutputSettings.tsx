@@ -3,6 +3,7 @@ import { invoke, isTauri } from './tauri';
 import { Icon } from './Icons';
 import { defaultOutputConfig, type OutputConfig } from './outputState';
 import { NativePreview } from './NativePreview';
+import UpdateSettings from './UpdateSettings';
 
 type Tab = 'projection' | 'confidence' | 'backgrounds' | 'system';
 const TABS: [Tab, string][] = [['projection', 'Projection'], ['confidence', 'Confidence'], ['backgrounds', 'Logo & backgrounds'], ['system', 'System']];
@@ -68,6 +69,21 @@ export default function OutputSettings({ config, onChange, onClose, extraTabs }:
 type AppInfo = { version: string; data_dir: string; last_backup_ms: number | null };
 type VideoDecoding = { choice: string; available: { name: string; label: string }[] };
 
+type CaptureMethods = { current: string | null; choice: string; methods: { name: string; label: string; system_picker: boolean }[] };
+
+/** The screen capture method: automatic (the first that works) or one chosen. */
+function CaptureMethodSettings({ onError }: { onError: (message: string) => void }) {
+  const [methods, setMethods] = useState<CaptureMethods | null>(null);
+  useEffect(() => { void invoke<CaptureMethods>('get_capture_methods').then(setMethods).catch(e => onError(String(e))); }, [onError]);
+  if (!methods) return null;
+  const choose = (name: string) => void invoke('set_capture_method', { name }).then(() => invoke<CaptureMethods>('get_capture_methods')).then(setMethods).catch(e => onError(String(e)));
+  const automatic = methods.methods[0]?.label;
+  return <fieldset><legend>Screen capture</legend>
+    <label>Capture method<select aria-label="Capture method" value={methods.choice} onChange={e => choose(e.target.value)}><option value="">Automatic{automatic ? ` (${automatic})` : ''}</option>{methods.methods.map(m => <option key={m.name} value={m.name}>{m.label}</option>)}</select></label>
+    <small>{methods.methods.length ? 'Switch if captures look wrong or stay black; running captures restart with the new method.' : 'No screen capture method is available on this computer.'}</small>
+  </fieldset>;
+}
+
 /** Software decoding, automatic hardware decoding, or one accelerator found on this computer. */
 function VideoDecodingSettings({ onError }: { onError: (message: string) => void }) {
   const [decoding, setDecoding] = useState<VideoDecoding | null>(null);
@@ -103,7 +119,9 @@ function SystemSettings({ onError }: { onError: (message: string) => void }) {
       <button onClick={() => void invoke('open_backups_folder').catch(e => onError(String(e)))}>Open backups folder</button>
       <small>{status || `A backup holds the library, services and settings, plus a list of the media files they use (not the files themselves). One is also made automatically each week${info?.last_backup_ms ? `; the last was ${new Date(info.last_backup_ms).toLocaleString()}` : ''}.`}</small>
     </fieldset>
+    <UpdateSettings onError={onError}/>
     <VideoDecodingSettings onError={onError}/>
+    <CaptureMethodSettings onError={onError}/>
     <fieldset><legend>Troubleshooting</legend>
       <button onClick={() => void invoke('open_logs_folder').catch(e => onError(String(e)))}>Open logs folder</button>
       <small>The log files show what happened if something goes wrong during a service.</small>

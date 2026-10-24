@@ -5,6 +5,7 @@ import ScheduleVideo from './ScheduleVideo';
 import { defaultVideoOptions, type ProjectModel, type SessionItem, type VideoOptions } from './models';
 import { arrangedParts, itemSong, partCode, partColor, slides } from './song';
 import type { ProgramState, ProjectHeader } from './useEngine';
+import { CaptureCue } from './CaptureEditor';
 
 type Props = {
   project: ProjectModel | null;
@@ -22,13 +23,14 @@ type Props = {
   onNewSong: () => void;
   onEditSong: (item: SessionItem) => void;
   onEditPresentation: (item: SessionItem) => void;
+  onEditCapture: (item: SessionItem) => void;
   onEditPart: (part: { itemId: number; partId: string; label: string; lyrics: string }) => void;
   onCue: (item: SessionItem, index?: number) => Promise<unknown>;
   onVideoOptions: (id: number, options: VideoOptions) => void;
 };
 
 /** The left column: service choice, library buttons and the service's items with their part cues. */
-export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onOpenService, onOpenLibrary, onNewSong, onEditSong, onEditPresentation, onEditPart, onCue, onVideoOptions }: Props) {
+export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onOpenService, onOpenLibrary, onNewSong, onEditSong, onEditPresentation, onEditCapture, onEditPart, onCue, onVideoOptions }: Props) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [dragged, setDragged] = useState<number | null>(null);
   return <section className="session-pane"><div className="operator-settings-bar"><button aria-label="Open output settings" onClick={onOpenSettings}><Icon name="settings"/><span>Settings</span></button></div><div className="session-tools" aria-label="Service and library controls"><div className="service-select-row"><select aria-label="Session / service" value={project?.id || ''} onChange={e => {
@@ -45,6 +47,7 @@ export default function SessionPane({ project, pending, projectRef, projects, pr
           <span className="drag-handle" title="Drag to reorder"><Icon name="grip"/></span><Icon name="chevron"/><span className="song-name">{item.title || item.kind.kind}</span>
         </button>
         {item.kind.kind === 'video' && <button className="confidence-header-toggle" role="switch" aria-checked={!!item.kind.data.options?.confidence} aria-label={`Show ${item.title || 'video'} on confidence screen`} title="Show video on confidence screen (silent)" onDragStart={e => { e.preventDefault(); e.stopPropagation(); }} onClick={() => { if (item.kind.kind === 'video') onVideoOptions(item.id, { ...defaultVideoOptions, ...item.kind.data.options, confidence: !item.kind.data.options?.confidence }); }}><span className="confidence-toggle-check" aria-hidden="true">{item.kind.data.options?.confidence ? '✓' : ''}</span><span>Confidence</span></button>}
+        {item.kind.kind === 'capture' && <button className="song-edit icon-button" aria-label={`Edit screen capture ${item.title}`} title="Edit what is captured and where it shows" onClick={() => onEditCapture(item)}><Icon name="edit"/></button>}
         {(item.kind.kind === 'text' || item.kind.kind === 'presentation') && <button className="song-edit icon-button" aria-label={`Edit ${item.kind.kind === 'presentation' ? 'presentation' : 'song'} ${item.title}`} title={item.kind.kind === 'presentation' ? 'Edit presentation slides' : 'Edit song arrangement and background'} onClick={() => item.kind.kind === 'presentation' ? onEditPresentation(item) : onEditSong(item)}><Icon name="edit"/></button>}
       </header>
       {!collapsed.has(item.id) && item.kind.kind === 'text' && <div className="part-cues" aria-label={`${item.title} arrangement`}>{(() => {
@@ -62,6 +65,7 @@ export default function SessionPane({ project, pending, projectRef, projects, pr
       })()}</div>}
       {!collapsed.has(item.id) && item.kind.kind === 'presentation' && <PresentationCues item={item} active={program?.active_item_id === item.id} step={program?.active_step_index} onSelect={index => void run(() => onCue(item, index))}/> }
       {!collapsed.has(item.id) && item.kind.kind === 'audio' && <button className="schedule-audio-cue" onClick={() => void run(() => onCue(item))}><Icon name="audio"/>Audio<Icon name="live"/></button>}
+      {!collapsed.has(item.id) && item.kind.kind === 'capture' && <CaptureCue item={item} active={program?.active_item_id === item.id} onSelect={() => void run(() => onCue(item))}/>}
       {!collapsed.has(item.id) && item.kind.kind === 'video' && <ScheduleVideo title={item.title || 'Untitled video'} path={item.kind.data.path} active={program?.active_item_id === item.id} onSelect={() => void run(() => onCue(item))}/>}
     </article>)}
   </div></section>;

@@ -3,6 +3,7 @@
 
 mod awake;
 mod backup;
+mod capture;
 mod commands;
 mod displays;
 mod engine_host;
@@ -18,6 +19,7 @@ mod remote;
 mod settings;
 mod storage;
 mod streamdeck;
+mod updates;
 use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
@@ -105,6 +107,7 @@ fn main() -> anyhow::Result<()> {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_output_sizes,
             get_output_preview,
@@ -117,6 +120,15 @@ fn main() -> anyhow::Result<()> {
             get_app_info,
             get_video_decoding,
             set_video_decoder,
+            capture::get_capture_methods,
+            capture::set_capture_method,
+            capture::list_capture_sources,
+            capture::pick_capture_source,
+            capture::get_capture_status,
+            updates::get_update_status,
+            updates::check_for_update,
+            updates::install_update,
+            updates::reinstall_version,
             remote::get_remote_status,
             remote::set_remote_settings,
             remote::start_pairing,
@@ -234,6 +246,8 @@ fn main() -> anyhow::Result<()> {
             }
             app.manage(StartupWarnings(warnings));
             app.manage(ChosenPdf::default());
+            app.manage(updates::Updates::new(&app_data_dir));
+            updates::start_background_checks(app.handle());
             app.manage(DataDir(app_data_dir.clone()));
             // A weekly automatic backup, checked shortly after start and then
             // every few hours, so a long-running app still makes one.
@@ -381,7 +395,9 @@ fn main() -> anyhow::Result<()> {
             // output windows.
             let media = NativeMedia::start(engine.clone())?;
             app.manage(media.clone());
-            native_output::start(app, [&projection_window, &confidence_window], media.frames())?;
+            let captures = Arc::new(capture::Captures::new(&config.read().expect("config lock poisoned").capture_method, &app_data_dir));
+            app.manage(captures.clone());
+            native_output::start(app, [&projection_window, &confidence_window], media.frames(captures.clone()))?;
             // Scenes follow every engine change and output style edit.
             let feed = {
                 let handle = app.handle().clone();
@@ -391,6 +407,7 @@ fn main() -> anyhow::Result<()> {
                     snapshot.clone(),
                     move || handle.state::<OutputState>().config.lock().map(|c| c.clone()).unwrap_or_default(),
                     move |scenes, plan| {
+                        captures.set_active(&plan.captures);
                         ambient.set_ambient(&plan.ambient, &plan.prepared_ambient);
                         ambient.prepare(plan.foreground.as_deref());
                         if let Some(outputs) = apply_handle.try_state::<NativeOutputs>() {
@@ -454,7 +471,7 @@ fn main() -> anyhow::Result<()> {
 
 /// Writes pending project saves, then stops native presentation (and its
 /// frame polling) before media decoders. Safe to call more than once.
-fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+pub(crate) fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(store) = app.try_state::<Storage>() {
         if !store.flush(EXIT_FLUSH) {
             error!("Exiting with project saves still pending");
@@ -468,6 +485,9 @@ fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
     if let Some(media) = app.try_state::<Arc<NativeMedia>>() {
         media.shutdown();
+    }
+    if let Some(captures) = app.try_state::<Arc<capture::Captures>>() {
+        captures.shutdown();
     }
     if let Some(recovery) = app.try_state::<Arc<recovery::Recovery>>() {
         recovery.clean_exit();

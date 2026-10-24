@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use core_engine::song::Song;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use protocol::{
-    BackgroundFit, BackgroundKind, DisplayMode, EngineSnapshot, OutputConfig, PlaybackState, ProgramState, ProjectModel,
+    BackgroundFit, BackgroundKind, CaptureFit, CaptureSource, DisplayMode, EngineSnapshot, OutputConfig, PlaybackState, ProgramState, ProjectModel,
     SessionItem, SessionItemKind, TextAlign as ConfigAlign, VerticalAlign,
 };
 use render_engine::{
@@ -39,6 +39,14 @@ fn foreground_video(item: Option<&SessionItem>, playback: Option<&PlaybackState>
         }
         _ => None,
     }
+}
+
+/// The capture `item` shows, with whether it fills (crops) the screen, if
+/// it is routed to the projection (`confidence` false) or confidence screen.
+fn capture_on(item: Option<&SessionItem>, confidence: bool) -> Option<(VideoKey, bool)> {
+    let SessionItemKind::Capture { source, options } = &item?.kind else { return None };
+    let (shown, fit) = if confidence { (options.confidence, options.confidence_fit) } else { (options.projection, options.projection_fit) };
+    shown.then(|| (VideoKey::Capture(source.id.clone()), fit == CaptureFit::Fill))
 }
 
 pub fn lyric_style(config: &OutputConfig) -> LyricStyle {
@@ -132,7 +140,9 @@ pub fn main_scene(config: &OutputConfig, program: &ProgramState, project: Option
     let item = active_item(program, project);
     let item_is_video = matches!(item.map(|i| &i.kind), Some(SessionItemKind::Video { .. }));
     let fit_cover = config.background_fit == BackgroundFit::Cover;
-    let background = program.background.as_ref().and_then(|bg| match bg.kind {
+    // A capture routed here replaces the background; otherwise the song background stays.
+    let capture = capture_on(item, false).map(|(key, cover)| MediaLayer { source: MediaSource::Video(key), cover });
+    let background = capture.or_else(|| program.background.as_ref().and_then(|bg| match bg.kind {
         BackgroundKind::Image => Some(MediaLayer { source: MediaSource::Image(bg.path.clone()), cover: fit_cover }),
         // The video item itself plays in the foreground session.
         BackgroundKind::Video if item_is_video => {
@@ -141,7 +151,7 @@ pub fn main_scene(config: &OutputConfig, program: &ProgramState, project: Option
         // A song's background video loops muted and always fills the screen.
         BackgroundKind::Video => Some(MediaLayer { source: MediaSource::Video(VideoKey::Ambient(bg.path.clone())), cover: true }),
         BackgroundKind::Shader => Some(MediaLayer { source: MediaSource::Video(shader_key(config, &bg.path)), cover: true }),
-    });
+    }));
     let logo = Some(config.logo_path.trim()).filter(|p| !p.is_empty()).map(|path| {
         if is_video(path) {
             MediaSource::Video(VideoKey::Ambient(path.to_string()))
@@ -189,6 +199,7 @@ pub fn confidence_sample_scene(config: &OutputConfig) -> ConfidenceScene {
         active: Some((1, 0)),
         size: config.confidence_size as f32,
         video: None,
+        video_cover: false,
         transition_ms: config.confidence_transition as f32,
         style: confidence_style(config),
     }
@@ -205,6 +216,7 @@ pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, Con
             SessionItemKind::Video { .. } => ("video", &Vec::new()),
             SessionItemKind::Audio { .. } => ("audio", &Vec::new()),
             SessionItemKind::Presentation { .. } => ("presentation", &Vec::new()),
+            SessionItemKind::Capture { .. } => ("capture", &Vec::new()),
         };
         if kind != "text" {
             let label = title.clone().unwrap_or_else(|| kind.to_string());
@@ -249,13 +261,19 @@ pub fn confidence_scene(config: &OutputConfig, program: &ProgramState, project: 
             .map(|index| (index, step - groups[index].1))
     });
     let item = active_item(program, project);
-    let shows_video = program.display == DisplayMode::Live
-        && matches!(item.map(|i| &i.kind), Some(SessionItemKind::Video { options, .. }) if options.confidence);
+    let live = program.display == DisplayMode::Live;
+    let shows_video = live && matches!(item.map(|i| &i.kind), Some(SessionItemKind::Video { options, .. }) if options.confidence);
+    let capture = capture_on(item, true).filter(|_| live);
     ConfidenceScene {
         groups: groups.into_iter().map(|(_, _, g)| g).collect(),
         active,
         size: config.confidence_size as f32,
-        video: if shows_video { foreground_video(item, playback) } else { None },
+        video_cover: capture.as_ref().is_some_and(|(_, cover)| *cover),
+        video: match capture {
+            Some((key, _)) => Some(key),
+            None if shows_video => foreground_video(item, playback),
+            None => None,
+        },
         transition_ms: config.confidence_transition as f32,
         style: confidence_style(config),
     }
@@ -289,6 +307,8 @@ pub struct MediaPlan {
     pub foreground: Option<String>,
     /// Stills of neighboring items, slides either side, the logo image.
     pub images: Vec<String>,
+    /// Screens or windows being captured for the current item.
+    pub captures: Vec<CaptureSource>,
 }
 
 /// Plans `main`'s media and what the neighboring cues need.
@@ -307,6 +327,11 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
     }
     let items = project.map(|p| p.session.items.as_slice()).unwrap_or_default();
     let current = program.active_item_id.and_then(|id| items.iter().position(|item| item.id == id));
+    if let Some(SessionItemKind::Capture { source, options }) = current.map(|i| &items[i].kind) {
+        if options.projection || options.confidence {
+            plan.captures.push(source.clone());
+        }
+    }
     // A presentation's slides either side of the current one.
     if let Some(SessionItemKind::Presentation { slides, .. }) = current.map(|i| &items[i].kind) {
         let step = program.active_step_index.unwrap_or(0) as usize;
@@ -330,7 +355,7 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
                     plan.foreground = Some(path.clone());
                 }
             }
-            SessionItemKind::Text { .. } => {}
+            SessionItemKind::Text { .. } | SessionItemKind::Capture { .. } => {}
         }
         if let Some(background) = item.background.as_deref().filter(|b| !b.starts_with(protocol::SHADER_PREFIX)) {
             if is_video(background) {
@@ -610,5 +635,30 @@ mod tests {
         let style = lyric_style(&config);
         assert!((style.box_color[3] - 0.5).abs() < 1e-6);
         assert!((style.box_color[0] - 16.0 / 255.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_capture_shows_on_the_screens_it_is_routed_to() {
+        use protocol::{CaptureFit, CaptureKind, CaptureOptions, CaptureSource};
+        let source = CaptureSource { kind: CaptureKind::Window, id: "window:app|Slides".into(), name: "Slides".into() };
+        let capture = |options: CaptureOptions| SessionItem { id: 9, title: None, kind: SessionItemKind::Capture { source: source.clone(), options }, song: None, background: None };
+        let config = OutputConfig::default();
+        let song_bg = Background { kind: BackgroundKind::Image, path: "/bg.png".into() };
+        let program = ProgramState { active_item_id: Some(9), background: Some(song_bg), ..ProgramState::default() };
+        let key = VideoKey::Capture(source.id.clone());
+
+        let both = project(vec![capture(CaptureOptions { projection: true, confidence: true, projection_fit: CaptureFit::Fit, confidence_fit: CaptureFit::Fill })]);
+        let main = main_scene(&config, &program, Some(&both), None);
+        assert_eq!(main.background, Some(MediaLayer { source: MediaSource::Video(key.clone()), cover: false }));
+        let confidence = confidence_scene(&config, &program, Some(&both), None);
+        assert_eq!((confidence.video.clone(), confidence.video_cover), (Some(key.clone()), true));
+        let plan = media_plan(&config, &main, &program, Some(&both), None);
+        assert_eq!(plan.captures, vec![source.clone()]);
+
+        let confidence_only = project(vec![capture(CaptureOptions { projection: false, confidence: true, ..CaptureOptions::default() })]);
+        let main = main_scene(&config, &program, Some(&confidence_only), None);
+        assert_eq!(main.background.unwrap().source, MediaSource::Image("/bg.png".into()), "the projection keeps the song background");
+        let black = ProgramState { display: DisplayMode::Black, ..program.clone() };
+        assert_eq!(confidence_scene(&config, &black, Some(&confidence_only), None).video, None, "the teleprompter returns when not live");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [build-dependencies]
@@ -22,6 +22,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true, features = ["protocol-asset", "unstable"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 uuid = { version = "1", features = ["v4"] }
 dirs = "7"
 image = { workspace = true }
@@ -32,6 +33,14 @@ elgato-streamdeck = { version = "0.14", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# Screen capture: the xdg screen-cast portal and PipeWire (Wayland), X11.
+ashpd = { version = "0.12", default-features = false, features = ["tokio"] }
+pipewire = "0.9"
+x11rb = { version = "0.13", features = ["randr", "composite"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Power"] }
+# Screen capture: Windows.Graphics.Capture and Desktop Duplication.
+windows-capture = "1.5"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common"] }
+

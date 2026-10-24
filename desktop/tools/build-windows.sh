@@ -4,6 +4,12 @@
 #   tools/build-windows.sh            # bumps the build number first
 #   tools/build-windows.sh --no-bump  # rebuilds the current version
 #
+# Updates: the installer is signed for the in-app updater with the key in
+# TAURI_SIGNING_PRIVATE_KEY (CI secret) or ~/.tauri/palto-updater.key, and
+# latest.json is written next to it for the GitHub release. Release notes
+# shown before installing come from RELEASE_NOTES (text) if set. Without a
+# key the installer still builds, but cannot be offered as an update.
+#
 # The first run fetches its toolchain into ~/.local/share/projection-win and
 # rustup into ~/.cargo, all without sudo; the system Rust stays the default.
 # Needs curl, bsdtar, clang, lld and llvm (llvm-rc) on the system. The MSI
@@ -70,10 +76,33 @@ for lib in avcodec avformat avutil swresample swscale; do
     cp "$FFMPEG_DIR"/bin/$lib-*.dll "$dlls/"
 done
 
+key_file="$HOME/.tauri/palto-updater.key"
+updater_config=()
+if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] && [ -f "$key_file" ]; then
+    export TAURI_SIGNING_PRIVATE_KEY="$key_file"
+fi
+if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+    export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+else
+    echo "No updater signing key ($key_file or TAURI_SIGNING_PRIVATE_KEY): building without update signature." >&2
+    updater_config=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
+fi
+
 cd "$desktop/crates/app"
 bun install --silent
 bun install --silent --cwd frontend
-bun tauri build --runner cargo-xwin --target "$target" --bundles nsis
+bun tauri build --runner cargo-xwin --target "$target" --bundles nsis "${updater_config[@]}"
+
+bundle="$desktop/target/$target/release/bundle/nsis"
+version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$desktop/crates/app/Cargo.toml" | head -n1)
+installer="PALTO_${version}_x64-setup.exe"
+if [ -f "$bundle/$installer.sig" ]; then
+    repo=${GITHUB_REPOSITORY:-jabezdev/projection}
+    RELEASE_NOTES="${RELEASE_NOTES:-}" VERSION="$version" SIGNATURE="$(cat "$bundle/$installer.sig")" \
+    URL="https://github.com/$repo/releases/download/v$version/$installer" \
+    python3 -c 'import json, os, datetime; print(json.dumps({"version": os.environ["VERSION"], "notes": os.environ["RELEASE_NOTES"], "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": {"windows-x86_64": {"signature": os.environ["SIGNATURE"], "url": os.environ["URL"]}}}, indent=2))' \
+    >"$bundle/latest.json"
+fi
 
 echo
-ls -1 "$desktop/target/$target/release/bundle/nsis/"*.exe
+ls -1 "$bundle/"*.exe "$bundle/"*.sig "$bundle/latest.json" 2>/dev/null
