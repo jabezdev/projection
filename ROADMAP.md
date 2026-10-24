@@ -203,7 +203,7 @@ Items:
 - [ ] Web page source: open a URL, render it off screen, show it on the outputs with per-screen routing and fit/fill; forward next/previous and clicks from the operator. **Open:** how to render off screen (an embedded browser engine such as CEF, or a hidden WebView2/WebKit window captured through phase 8), judged by cost on the target machine.
 - [ ] Canva presentation player tested end to end (sign-in, fullscreen player, stepping).
 - [ ] Other browser presentations: Google Slides and similar, tested one by one.
-- [ ] PDF import: render each page to a slide at output resolution.
+- [x] PDF import: render each page to a slide at output resolution. *pdf.js in the operator window renders each page to a 1920×1080 PNG in the media folder; no native PDF library to ship.*
 - [ ] PowerPoint and other formats. **Open:** convert to slides through an installed office suite (PowerPoint or LibreOffice) or require a PDF export; slide animations and embedded video are probably lost either way.
 - [ ] Speaker notes and the next slide on the confidence screen, where the format provides them.
 

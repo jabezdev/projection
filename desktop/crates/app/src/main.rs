@@ -138,6 +138,9 @@ fn main() -> anyhow::Result<()> {
             resolve_media_path,
             video_thumbnail,
             choose_presentation_images,
+            choose_pdf,
+            read_chosen_pdf,
+            save_slide_image,
             play,
             pause,
             stop,
@@ -230,6 +233,7 @@ fn main() -> anyhow::Result<()> {
                 })?;
             }
             app.manage(StartupWarnings(warnings));
+            app.manage(ChosenPdf::default());
             app.manage(DataDir(app_data_dir.clone()));
             // A weekly automatic backup, checked shortly after start and then
             // every few hours, so a long-running app still makes one.

@@ -439,6 +439,11 @@ export async function invoke<T = unknown>(
   return nativeInvoke<T>(command, args);
 }
 
+/** Sends `bytes` as the raw request body (desktop app only), with string headers. */
+export async function invokeBytes<T = unknown>(command: string, bytes: Uint8Array, headers: Record<string, string> = {}): Promise<T> {
+  return nativeInvoke<T>(command, bytes, { headers });
+}
+
 export async function listen<T>(
   event: string,
   handler: (event: TauriEvent<T>) => void

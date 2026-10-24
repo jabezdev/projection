@@ -44,6 +44,38 @@ pub fn import_file(data_dir: &Path, source: &Path) -> std::io::Result<PathBuf> {
     unreachable!("the loop returns")
 }
 
+/// Writes `bytes` (for example a rendered PDF page) into the media folder as
+/// `name` and returns the file; like [`import_file`], an identical file is
+/// reused and a different one with the same name gets a number.
+pub fn import_bytes(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    let folder = data_dir.join(MEDIA_FOLDER);
+    std::fs::create_dir_all(&folder)?;
+    // Only a plain file name, never a path.
+    let name: String = name.chars().map(|c| if c.is_alphanumeric() || " ._-()".contains(c) { c } else { '_' }).collect();
+    let name = name.trim_start_matches('.');
+    let (stem, extension) = match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() => (stem.to_string(), format!(".{extension}")),
+        _ => (if name.is_empty() { "media".to_string() } else { name.to_string() }, String::new()),
+    };
+    for attempt in 1.. {
+        let file = if attempt == 1 { format!("{stem}{extension}") } else { format!("{stem} ({attempt}){extension}") };
+        let target = folder.join(&file);
+        if target.exists() {
+            if std::fs::read(&target)? == bytes {
+                return Ok(target);
+            }
+            continue;
+        }
+        let partial = folder.join(format!("{file}.partial"));
+        if let Err(e) = std::fs::write(&partial, bytes).and_then(|()| std::fs::rename(&partial, &target)) {
+            let _ = std::fs::remove_file(&partial);
+            return Err(e);
+        }
+        return Ok(target);
+    }
+    unreachable!("the loop returns")
+}
+
 fn same_contents(a: &Path, b: &Path) -> std::io::Result<bool> {
     if std::fs::metadata(a)?.len() != std::fs::metadata(b)?.len() {
         return Ok(false);
@@ -182,5 +214,17 @@ mod tests {
         assert_eq!(serde_json::from_str::<serde_json::Value>(item["song"].as_str().unwrap()).unwrap()["background"], "/new/bg.png");
         assert_eq!(item["kind"]["data"]["path"], "/old/other.png");
         assert!(!replace_paths(&mut project, &map), "nothing left to replace");
+    }
+
+    #[test]
+    fn rendered_pages_are_written_once_under_a_safe_name() {
+        let dir = std::env::temp_dir().join(format!("magi-import-bytes-{}", uuid::Uuid::new_v4()));
+        let first = import_bytes(&dir, "../Sermon slides p1.png", b"page one").unwrap();
+        assert_eq!(first.file_name().unwrap(), "_Sermon slides p1.png", "no path escapes the media folder");
+        assert_eq!(first.parent().unwrap(), dir.join(MEDIA_FOLDER));
+        assert_eq!(import_bytes(&dir, "../Sermon slides p1.png", b"page one").unwrap(), first, "identical bytes reuse the file");
+        let other = import_bytes(&dir, "../Sermon slides p1.png", b"another page").unwrap();
+        assert_eq!(other.file_name().unwrap(), "_Sermon slides p1 (2).png");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
