@@ -2,7 +2,7 @@ use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
 use core_engine::EngineCommand;
-use protocol::ProjectModel;
+use protocol::model::ItemContent;
 
 use crate::{now_ms, AppState};
 use crate::system::backup;
@@ -41,35 +41,35 @@ pub(super) fn relink_everywhere(app: &tauri::AppHandle, map: &std::collections::
         return Ok(());
     }
     let state = app.state::<AppState>();
-    let loaded = state.snapshot.read().map_err(|_| anyhow::anyhow!("snapshot lock poisoned"))?.project.as_ref().map(|p| p.id);
+    let loaded = state.snapshot.read().map_err(|_| anyhow::anyhow!("snapshot lock poisoned"))?.service.as_ref().map(|s| s.id().to_string());
     {
         let db = state.db.lock()?;
         for (old, new) in map {
-            db.relink_media(old, new)?;
+            db.relink_media_path(old, new)?;
             app.asset_protocol_scope().allow_file(new)?;
         }
-        for header in db.list_projects()? {
-            let project = db.get_project(header.id)?;
-            let mut value = serde_json::to_value(&project)?;
-            if !crate::library::replace_paths(&mut value, map) {
+        for mut service in db.list_services()? {
+            let mut changed = false;
+            for item in &mut service.items {
+                let ItemContent::Presentation { slides, .. } = &mut item.content else { continue };
+                for slide in slides.iter_mut() {
+                    if let Some(new) = map.get(slide.as_str()) {
+                        *slide = new.clone();
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
                 continue;
             }
-            let mut project: ProjectModel = serde_json::from_value(value)?;
-            if Some(project.id) == loaded {
-                state.send(EngineCommand::SaveProject { project }).map_err(anyhow::Error::msg)?;
+            if loaded.as_deref() == Some(service.id.as_str()) {
+                state.send(EngineCommand::SaveService { service }).map_err(anyhow::Error::msg)?;
             } else {
-                db.save_project(&mut project, now_ms())?;
-            }
-        }
-        for header in db.list_songs()? {
-            let mut song = db.get_song(header.id)?;
-            let mut lyrics = serde_json::Value::String(song.lyrics.clone());
-            if crate::library::replace_paths(&mut lyrics, map) {
-                song.lyrics = lyrics.as_str().unwrap_or_default().to_string();
-                db.update_song(&song)?;
+                db.save_service(&service, now_ms())?;
             }
         }
     }
+    state.send(EngineCommand::RefreshService).map_err(anyhow::Error::msg)?;
     let output = app.state::<crate::settings::OutputState>();
     let config = output.config.lock().map_err(|_| anyhow::anyhow!("settings lock poisoned"))?.clone();
     if let Some(logo) = map.get(&config.logo_path) {

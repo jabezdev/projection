@@ -1,53 +1,48 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { splitSlides, slides, decodeSong, emptySong, songSteps } from './song.ts';
+import { readFileSync } from 'node:fs';
+import { splitSlides, slides, draftSteps, emptyDraft, moveArrangement, resolveSong, serviceDraft, fromServiceDraft, sectionCode, sectionColor } from './song.ts';
+
+const section = (id, kind, lyrics, number) => ({ id, kind, lyrics, ...(number ? { number } : {}) });
+const version = { id: 'v1', number: 1, sections: [section('v', 'verse', 'A\nB\n\nC', 1), section('c', 'chorus', 'D')], arrangement: ['v', 'c', 'v'] };
 
 test('single line breaks stay within a slide; blank lines start the next', () => {
   assert.deepEqual(splitSlides('First line\nSecond line\n\nThird line\nFourth line'), ['First line\nSecond line', 'Third line\nFourth line']);
 });
-test('handles whitespace-only blank lines, CRLF, and extra empty slides', () => {
-  assert.deepEqual(splitSlides('\r\n First\r\nSecond\r\n \t\r\n\r\nThird\r\n\r\n'), ['First\nSecond', 'Third']);
-  assert.deepEqual(splitSlides('\n \n'), []);
-});
 test('arranged repeated parts preserve multiline slides in order', () => {
-  const part = { id: 'verse', type: 'Verse', number: 1, lyrics: 'A\nB\n\nC' };
-  assert.deepEqual(songSteps({ ...emptySong(), parts: [part], arrangement: ['verse', 'verse'] }), ['A\nB', 'C', 'A\nB', 'C']);
+  assert.deepEqual(draftSteps({ ...emptyDraft(), sections: [section('v', 'verse', 'A\nB\n\nC')], arrangement: ['v', 'v'] }), ['A\nB', 'C', 'A\nB', 'C']);
+  assert.deepEqual(slides(version.sections[0]), ['A\nB', 'C']);
 });
-test('old single-line documents keep their original projection positions', () => {
-  const old = { format: 'magi.song.v1', parts: [{ id: 'v', type: 'Verse', number: 1, lyrics: 'A\nB' }], arrangement: ['v'], background: '' };
-  const migrated = decodeSong(JSON.stringify(old));
-  assert.equal(migrated.slideSeparator, 'blank-line');
-  assert.deepEqual(songSteps(migrated), ['A', 'B']);
-  assert.equal(migrated.parts[0].lyrics, 'A\n\nB');
-});
-test('new song documents retain ordinary line breaks when saved and reopened', () => {
-  const part = { id: 'v', type: 'Verse', number: 1, lyrics: 'A\nB\n\nC' };
-  const song = decodeSong(JSON.stringify({ ...emptySong(), parts: [part], arrangement: ['v'] }));
-  assert.deepEqual(slides(song.parts[0]), ['A\nB', 'C']);
-});
-
-test('arrangement drops use insertion gaps without losing repeated occurrences', async () => {
-  const { moveArrangement } = await import('./song.ts');
+test('arrangement drops use insertion gaps without losing repeated occurrences', () => {
   assert.deepEqual(moveArrangement(['v', 'c', 'v', 'b'], 0, 4), ['c', 'v', 'b', 'v']);
   assert.deepEqual(moveArrangement(['v', 'c', 'v', 'b'], 3, 1), ['v', 'b', 'c', 'v']);
   assert.deepEqual(moveArrangement(['v', 'c', 'v'], 1, 2), ['v', 'c', 'v']);
   assert.deepEqual(moveArrangement(['v', 'c', 'v'], 1, 0), ['c', 'v', 'v']);
 });
-test('author / singer survives saving and reopening', () => {
-  assert.equal(decodeSong(JSON.stringify({ ...emptySong(), authorSinger: 'Example singer' })).authorSinger, 'Example singer');
-});
-
-test('shared normalization fixtures match the Rust parser expectations', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { arrangedParts, partCode, partColor } = await import('./song.ts');
-  const fixtures = JSON.parse(readFileSync(new URL('../../../../../fixtures/song-normalization.json', import.meta.url), 'utf8'));
-  for (const fixture of fixtures.cases) {
-    const song = decodeSong(fixture.song);
-    assert.deepEqual(songSteps(song), fixture.steps, fixture.name);
-    assert.deepEqual(arrangedParts(song).map(part => ({ part: part.id, code: partCode(part), color: partColor(part), slides: slides(part) })), fixture.occurrences, fixture.name);
+test('shared section fixtures match the Rust model', () => {
+  const fixtures = JSON.parse(readFileSync(new URL('../../../../../fixtures/sections.json', import.meta.url), 'utf8'));
+  for (const c of fixtures.slides) assert.deepEqual(splitSlides(c.lyrics), c.slides, c.name);
+  for (const c of fixtures.codes) {
+    const s = { id: 'x', lyrics: '', ...c.section };
+    assert.deepEqual([sectionCode(s), sectionColor(s)], [c.code, c.color], JSON.stringify(c.section));
   }
 });
-
+test('a song item follows the library until the service changes it', () => {
+  const item = { songId: 's' };
+  assert.deepEqual(resolveSong(item, version).map(s => s.lyrics), ['A\nB\n\nC', 'D', 'A\nB\n\nC']);
+  assert.equal(fromServiceDraft(serviceDraft(item, version), version), undefined, 'an untouched draft keeps following the library');
+});
+test('service edits become variations and service-only parts', () => {
+  const draft = serviceDraft({ songId: 's' }, version);
+  draft.sections = draft.sections.map(s => s.id === 'c' ? { ...s, lyrics: 'D, softly' } : s);
+  draft.sections.push(section('own', 'tag', 'Amen'));
+  draft.arrangement = ['v', 'c', 'own'];
+  const entries = fromServiceDraft(draft, version);
+  const item = { songId: 's', arrangement: entries };
+  assert.deepEqual(resolveSong(item, version).map(s => [s.kind, s.lyrics]), [['verse', 'A\nB\n\nC'], ['chorus', 'D, softly'], ['tag', 'Amen']]);
+  assert.deepEqual(serviceDraft(item, version).arrangement, ['v', 'c', 'own'], 'reopening shows the same arrangement');
+  assert.equal(entries[0].variation, undefined, 'unchanged parts carry no variation');
+});
 test('the caret picks the slide it is in', async () => {
   const { slideAtCaret } = await import('./song.ts');
   const lyrics = 'a\nb\n\nc\nd\n\ne';

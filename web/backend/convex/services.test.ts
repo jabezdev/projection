@@ -4,6 +4,8 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+const DAY = 86_400_000;
+const NOV_1 = Date.UTC(2026, 10, 1);
 
 async function setup() {
   const t = convexTest(schema, modules);
@@ -11,16 +13,20 @@ async function setup() {
   await admin.mutation(api.users.ensure, {});
   const songId = await admin.mutation(api.songs.create, {
     title: "Amazing Grace",
+    credits: { ccli: "22025", authors: [{ name: "John Newton", role: "words" }] },
     sections: [
-      { label: "Verse 1", lyrics: "Amazing grace" },
-      { label: "Chorus", lyrics: "My chains are gone" },
+      { id: "v1", kind: "verse", number: 1, lyrics: "Amazing grace" },
+      { id: "c", kind: "chorus", lyrics: "My chains are gone" },
     ],
   });
-  const serviceId = await admin.mutation(api.services.create, { date: "2026-10-11", title: "Sunday" });
+  const serviceId = await admin.mutation(api.services.create, { scheduledAtMs: NOV_1, title: "Sunday" });
   const itemId = await admin.mutation(api.services.addSong, { serviceId, songId });
   const get = async () => (await admin.query(api.services.get, { serviceId }))!.items[0];
-  return { t, admin, songId, serviceId, itemId, get };
+  const song = async () => (await admin.query(api.songs.get, { songId }))!;
+  return { t, admin, songId, serviceId, itemId, get, song };
 }
+
+const labels = (entries: { kind: string; number?: number }[]) => entries.map((e) => `${e.kind}${e.number ?? ""}`);
 
 test("first user is admin, later users start as singers who can only read", async () => {
   const { t, serviceId } = await setup();
@@ -28,57 +34,73 @@ test("first user is admin, later users start as singers who can only read", asyn
   await singer.mutation(api.users.ensure, {});
   expect((await singer.query(api.users.me, {}))!.role).toBe("singer");
   expect(await singer.query(api.services.get, { serviceId })).not.toBeNull();
-  await expect(singer.mutation(api.services.create, { date: "2026-10-18", title: "x" })).rejects.toThrow();
+  await expect(singer.mutation(api.services.create, { scheduledAtMs: NOV_1, title: "x" })).rejects.toThrow();
 });
 
-test("a service starts from the song's usual order", async () => {
-  const { get } = await setup();
-  expect((await get()).entries.map((e) => e.label)).toEqual(["Verse 1", "Chorus"]);
+test("a service follows the song's arrangement and credits stay on the song", async () => {
+  const { get, song } = await setup();
+  const item = await get();
+  expect(labels(item.entries)).toEqual(["verse1", "chorus"]);
+  expect(item.edited).toBe(false);
+  expect((await song()).credits.ccli).toBe("22025");
 });
 
-test("repeat, move and remove address entries by key", async () => {
+test("repeat, move and remove address entries by id", async () => {
   const { admin, itemId, get } = await setup();
   const [verse, chorus] = (await get()).entries;
-  await admin.mutation(api.services.insertEntry, { itemId, index: 99, sectionId: chorus.sectionId! });
-  await admin.mutation(api.services.moveEntry, { itemId, entryKey: verse.key, toIndex: 2 });
-  expect((await get()).entries.map((e) => e.label)).toEqual(["Chorus", "Chorus", "Verse 1"]);
-
-  await admin.mutation(api.services.removeEntry, { itemId, entryKey: chorus.key });
-  await admin.mutation(api.services.removeEntry, { itemId, entryKey: chorus.key });
-  expect((await get()).entries.map((e) => e.label)).toEqual(["Chorus", "Verse 1"]);
+  await admin.mutation(api.services.insertEntry, { itemId, index: 99, sectionId: "c" });
+  await admin.mutation(api.services.moveEntry, { itemId, entryId: verse.entryId, toIndex: 2 });
+  expect(labels((await get()).entries)).toEqual(["chorus", "chorus", "verse1"]);
+  await admin.mutation(api.services.removeEntry, { itemId, entryId: chorus.entryId });
+  expect(labels((await get()).entries)).toEqual(["chorus", "verse1"]);
+  await admin.mutation(api.services.resetSequence, { itemId });
+  expect(labels((await get()).entries)).toEqual(["verse1", "chorus"]);
 });
 
 test("a variation stays in the service until saved to the library", async () => {
-  const { admin, songId, itemId, get } = await setup();
+  const { admin, songId, itemId, get, song } = await setup();
   const [verse] = (await get()).entries;
-  await admin.mutation(api.services.setEntryText, { itemId, entryKey: verse.key, lyrics: "Amazing GRACE" });
+  await admin.mutation(api.services.setEntryText, { itemId, entryId: verse.entryId, lyrics: "Amazing GRACE" });
+  expect((await get()).entries[0]).toMatchObject({ lyrics: "Amazing GRACE", isVariation: true });
+  expect((await song()).current.sections[0].lyrics).toBe("Amazing grace");
 
-  let entry = (await get()).entries[0];
-  expect(entry).toMatchObject({ lyrics: "Amazing GRACE", isVariation: true });
-  let song = await admin.query(api.songs.get, { songId });
-  expect(song!.sections[0].lyrics).toBe("Amazing grace");
-
-  await admin.mutation(api.songs.updateSection, { sectionId: song!.sections[0]._id, lyrics: "Amazing grace!" });
+  const current = (await song()).current;
+  await admin.mutation(api.songs.setContent, { songId, sections: [{ ...current.sections[0], lyrics: "Amazing grace!" }, current.sections[1]], arrangement: current.arrangement });
   expect((await get()).entries[0].lyrics).toBe("Amazing GRACE");
 
-  await admin.mutation(api.services.promoteEntry, { itemId, entryKey: verse.key });
-  entry = (await get()).entries[0];
-  expect(entry).toMatchObject({ lyrics: "Amazing GRACE", isVariation: false });
-  song = await admin.query(api.songs.get, { songId });
-  expect(song!.sections[0].lyrics).toBe("Amazing GRACE");
+  const entryId = (await get()).entries[0].entryId;
+  await admin.mutation(api.services.promoteEntry, { itemId, entryId });
+  expect((await get()).entries[0]).toMatchObject({ lyrics: "Amazing GRACE", isVariation: false });
+  expect((await song()).current.sections[0].lyrics).toBe("Amazing GRACE");
 });
 
-test("deleting library content leaves services readable", async () => {
-  const { admin, songId, get } = await setup();
-  const song = await admin.query(api.songs.get, { songId });
-  await admin.mutation(api.songs.removeSection, { sectionId: song!.sections[1]._id });
-  expect((await get()).entries[1]).toMatchObject({ label: "Chorus", lyrics: "My chains are gone", sectionId: null });
+test("library fixes reach upcoming services but not past ones", async () => {
+  const { admin, songId, serviceId, get, song } = await setup();
+  const next = await admin.mutation(api.services.create, { scheduledAtMs: NOV_1 + 14 * DAY, title: "Later" });
+  await admin.mutation(api.services.addSong, { serviceId: next, songId });
+  expect(await admin.mutation(api.services.freezePast, { todayStartsAtMs: NOV_1 + 7 * DAY })).toBe(1);
+  expect((await admin.query(api.services.get, { serviceId }))!.frozen).toBe(true);
 
-  await admin.mutation(api.songs.remove, { songId });
-  const item = await get();
-  expect(item.songId).toBeNull();
-  expect(item.title).toBe("Amazing Grace");
-  expect(item.entries.map((e) => e.lyrics)).toEqual(["Amazing grace", "My chains are gone"]);
+  const current = (await song()).current;
+  await admin.mutation(api.songs.setContent, { songId, sections: [current.sections[0], { ...current.sections[1], lyrics: "Fixed" }], arrangement: current.arrangement });
+  expect((await song()).current.number).toBe(2);
+  expect((await get()).entries[1].lyrics).toBe("My chains are gone");
+  expect((await get()).versionNumber).toBe(1);
+  expect((await admin.query(api.services.get, { serviceId: next }))!.items[0].entries[1].lyrics).toBe("Fixed");
+
+  const fixed = (await song()).current;
+  await admin.mutation(api.songs.setContent, { songId, sections: [fixed.sections[0], { ...fixed.sections[1], lyrics: "Fixed twice" }], arrangement: fixed.arrangement });
+  expect((await song()).current).toMatchObject({ id: fixed.id, number: 2 });
+});
+
+test("ending a service pins it; archived songs still show in it", async () => {
+  const { admin, songId, serviceId, get } = await setup();
+  await admin.mutation(api.services.end, { serviceId });
+  expect((await get()).versionNumber).toBe(1);
+  await admin.mutation(api.songs.archive, { songId, archived: true });
+  expect(await admin.query(api.songs.list, {})).toHaveLength(0);
+  expect(await admin.query(api.songs.list, { includeArchived: true })).toHaveLength(1);
+  expect((await get()).entries.map((e) => e.lyrics)).toEqual(["Amazing grace", "My chains are gone"]);
 });
 
 test("pairing codes are single use", async () => {

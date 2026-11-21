@@ -1,6 +1,8 @@
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
+use protocol::model::{new_id, MediaFile, MediaKind};
+
 use crate::AppState;
 
 use super::*;
@@ -76,50 +78,61 @@ pub async fn choose_media_file(app: tauri::AppHandle, kind: String) -> Result<Op
 }
 
 #[tauri::command]
-pub fn list_media(state: tauri::State<AppState>, app: tauri::AppHandle) -> Result<Vec<protocol::MediaModel>, String> {
-    let media = state.db.lock().map_err(|e| e.to_string())?.list_media().map_err(|e| e.to_string())?;
-    for item in &media { app.asset_protocol_scope().allow_file(&item.path).map_err(|e| e.to_string())?; }
+pub fn list_media(state: tauri::State<AppState>, app: tauri::AppHandle) -> Result<Vec<MediaFile>, String> {
+    let media = state.db.lock().map_err(|e| e.to_string())?.list_media_files().map_err(|e| e.to_string())?;
+    for path in media.iter().filter_map(|m| m.path.as_ref()) { app.asset_protocol_scope().allow_file(path).map_err(|e| e.to_string())?; }
     Ok(media)
 }
 
 #[tauri::command]
-pub async fn create_media(app: tauri::AppHandle, title: String, kind: protocol::MediaKind, path: String) -> Result<protocol::MediaModel, String> {
+pub async fn create_media(app: tauri::AppHandle, title: String, kind: MediaKind, path: String) -> Result<MediaFile, String> {
     let file = std::fs::canonicalize(path.trim()).map_err(|e| format!("Cannot open media file: {e}"))?;
     if !file.is_file() { return Err("Choose a media file, not a directory.".into()); }
     if title.trim().is_empty() { return Err("Enter a media title.".into()); }
     let copy = import_into_library(&app, file).await?;
+    add_media(&app, title.trim().into(), kind, copy)
+}
+
+pub(super) fn add_media(app: &tauri::AppHandle, title: String, kind: MediaKind, path: String) -> Result<MediaFile, String> {
     let db = app.state::<AppState>().db.clone();
-    let created = db.lock().map_err(|e| e.to_string())?.create_media(title.trim().into(), kind, copy);
-    created.map_err(|e| e.to_string())
+    let db = db.lock().map_err(|e| e.to_string())?;
+    if let Some(existing) = db.media_file_at(&path).map_err(|e| e.to_string())? {
+        return Ok(existing);
+    }
+    let media = MediaFile { id: new_id(), title, kind, hash: None, path: Some(path) };
+    db.save_media_file(&media).map_err(|e| e.to_string())?;
+    Ok(media)
 }
 
 #[tauri::command]
-pub fn delete_media(state: tauri::State<AppState>, id: i64) -> Result<(), String> {
+pub fn delete_media(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.delete_media(id).map_err(|e| e.to_string())?;
+    db.delete_media_file(&id).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn rename_media(state: tauri::State<AppState>, id: i64, title: String) -> Result<(), String> {
+pub fn rename_media(state: tauri::State<AppState>, id: String, title: String) -> Result<(), String> {
     let title = title.trim();
     if title.is_empty() { return Err("Enter a title.".into()); }
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.rename_media(id, title).map_err(|e| e.to_string())
+    let mut media = db.media_file(&id).map_err(|e| e.to_string())?.ok_or_else(|| format!("Media {id} not found"))?;
+    media.title = title.into();
+    db.save_media_file(&media).map_err(|e| e.to_string())
 }
 
-pub fn media_kind_of(path: &std::path::Path) -> Option<protocol::MediaKind> {
+pub fn media_kind_of(path: &std::path::Path) -> Option<MediaKind> {
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
     match extension.as_str() {
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => Some(protocol::MediaKind::Image),
-        "mp4" | "m4v" | "mov" | "mkv" | "webm" | "avi" => Some(protocol::MediaKind::Video),
-        "mp3" | "wav" | "ogg" | "flac" | "m4a" | "aac" => Some(protocol::MediaKind::Audio),
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => Some(MediaKind::Image),
+        "mp4" | "m4v" | "mov" | "mkv" | "webm" | "avi" => Some(MediaKind::Video),
+        "mp3" | "wav" | "ogg" | "flac" | "m4a" | "aac" => Some(MediaKind::Audio),
         _ => None,
     }
 }
 
 #[tauri::command]
-pub async fn import_media_files(app: tauri::AppHandle) -> Result<Vec<protocol::MediaModel>, String> {
+pub async fn import_media_files(app: tauri::AppHandle) -> Result<Vec<MediaFile>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     app.dialog().file().set_title("Import media")
         .add_filter("Images, videos and audio", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "m4v", "mov", "mkv", "webm", "avi", "mp3", "wav", "ogg", "flac", "m4a", "aac"])
@@ -132,9 +145,7 @@ pub async fn import_media_files(app: tauri::AppHandle) -> Result<Vec<protocol::M
         let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into());
         let copy = import_into_library(&app, path).await?;
         app.asset_protocol_scope().allow_file(&copy).map_err(|e| e.to_string())?;
-        let db = app.state::<AppState>().db.clone();
-        let created = db.lock().map_err(|e| e.to_string())?.create_media(title, kind, copy).map_err(|e| e.to_string())?;
-        imported.push(created);
+        imported.push(add_media(&app, title, kind, copy)?);
     }
     Ok(imported)
 }

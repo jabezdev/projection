@@ -1,6 +1,5 @@
-use core_engine::song::Song;
 use protocol::{
-    DisplayMode, OutputConfig, PlaybackState, ProgramState, ProjectModel, SessionItemKind,
+    DisplayMode, LiveService, OutputConfig, PlaybackState, ProgramState, SessionItemKind,
 };
 use render_engine::{
     css_color, ConfidenceGroup, ConfidenceScene,
@@ -31,9 +30,9 @@ pub fn confidence_sample_scene(config: &OutputConfig) -> ConfidenceScene {
     }
 }
 
-pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, ConfidenceGroup)> {
+pub fn confidence_groups(service: Option<&LiveService>) -> Vec<(String, usize, ConfidenceGroup)> {
     let mut groups = Vec::new();
-    for item in project.map(|p| p.session.items.as_slice()).unwrap_or_default() {
+    for item in service.map(|s| s.items.as_slice()).unwrap_or_default() {
         let title = item.title.clone().filter(|t| !t.is_empty());
         let (kind, steps) = match &item.kind {
             SessionItemKind::Text { steps } => ("text", steps),
@@ -47,10 +46,10 @@ pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, Con
         if kind != "text" {
             let label = title.clone().unwrap_or_else(|| kind.to_string());
             groups.push((
-                item.id,
+                item.id.clone(),
                 0,
                 ConfidenceGroup {
-                    key: item.id.to_string(),
+                    key: item.id.clone(),
                     code: if kind == "presentation" { "Slides".into() } else { kind.into() },
                     title: label.clone(),
                     color: css_color(NON_SONG_COLOR, [1.0; 4]),
@@ -59,34 +58,44 @@ pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, Con
             ));
             continue;
         }
-        let song = Song::decode(item.song.as_deref().unwrap_or(&steps.join("\n\n")));
-        for occurrence in song.occurrences() {
+        let Some(song) = &item.song else {
             groups.push((
-                item.id,
-                occurrence.first_step,
+                item.id.clone(),
+                0,
+                ConfidenceGroup { key: item.id.clone(), code: "Text".into(), title: title.clone().unwrap_or_default(), color: css_color(NON_SONG_COLOR, [1.0; 4]), lines: steps.clone() },
+            ));
+            continue;
+        };
+        let mut first_step = 0;
+        for (occurrence, section) in song.sections.iter().enumerate() {
+            let lines = section.slides();
+            groups.push((
+                item.id.clone(),
+                first_step,
                 ConfidenceGroup {
-                    key: format!("{}-{}", item.id, occurrence.occurrence),
-                    code: occurrence.part.code(),
+                    key: format!("{}-{occurrence}", item.id),
+                    code: section.code(),
                     title: title.clone().unwrap_or_default(),
-                    color: css_color(occurrence.part.color(), [1.0; 4]),
-                    lines: occurrence.slides.clone(),
+                    color: css_color(section.color(), [1.0; 4]),
+                    lines: lines.clone(),
                 },
             ));
+            first_step += lines.len();
         }
     }
     groups
 }
 
-pub fn confidence_scene(config: &OutputConfig, program: &ProgramState, project: Option<&ProjectModel>, playback: Option<&PlaybackState>) -> ConfidenceScene {
-    let groups = confidence_groups(project);
+pub fn confidence_scene(config: &OutputConfig, program: &ProgramState, service: Option<&LiveService>, playback: Option<&PlaybackState>) -> ConfidenceScene {
+    let groups = confidence_groups(service);
     let step = program.active_step_index.unwrap_or(0) as usize;
-    let active = program.active_item_id.and_then(|id| {
+    let active = program.active_item_id.as_ref().and_then(|id| {
         groups
             .iter()
-            .position(|(item, start, g)| *item == id && step >= *start && step < start + g.lines.len())
+            .position(|(item, start, g)| item == id && step >= *start && step < start + g.lines.len())
             .map(|index| (index, step - groups[index].1))
     });
-    let item = active_item(program, project);
+    let item = active_item(program, service);
     let live = program.display == DisplayMode::Live;
     let shows_video = live && matches!(item.map(|i| &i.kind), Some(SessionItemKind::Video { options, .. }) if options.confidence);
     let capture = capture_on(item, true).filter(|_| live);

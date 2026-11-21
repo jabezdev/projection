@@ -7,12 +7,12 @@ use super::*;
 impl Engine {
     pub(super) fn sync_session(&mut self, item: Option<&SessionItem>, ports: &mut Ports) {
         let target = item.and_then(|item| match &item.kind {
-            SessionItemKind::Video { path, options } => Some((item.id, PlaybackKind::Video, path, options)),
-            SessionItemKind::Audio { path, options } => Some((item.id, PlaybackKind::Audio, path, options)),
+            SessionItemKind::Video { path, options } => Some((item.id.as_str(), PlaybackKind::Video, path, options)),
+            SessionItemKind::Audio { path, options } => Some((item.id.as_str(), PlaybackKind::Audio, path, options)),
             _ => None,
         });
-        if let (Some(playback), Some((item_id, kind, path, options))) = (self.state.playback.as_mut(), target) {
-            if playback.item_id == item_id && playback.kind == kind && &playback.path == path {
+        if let (Some(playback), Some((item_id, kind, path, options))) = (self.state.playback.as_mut(), target.as_ref()) {
+            if playback.item_id == *item_id && playback.kind == *kind && &playback.path == *path {
                 let before = playback.clone();
                 apply_options(playback, options);
                 if *playback != before {
@@ -30,7 +30,7 @@ impl Engine {
             let mut playback = PlaybackState {
                 session_id,
                 generation: 0,
-                item_id,
+                item_id: item_id.to_string(),
                 path: path.clone(),
                 kind,
                 paused: !self.autoplay,

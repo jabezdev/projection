@@ -46,7 +46,7 @@ pub(super) fn run(
         let config = config();
         let (main, confidence, plan) = {
             let state = snapshot.read().expect("snapshot poisoned");
-            let (program, project, playback) = (&state.program_state, state.project.as_ref(), state.playback.as_ref());
+            let (program, project, playback) = (&state.program_state, state.service.as_ref(), state.playback.as_ref());
             let main = main_scene(&config, program, project, playback);
             let plan = media_plan(&config, &main, program, project, playback);
             (main, confidence_scene(&config, program, project, playback), plan)

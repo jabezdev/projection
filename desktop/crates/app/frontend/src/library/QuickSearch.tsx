@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '../ui/Icons';
-import type { Media, SongHeader } from '../api/models';
+import type { MediaFile, Song } from '../api/models';
 import { fileName, searchLibrary, type SearchResult } from './search';
 
-export default function QuickSearch({ songs, media, canAdd, onAdd, onClose }: { songs: SongHeader[]; media: Media[]; canAdd: boolean; onAdd: (result: SearchResult) => Promise<void>; onClose: () => void }) {
+export default function QuickSearch({ songs, media, canAdd, onAdd, onClose }: { songs: Song[]; media: MediaFile[]; canAdd: boolean; onAdd: (result: SearchResult) => Promise<void>; onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [error, setError] = useState('');
@@ -25,9 +25,9 @@ export default function QuickSearch({ songs, media, canAdd, onAdd, onClose }: { 
     <ul role="listbox" aria-label="Results">{results.map((result, index) => {
       const key = result.kind === 'song' ? `song-${result.song.id}` : `media-${result.media.id}`;
       const title = result.kind === 'song' ? result.song.title : result.media.title;
-      const detail = result.kind === 'song' ? 'Song' : `${result.media.kind} · ${fileName(result.media.path)}`;
+      const detail = result.kind === 'song' ? 'Song' : `${result.media.kind} · ${fileName(result.media.path ?? '')}`;
       return <li key={key} role="option" aria-selected={index === active} className={index === active ? 'is-active' : ''} onMouseEnter={() => setActive(index)} onClick={() => void add(result)}>
-        <Icon name={result.kind === 'song' ? 'library' : result.media.kind === 'image' ? 'logo' : result.media.kind}/><span>{title}<small>{detail}</small></span>
+        <Icon name={result.kind === 'song' ? 'library' : result.media.kind === 'image' || result.media.kind === 'presentation' ? 'logo' : result.media.kind}/><span>{title}<small>{detail}</small></span>
       </li>;
     })}</ul>
     {!results.length && <p className="empty-panel">{query ? 'Nothing matches.' : 'The library is empty.'}</p>}

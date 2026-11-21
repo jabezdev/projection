@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { invoke, isTauri } from '../api/tauri';
 import { Icon } from '../ui/Icons';
 import { DEMO_SOURCES } from '../demo/service';
-import { defaultCaptureOptions, newItemId, type CaptureFit, type CaptureKind, type CaptureOptions, type CaptureSource, type SessionItem } from '../api/models';
+import type { CaptureFit, CaptureKind, CaptureOptions, CaptureSource } from '../api/models';
 
 type Method = { name: string; label: string; system_picker: boolean };
 type Methods = { current: string | null; choice: string; methods: Method[] };
@@ -53,25 +53,4 @@ export function CaptureSettings({ source, options, onSource, onOptions }: { sour
       <small>The capture runs only while this item is cued. If the window closes or the screen disconnects, the outputs go black and the cue shows why.</small>
     </fieldset>
   </>;
-}
-
-export default function CaptureEditor({ item, onClose, onSave }: { item?: SessionItem; onClose: () => void; onSave: (item: SessionItem) => Promise<void> }) {
-  const existing = item?.kind.kind === 'capture' ? item.kind.data : null;
-  const [source, setSource] = useState<CaptureSource | null>(existing?.source ?? null);
-  const [options, setOptions] = useState<CaptureOptions>({ ...defaultCaptureOptions, ...existing?.options });
-  const [title, setTitle] = useState(item?.title ?? '');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const choose = (picked: CaptureSource) => { setSource(picked); if (!title.trim() || title === source?.name) setTitle(picked.name); };
-  return <div className="modal-backdrop"><form className="capture-editor" role="dialog" aria-modal="true" aria-label="Screen capture" onKeyDown={e => { if (e.key === 'Escape' && !busy) onClose(); }} onSubmit={e => {
-    e.preventDefault();
-    if (!source) return;
-    setBusy(true);
-    void onSave({ id: item?.id ?? newItemId(), title: title.trim() || source.name, kind: { kind: 'capture', data: { source, options } } }).catch(e => { setError(String(e)); setBusy(false); });
-  }}>
-    <header className="surface-header"><div><small>SCREEN CAPTURE</small><input aria-label="Capture title" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} autoFocus/></div><button type="button" className="icon-button" aria-label="Close screen capture" disabled={busy} onClick={onClose}><Icon name="close"/></button></header>
-    {error && <p role="alert" className="ui-error">{error}</p>}
-    <div className="capture-editor-body settings-fields"><CaptureSettings source={source} options={options} onSource={choose} onOptions={setOptions}/></div>
-    <footer><span/><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-action" disabled={busy || !source || (!options.projection && !options.confidence)}>Save capture</button></footer>
-  </form></div>;
 }

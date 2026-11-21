@@ -1,9 +1,9 @@
 use super::*;
 use protocol::{
     Background, BackgroundKind, DisplayMode, EngineCommand, EngineEvent, MediaAction, MediaDirective,
-    PlaybackKind, PlaybackPhase, PlaybackReport, PlaybackState, ProjectModel, SessionItem, SessionItemKind, VideoOptions,
+    PlaybackKind, PlaybackPhase, PlaybackReport, PlaybackState, LiveService, SessionItem, SessionItemKind, VideoOptions,
 };
-use protocol::SessionModel;
+use protocol::model::Service;
 use std::cell::RefCell;
 
 mod coalescing;
@@ -39,33 +39,33 @@ impl MediaBackend for FakeMedia {
 
 #[derive(Default)]
 struct FakeStore {
-    projects: RefCell<Vec<ProjectModel>>,
+    services: RefCell<Vec<LiveService>>,
 }
 
-impl ProjectStore for FakeStore {
-    fn load_project(&self, project_id: i64) -> anyhow::Result<ProjectModel> {
-        self.projects
-            .borrow()
-            .iter()
-            .find(|p| p.id == project_id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("project {project_id} not found"))
+impl ServiceStore for FakeStore {
+    fn load_service(&self, service_id: &str) -> anyhow::Result<LiveService> {
+        self.services.borrow().iter().find(|s| s.id() == service_id).cloned().ok_or_else(|| anyhow::anyhow!("service {service_id} not found"))
     }
-    fn save_project(&self, project: &mut ProjectModel) -> anyhow::Result<()> {
-        let mut projects = self.projects.borrow_mut();
-        match projects.iter_mut().find(|p| p.id == project.id) {
-            Some(p) => *p = project.clone(),
-            None => anyhow::bail!("project {} not found", project.id),
-        }
-        Ok(())
+    fn save_service(&self, service: &Service) -> anyhow::Result<LiveService> {
+        let mut services = self.services.borrow_mut();
+        let stored = services.iter_mut().find(|s| s.id() == service.id).ok_or_else(|| anyhow::anyhow!("service {} not found", service.id))?;
+        stored.service = service.clone();
+        Ok(stored.clone())
     }
+    fn resolve_service(&self, service: &Service) -> anyhow::Result<LiveService> {
+        self.load_service(&service.id)
+    }
+}
+
+fn live(id: &str, title: &str, items: Vec<SessionItem>) -> LiveService {
+    LiveService { service: Service { id: id.into(), scheduled_at_ms: 0, title: title.into(), leader: None, notes: None, ended_at_ms: None, items: Vec::new() }, items }
 }
 
 fn text_item(id: i64, steps: &[&str]) -> SessionItem {
     SessionItem {
         song: None,
         background: None,
-        id,
+        id: id.to_string(),
         title: None,
         kind: SessionItemKind::Text {
             steps: steps.iter().map(|s| s.to_string()).collect(),
@@ -77,7 +77,7 @@ fn image_item(id: i64, path: &str) -> SessionItem {
     SessionItem {
         song: None,
         background: None,
-        id,
+        id: id.to_string(),
         title: None,
         kind: SessionItemKind::Image {
             path: path.to_string(),
@@ -107,7 +107,15 @@ impl Harness {
         engine.handle_report(report, &mut ports)
     }
     fn load(&mut self) {
-        self.send(EngineCommand::LoadProject { project_id: 1 });
+        self.send(EngineCommand::LoadService { service_id: "1".into() });
+    }
+    fn items(&self) -> std::cell::RefMut<'_, Vec<SessionItem>> {
+        std::cell::RefMut::map(self.store.services.borrow_mut(), |s| &mut s[0].items)
+    }
+    fn save(&mut self, change: impl FnOnce(&mut Vec<SessionItem>)) -> Vec<EngineEvent> {
+        change(&mut self.items());
+        let service = self.store.services.borrow()[0].service.clone();
+        self.send(EngineCommand::SaveService { service })
     }
     fn playback(&self) -> &PlaybackState {
         self.engine.snapshot().playback.as_ref().expect("a cued media session")
@@ -118,31 +126,21 @@ impl Harness {
 }
 
 fn setup() -> Harness {
-    let project = ProjectModel {
-        id: 1,
-        name: "Service".into(),
-        session: SessionModel {
-            items: vec![
-                text_item(10, &["a", "b"]),
-                image_item(20, "bg.png"),
-                text_item(30, &["c"]),
-            ],
-        },
-    };
+    let service = live("1", "Service", vec![text_item(10, &["a", "b"]), image_item(20, "bg.png"), text_item(30, &["c"])]);
     let store = FakeStore::default();
-    store.projects.borrow_mut().push(project);
+    store.services.borrow_mut().push(service);
     Harness { engine: Engine::new(), assets: FakeAssets::default(), media: FakeMedia::default(), store, now_ms: 1_000 }
 }
 
 fn selection(engine: &Engine) -> (Option<i64>, Option<u32>, &str) {
     let p = &engine.snapshot().program_state;
     (
-        p.active_item_id,
+        p.active_item_id.as_ref().map(|id| id.parse().unwrap()),
         p.active_step_index,
         p.active_text.as_str(),
     )
 }
 
 fn section(id: i64) -> SessionItem {
-    SessionItem { song: None, background: None, id, title: Some("Worship".into()), kind: SessionItemKind::Section {} }
+    SessionItem { song: None, background: None, id: id.to_string(), title: Some("Worship".into()), kind: SessionItemKind::Section {} }
 }

@@ -5,8 +5,8 @@ use crate::*;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum EngineEvent {
-    ProjectChanged {
-        project: Option<ProjectModel>,
+    ServiceChanged {
+        service: Option<LiveService>,
         version: u64,
     },
 
@@ -30,8 +30,8 @@ pub enum EngineEvent {
 impl EngineSnapshot {
     pub fn sync_events(&self) -> [EngineEvent; 3] {
         [
-            EngineEvent::ProjectChanged {
-                project: self.project.clone(),
+            EngineEvent::ServiceChanged {
+                service: self.service.clone(),
                 version: self.version,
             },
             EngineEvent::ProgramChanged {

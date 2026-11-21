@@ -1,5 +1,5 @@
 use protocol::{
-    BackgroundFit, BackgroundKind, DisplayMode, OutputConfig, PlaybackState, ProgramState, ProjectModel,
+    BackgroundFit, BackgroundKind, DisplayMode, OutputConfig, PlaybackState, ProgramState, LiveService,
     SessionItem, SessionItemKind,
 };
 use render_engine::{
@@ -8,33 +8,32 @@ use render_engine::{
 
 use super::*;
 
-use protocol::{Background, PlaybackKind, PlaybackPhase, SessionModel, VideoOptions};
+use protocol::model::{Section, SectionKind, Service};
+use protocol::{Background, LiveSong, PlaybackKind, PlaybackPhase, VideoOptions};
 
-fn project(items: Vec<SessionItem>) -> ProjectModel {
-    ProjectModel { id: 1, name: "Service".into(), session: SessionModel { items } }
+fn project(items: Vec<SessionItem>) -> LiveService {
+    LiveService { service: Service { id: "1".into(), scheduled_at_ms: 0, title: "Service".into(), leader: None, notes: None, ended_at_ms: None, items: Vec::new() }, items }
+}
+
+fn section(id: &str, kind: SectionKind, lyrics: &str) -> Section {
+    Section { id: id.into(), kind, number: Some(1), name: None, color: None, lyrics: lyrics.into() }
 }
 
 fn song_item(id: i64) -> SessionItem {
-    let song = serde_json::json!({
-        "format": "magi.song.v1", "slideSeparator": "blank-line", "background": "",
-        "parts": [
-            {"id": "v", "type": "Verse", "number": 1, "lyrics": "one\n\ntwo"},
-            {"id": "c", "type": "Chorus", "number": 1, "lyrics": "chorus"}
-        ],
-        "arrangement": ["v", "c", "v"]
-    });
+    let verse = section("v", SectionKind::Verse, "one\n\ntwo");
+    let song = LiveSong { song_id: "s".into(), version_id: "v1".into(), sections: vec![verse.clone(), section("c", SectionKind::Chorus, "chorus"), verse] };
     SessionItem {
-        id,
+        id: id.to_string(),
         title: Some("Song".into()),
         kind: SessionItemKind::Text { steps: vec!["one".into(), "two".into(), "chorus".into(), "one".into(), "two".into()] },
-        song: Some(song.to_string()),
+        song: Some(song),
         background: None,
     }
 }
 
 fn video_item(id: i64, confidence: bool) -> SessionItem {
     SessionItem {
-        id,
+        id: id.to_string(),
         title: None,
         kind: SessionItemKind::Video { path: "/v/clip.mp4".into(), options: VideoOptions { confidence, ..Default::default() } },
         song: None,
@@ -43,6 +42,7 @@ fn video_item(id: i64, confidence: bool) -> SessionItem {
 }
 
 fn playback(session_id: u64, item_id: i64) -> PlaybackState {
+    let item_id = item_id.to_string();
     PlaybackState {
         session_id,
         generation: 0,
@@ -69,7 +69,7 @@ fn playback(session_id: u64, item_id: i64) -> PlaybackState {
 #[test]
 fn repeated_parts_are_separate_groups_and_the_active_line_follows_the_step() {
     let project = project(vec![song_item(1), video_item(2, false)]);
-    let program = ProgramState { active_item_id: Some(1), active_step_index: Some(3), ..Default::default() };
+    let program = ProgramState { active_item_id: Some("1".into()), active_step_index: Some(3), ..Default::default() };
     let scene = confidence_scene(&OutputConfig::default(), &program, Some(&project), None);
     let codes: Vec<_> = scene.groups.iter().map(|g| g.code.as_str()).collect();
     assert_eq!(codes, ["V1", "C1", "V1", "video"]);
@@ -78,19 +78,19 @@ fn repeated_parts_are_separate_groups_and_the_active_line_follows_the_step() {
 }
 
 #[test]
-fn legacy_plain_lyric_items_are_one_verse_of_their_steps() {
+fn plain_text_items_are_one_group_of_their_steps() {
     let legacy = SessionItem {
-        id: 5,
+        id: "5".into(),
         title: Some("Old".into()),
         kind: SessionItemKind::Text { steps: vec!["first".into(), "second".into()] },
         song: None,
         background: None,
     };
     let project = project(vec![legacy]);
-    let program = ProgramState { active_item_id: Some(5), active_step_index: Some(1), ..Default::default() };
+    let program = ProgramState { active_item_id: Some("5".into()), active_step_index: Some(1), ..Default::default() };
     let scene = confidence_scene(&OutputConfig::default(), &program, Some(&project), None);
     assert_eq!(scene.groups.len(), 1);
-    assert_eq!(scene.groups[0].code, "V1");
+    assert_eq!(scene.groups[0].code, "Text");
     assert_eq!(scene.groups[0].lines, ["first", "second"]);
     assert_eq!(scene.active, Some((0, 1)));
 }
@@ -99,7 +99,7 @@ fn legacy_plain_lyric_items_are_one_verse_of_their_steps() {
 fn song_video_backgrounds_loop_ambient_and_cover() {
     let project = project(vec![song_item(1)]);
     let program = ProgramState {
-        active_item_id: Some(1),
+        active_item_id: Some("1".into()),
         background: Some(Background { kind: BackgroundKind::Video, path: "/bg/loop.mp4".into() }),
         ..Default::default()
     };
@@ -115,7 +115,7 @@ fn song_video_backgrounds_loop_ambient_and_cover() {
 fn a_video_item_uses_its_foreground_session_on_both_outputs_when_enabled() {
     let project = project(vec![video_item(2, true)]);
     let mut program = ProgramState {
-        active_item_id: Some(2),
+        active_item_id: Some("2".into()),
         background: Some(Background { kind: BackgroundKind::Video, path: "/v/clip.mp4".into() }),
         ..Default::default()
     };
@@ -141,7 +141,7 @@ fn logo_videos_play_only_while_the_logo_is_up() {
 fn shader_backgrounds_use_the_configured_colors() {
     let project = project(vec![song_item(1)]);
     let program = ProgramState {
-        active_item_id: Some(1),
+        active_item_id: Some("1".into()),
         background: Some(Background { kind: BackgroundKind::Shader, path: "shader:aurora".into() }),
         ..Default::default()
     };
@@ -165,29 +165,29 @@ fn effects_and_transitions_follow_the_settings() {
 }
 
 fn image_item(id: i64, path: &str) -> SessionItem {
-    SessionItem { id, title: None, kind: SessionItemKind::Image { path: path.into() }, song: None, background: None }
+    SessionItem { id: id.to_string(), title: None, kind: SessionItemKind::Image { path: path.into() }, song: None, background: None }
 }
 
 #[test]
 fn the_cues_either_side_are_prepared() {
     let mut song = song_item(2);
     song.background = Some("/bg/next-loop.mp4".into());
-    let slides = SessionItem { id: 4, title: None, kind: SessionItemKind::Presentation { path: "/s/1.png".into(), slides: vec!["/s/1.png".into(), "/s/2.png".into(), "/s/3.png".into()] }, song: None, background: None };
+    let slides = SessionItem { id: "4".into(), title: None, kind: SessionItemKind::Presentation { path: "/s/1.png".into(), slides: vec!["/s/1.png".into(), "/s/2.png".into(), "/s/3.png".into()] }, song: None, background: None };
     let project = project(vec![image_item(1, "/i/before.png"), video_item(3, false), song, slides]);
     let config = OutputConfig { logo_path: "/logo/spin.mov".into(), ..Default::default() };
 
-    let program = ProgramState { active_item_id: Some(3), ..Default::default() };
+    let program = ProgramState { active_item_id: Some("3".into()), ..Default::default() };
     let main = main_scene(&config, &program, Some(&project), None);
     let plan = media_plan(&config, &main, &program, Some(&project), None);
     assert_eq!(plan.images, ["/i/before.png"]);
     assert_eq!(plan.prepared_ambient, ["/logo/spin.mov", "/bg/next-loop.mp4"]);
     assert_eq!(plan.foreground, None);
 
-    let program = ProgramState { active_item_id: Some(1), ..Default::default() };
+    let program = ProgramState { active_item_id: Some("1".into()), ..Default::default() };
     let plan = media_plan(&config, &main_scene(&config, &program, Some(&project), None), &program, Some(&project), None);
     assert_eq!(plan.foreground.as_deref(), Some("/v/clip.mp4"));
 
-    let program = ProgramState { active_item_id: Some(4), active_step_index: Some(1), ..Default::default() };
+    let program = ProgramState { active_item_id: Some("4".into()), active_step_index: Some(1), ..Default::default() };
     let plan = media_plan(&config, &main_scene(&config, &program, Some(&project), None), &program, Some(&project), None);
     assert!(plan.images.contains(&"/s/1.png".to_string()) && plan.images.contains(&"/s/3.png".to_string()), "{:?}", plan.images);
 }
@@ -214,10 +214,10 @@ fn box_opacity_applies_to_the_box_color() {
 fn a_capture_shows_on_the_screens_it_is_routed_to() {
     use protocol::{CaptureFit, CaptureKind, CaptureOptions, CaptureSource};
     let source = CaptureSource { kind: CaptureKind::Window, id: "window:app|Slides".into(), name: "Slides".into() };
-    let capture = |options: CaptureOptions| SessionItem { id: 9, title: None, kind: SessionItemKind::Capture { source: source.clone(), options }, song: None, background: None };
+    let capture = |options: CaptureOptions| SessionItem { id: "9".into(), title: None, kind: SessionItemKind::Capture { source: source.clone(), options }, song: None, background: None };
     let config = OutputConfig::default();
     let song_bg = Background { kind: BackgroundKind::Image, path: "/bg.png".into() };
-    let program = ProgramState { active_item_id: Some(9), background: Some(song_bg), ..ProgramState::default() };
+    let program = ProgramState { active_item_id: Some("9".into()), background: Some(song_bg), ..ProgramState::default() };
     let key = VideoKey::Capture(source.id.clone());
 
     let both = project(vec![capture(CaptureOptions { projection: true, confidence: true, projection_fit: CaptureFit::Fit, confidence_fit: CaptureFit::Fill })]);

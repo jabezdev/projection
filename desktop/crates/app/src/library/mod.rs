@@ -117,29 +117,6 @@ pub fn search(folder: &Path, missing: &[String]) -> BTreeMap<String, String> {
     found
 }
 
-pub fn replace_paths(value: &mut serde_json::Value, map: &BTreeMap<String, String>) -> bool {
-    match value {
-        serde_json::Value::String(text) => {
-            if let Some(new) = map.get(text.as_str()) {
-                *text = new.clone();
-                return true;
-            }
-            if text.starts_with('{') {
-                if let Ok(mut inner) = serde_json::from_str::<serde_json::Value>(text) {
-                    if replace_paths(&mut inner, map) {
-                        *text = inner.to_string();
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-        serde_json::Value::Array(items) => items.iter_mut().fold(false, |changed, item| replace_paths(item, map) || changed),
-        serde_json::Value::Object(fields) => fields.values_mut().fold(false, |changed, field| replace_paths(field, map) || changed),
-        _ => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,22 +158,6 @@ mod tests {
         assert!(found[&missing[0]].ends_with("Welcome.MP4"));
         assert!(found[&missing[1]].ends_with("logo.png"));
         std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn paths_are_replaced_in_items_and_embedded_song_documents() {
-        let map = BTreeMap::from([("/old/bg.png".to_string(), "/new/bg.png".to_string())]);
-        let mut project = serde_json::json!({
-            "session": { "items": [
-                { "background": "/old/bg.png", "song": "{\"background\":\"/old/bg.png\",\"parts\":[]}", "kind": { "kind": "image", "data": { "path": "/old/other.png" } } }
-            ] }
-        });
-        assert!(replace_paths(&mut project, &map));
-        let item = &project["session"]["items"][0];
-        assert_eq!(item["background"], "/new/bg.png");
-        assert_eq!(serde_json::from_str::<serde_json::Value>(item["song"].as_str().unwrap()).unwrap()["background"], "/new/bg.png");
-        assert_eq!(item["kind"]["data"]["path"], "/old/other.png");
-        assert!(!replace_paths(&mut project, &map), "nothing left to replace");
     }
 
     #[test]

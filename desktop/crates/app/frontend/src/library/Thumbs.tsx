@@ -1,6 +1,5 @@
 import { Icon } from '../ui/Icons';
 import type { MediaKind, SessionItem } from '../api/models';
-import { itemSong, songSteps } from '../song/song';
 import { Background, SlidePreview } from '../song/SlidePreview';
 
 export function MediaThumb({ kind, path, badge }: { kind: MediaKind; path: string; badge?: string }) {
@@ -14,8 +13,7 @@ export function MediaThumb({ kind, path, badge }: { kind: MediaKind; path: strin
 export function ItemThumb({ item }: { item: SessionItem }) {
   const kind = item.kind;
   if (kind.kind === 'text') {
-    const song = itemSong(item);
-    return <div className="thumb"><SlidePreview text={songSteps(song)[0] || ''} background={song.background || item.background || ''}/></div>;
+    return <div className="thumb"><SlidePreview text={kind.data.steps[0] || ''} background={item.background || ''}/></div>;
   }
   if (kind.kind === 'presentation') {
     const slides = kind.data.slides || [kind.data.path];

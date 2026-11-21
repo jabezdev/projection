@@ -50,11 +50,11 @@ for (const decoder of decoders) {
   const app = await App.start(appPath, dataDir, port, args['manual-show'] ? {} : { PALTO_SHOW_OUTPUTS: '1' });
   try {
     const serviceId = app.seedService('Profile', [
-      { id: 1, title: basename(video), kind: { kind: 'video', data: { path: video, options: videoOptions({ confidence, looping: true }) } } },
+      { id: '1', title: basename(video), media: { kind: 'video', path: video, options: videoOptions({ confidence, looping: true }) } },
     ]);
     const remote = await Remote.connect(port);
-    await remote.command('load_project', { project_id: serviceId }, e => e.type === 'project_changed', 'the service to load');
-    await remote.command('cue', { item_id: 1, index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 30_000);
+    await remote.command('load_service', { service_id: serviceId }, e => e.type === 'service_changed', 'the service to load');
+    await remote.command('cue', { item_id: '1', index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 30_000);
     if (args['manual-show']) console.log('Show the outputs now (Screens → Show).');
     console.log(`[${decoder}] warming up for ${WARMUP_MS / 1000} s, then measuring for ${seconds} s…`);
     await Bun.sleep(WARMUP_MS);

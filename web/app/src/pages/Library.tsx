@@ -16,7 +16,7 @@ export function Library() {
         <input
           className="flex-1"
           type="search"
-          placeholder="Search titles, artists, lyrics…"
+          placeholder="Search titles, authors, lyrics…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -34,11 +34,11 @@ export function Library() {
       ) : (
         <ul className="divide-y divide-line/60 overflow-hidden rounded-xl border border-line/60 bg-card">
           {songs.map((song) => (
-            <li key={song._id}>
-              <Link to={`/library/${song._id}`} className="flex items-baseline gap-3 px-4 py-3 hover:bg-hover">
+            <li key={song.id}>
+              <Link to={`/library/${song.id}`} className="flex items-baseline gap-3 px-4 py-3 hover:bg-hover">
                 <span className="font-medium">{song.title}</span>
-                <span className="truncate text-sm text-muted">{song.artist}</span>
-                {song.defaultKey && <span className="ml-auto text-xs text-muted">{song.defaultKey}</span>}
+                <span className="truncate text-sm text-muted">{song.credits.authors?.map((a) => a.name).join(", ")}</span>
+                {song.key && <span className="ml-auto text-xs text-muted">{song.key}</span>}
               </Link>
             </li>
           ))}

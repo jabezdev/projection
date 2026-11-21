@@ -3,7 +3,7 @@
 const TOKEN = 'palto.token';
 const $ = id => document.getElementById(id);
 let socket = null;
-let project = null;
+let live = null;
 let program = null;
 let retry = 0;
 
@@ -68,14 +68,14 @@ function send(type, payload) {
 }
 
 function receive(event) {
-  if (event.type === 'project_changed') project = event.payload.project;
+  if (event.type === 'service_changed') live = event.payload.service;
   else if (event.type === 'program_changed') program = event.payload.program_state;
   else if (event.type === 'error' && event.payload.source === 'remote') { $('error').textContent = event.payload.message; setTimeout(() => { $('error').textContent = ''; }, 3000); return; }
   else return;
   render();
 }
 
-const items = () => project?.session?.items ?? [];
+const items = () => live?.items ?? [];
 const label = item => item?.title || ({ text: 'Song', image: 'Image', video: 'Video', audio: 'Audio', presentation: 'Presentation' })[item?.kind?.kind] || '';
 function steps(item) {
   const kind = item?.kind;
@@ -85,7 +85,7 @@ function steps(item) {
 }
 
 function render() {
-  $('service').textContent = project?.name ?? 'No service loaded';
+  $('service').textContent = live?.service?.title ?? 'No service loaded';
   const list = items();
   const index = list.findIndex(item => item.id === program?.active_item_id);
   const item = list[index];

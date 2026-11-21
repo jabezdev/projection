@@ -1,6 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { App, Remote, defaultAppPath, parseArgs, playback, program, project, scratchDir, videoOptions, type Json } from './harness';
+import { App, Remote, defaultAppPath, parseArgs, playback, program, service, scratchDir, videoOptions, type Json, type Seed } from './harness';
 
 const args = parseArgs();
 const appPath = typeof args.app === 'string' ? args.app : defaultAppPath();
@@ -32,10 +32,10 @@ async function testVideo(): Promise<string | null> {
 const image = join(dataDir, 'still.png');
 writeFileSync(image, Buffer.from(PNG, 'base64'));
 const video = await testVideo();
-const items: Json[] = [
-  { id: 1, title: 'Song', kind: { kind: 'text', data: { steps: ['Line one', 'Line two'] } } },
-  { id: 2, title: 'Still', kind: { kind: 'image', data: { path: image } } },
-  ...(video ? [{ id: 3, title: 'Clip', kind: { kind: 'video', data: { path: video, options: videoOptions() } } }] : []),
+const items: Seed[] = [
+  { id: '1', title: 'Song', steps: ['Line one', 'Line two'] },
+  { id: '2', title: 'Still', media: { kind: 'image', path: image } },
+  ...(video ? [{ id: '3', title: 'Clip', media: { kind: 'video' as const, path: video } }] : []),
 ];
 
 console.log(`PALTO end-to-end (${appPath}, data in ${dataDir})`);
@@ -44,9 +44,9 @@ const serviceId = app.seedService('E2E service', items);
 let remote = await Remote.connect(port);
 
 await step('load a service', async () => {
-  const loaded = remote.next(e => project(e)?.id === serviceId, 'project_changed');
-  const selected = remote.next(e => program(e)?.active_item_id === 1, 'the first item to be selected');
-  remote.send('load_project', { project_id: serviceId });
+  const loaded = remote.next(e => service(e)?.id === serviceId, 'service_changed');
+  const selected = remote.next(e => program(e)?.active_item_id === '1', 'the first item to be selected');
+  remote.send('load_service', { service_id: serviceId });
   await Promise.all([loaded, selected]);
 });
 
@@ -58,7 +58,7 @@ await step('navigate lyrics with next and previous', async () => {
 });
 
 await step('cue an image', async () => {
-  const state = program(await remote.command('cue', { item_id: 2, index: 0 }, e => program(e)?.active_item_id === 2, 'the image cue'))!;
+  const state = program(await remote.command('cue', { item_id: '2', index: 0 }, e => program(e)?.active_item_id === '2', 'the image cue'))!;
   const background = state.background as Json | null;
   expect(background?.kind === 'image' && background.path === image, `background ${JSON.stringify(background)}`);
 });
@@ -71,7 +71,7 @@ await step('display modes', async () => {
 
 if (video) {
   await step('video transport', async () => {
-    await remote.command('cue', { item_id: 3, index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 20_000);
+    await remote.command('cue', { item_id: '3', index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 20_000);
     await remote.command('pause', undefined, e => playback(e)?.paused === true, 'pause');
     const seeked = playback(await remote.command('seek', { time_ms: 2_000 }, e => (playback(e)?.position_ms as number) >= 2_000, 'the seek'))!;
     expect((seeked.generation as number) > 0, 'seek starts a new generation');
@@ -79,7 +79,7 @@ if (video) {
     await remote.command('play', undefined, e => playback(e)?.phase === 'playing', 'play again', 10_000);
     await remote.command('set_display', { display: 'logo' }, e => playback(e)?.suspended === true, 'logo to suspend video');
     await remote.command('set_display', { display: 'live' }, e => playback(e)?.suspended === false, 'live to resume video');
-    await remote.command('cue', { item_id: 1, index: 1 }, e => playback(e) === null, 'leaving the video to close its session');
+    await remote.command('cue', { item_id: '1', index: 1 }, e => playback(e) === null, 'leaving the video to close its session');
   });
 } else {
   console.log('  skip  video transport (no --video and no ffmpeg command)');
@@ -93,12 +93,12 @@ await step('stale media commands are refused', async () => {
 
 await step('save a service', async () => {
   const last = [...remote.events].reverse().map(program).find(p => p);
-  if (last?.active_item_id !== 1 || last?.active_step_index !== 1) {
-    await remote.command('cue', { item_id: 1, index: 1 }, e => program(e)?.active_step_index === 1, 'the second line');
+  if (last?.active_item_id !== '1' || last?.active_step_index !== 1) {
+    await remote.command('cue', { item_id: '1', index: 1 }, e => program(e)?.active_step_index === 1, 'the second line');
   }
-  const current = [...remote.events].reverse().map(project).find(p => p) as Json;
-  const renamed = { ...current, name: 'E2E service (renamed)' };
-  await remote.command('save_project', { project: renamed }, e => project(e)?.name === 'E2E service (renamed)', 'the saved service');
+  const current = [...remote.events].reverse().map(service).find(p => p) as Json;
+  const renamed = { ...current, title: 'E2E service (renamed)' };
+  await remote.command('save_service', { service: renamed }, e => service(e)?.title === 'E2E service (renamed)', 'the saved service');
 });
 
 await step('restart: saved changes load and the last cue is restored', async () => {
@@ -108,13 +108,13 @@ await step('restart: saved changes load and the last cue is restored', async () 
   app = await App.start(appPath, dataDir, port);
   remote = await Remote.connect(port);
   const deadline = Date.now() + 10_000;
-  let restored: { project?: Json | null; program?: Json | null } = {};
-  while (Date.now() < deadline && !(restored.program?.active_item_id === 1 && restored.program?.active_step_index === 1)) {
-    restored = { project: [...remote.events].reverse().map(project).find(p => p !== undefined), program: [...remote.events].reverse().map(program).find(p => p) };
+  let restored: { service?: Json | null; program?: Json | null } = {};
+  while (Date.now() < deadline && !(restored.program?.active_item_id === '1' && restored.program?.active_step_index === 1)) {
+    restored = { service: [...remote.events].reverse().map(service).find(p => p !== undefined), program: [...remote.events].reverse().map(program).find(p => p) };
     await Bun.sleep(200);
   }
-  expect(restored.project?.name === 'E2E service (renamed)', `restored service ${JSON.stringify(restored.project?.name)}`);
-  expect(restored.program?.active_item_id === 1 && restored.program?.active_step_index === 1, `restored cue ${JSON.stringify(restored.program)}`);
+  expect(restored.service?.title === 'E2E service (renamed)', `restored service ${JSON.stringify(restored.service?.title)}`);
+  expect(restored.program?.active_item_id === '1' && restored.program?.active_step_index === 1, `restored cue ${JSON.stringify(restored.program)}`);
 });
 
 remote.close();

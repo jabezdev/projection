@@ -13,12 +13,12 @@ function positionOf(p: PlaybackState, now: number) {
   return p.position_ms + Math.max(0, now - p.position_at_ms) * p.rate_percent / 100;
 }
 
-export default function NowPlaying({ items, nextItemId }: { items: SessionItem[]; nextItemId?: number | null }) {
+export default function NowPlaying({ items, nextItemId }: { items: SessionItem[]; nextItemId?: string | null }) {
   const playback = usePlayback();
   return playback ? <MediaTransport key={playback.session_id} playback={playback} items={items} nextItemId={nextItemId}/> : null;
 }
 
-function MediaTransport({ playback, items, nextItemId }: { playback: PlaybackState; items: SessionItem[]; nextItemId?: number | null }) {
+function MediaTransport({ playback, items, nextItemId }: { playback: PlaybackState; items: SessionItem[]; nextItemId?: string | null }) {
   const [now, setNow] = useState(() => Date.now());
   const [scrub, setScrub] = useState<number | null>(null);
   const [fading, setFading] = useState(false);

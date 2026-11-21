@@ -1,7 +1,6 @@
 import { createContext, useContext, type CSSProperties } from 'react';
-import type { Media, SessionItem } from '../api/models';
+import type { MediaFile, SessionItem } from '../api/models';
 import { defaultOutputConfig, shaderPresets, type OutputConfig } from '../settings/outputState';
-import { itemSong, songSteps } from '../song/song';
 
 export const OutputConfigContext = createContext<OutputConfig>(defaultOutputConfig);
 export const useOutputConfig = () => useContext(OutputConfigContext);
@@ -22,26 +21,26 @@ export function shaderStyle(name: string, config: OutputConfig): CSSProperties {
   return { background: `linear-gradient(135deg, ${a}, ${b})` };
 }
 
-type Choice = { path: string; name: string; kind: string };
-export function backgroundChoices(backgrounds: Media[]): { group: string; items: Choice[] }[] {
+type Choice = { value: string; path: string; name: string; kind: string };
+export function backgroundChoices(backgrounds: MediaFile[]): { group: string; items: Choice[] }[] {
   return [
-    { group: 'None', items: [{ path: '', name: 'No background', kind: 'Keeps the previous one' }] },
-    { group: 'Animated', items: shaderPresets.map(p => ({ path: `shader:${p.name}`, name: p.title.replace(/ \(animated\)/i, ''), kind: 'Animated' })) },
-    { group: 'Videos', items: backgrounds.filter(m => m.kind === 'video').map(m => ({ path: m.path, name: m.title, kind: 'Video' })) },
-    { group: 'Images', items: backgrounds.filter(m => m.kind === 'image').map(m => ({ path: m.path, name: m.title, kind: 'Image' })) },
+    { group: 'None', items: [{ value: '', path: '', name: 'No background', kind: 'Keeps the previous one' }] },
+    { group: 'Animated', items: shaderPresets.map(p => ({ value: `shader:${p.name}`, path: `shader:${p.name}`, name: p.title.replace(/ \(animated\)/i, ''), kind: 'Animated' })) },
+    { group: 'Videos', items: backgrounds.filter(m => m.kind === 'video').map(m => ({ value: m.id, path: m.path ?? '', name: m.title, kind: 'Video' })) },
+    { group: 'Images', items: backgrounds.filter(m => m.kind === 'image').map(m => ({ value: m.id, path: m.path ?? '', name: m.title, kind: 'Image' })) },
   ].filter(g => g.items.length);
 }
-export function backgroundName(path: string, backgrounds: Media[]) {
-  if (!path) return { name: 'No background', kind: 'Keeps the previous one' };
-  if (isShader(path)) return { name: shaderPresets.find(p => `shader:${p.name}` === path)?.title.replace(/ \(animated\)/i, '') ?? path.slice(7), kind: 'Animated' };
-  const media = backgrounds.find(m => m.path === path);
-  return { name: media?.title ?? path.split(/[\\/]/).pop() ?? path, kind: media ? (media.kind === 'video' ? 'Video' : 'Image') : 'File' };
+export function backgroundName(value: string, backgrounds: MediaFile[]) {
+  if (!value) return { name: 'No background', kind: 'Keeps the previous one' };
+  if (isShader(value)) return { name: shaderPresets.find(p => `shader:${p.name}` === value)?.title.replace(/ \(animated\)/i, '') ?? value.slice(7), kind: 'Animated' };
+  const media = backgrounds.find(m => m.id === value);
+  return { name: media?.title ?? 'Missing file', kind: media ? (media.kind === 'video' ? 'Video' : 'Image') : 'File' };
 }
 
 export function itemSummary(item: SessionItem) {
   const kind = item.kind;
   switch (kind.kind) {
-    case 'text': { const song = itemSong(item); return `Song · ${songSteps(song).length} slides${song.editedInService ? ' · edited here' : ''}`; }
+    case 'text': return `${item.song ? 'Song' : 'Text'} · ${kind.data.steps.length} slides`;
     case 'presentation': return `Slides · ${(kind.data.slides || [kind.data.path]).length}`;
     case 'capture': return `${kind.data.source.kind === 'window' ? 'Window' : 'Screen'} capture · ${kind.data.source.name}`;
     case 'video': return `Video${kind.data.options?.looping ? ' · loops' : ''}${kind.data.options?.confidence ? ' · confidence' : ''}`;

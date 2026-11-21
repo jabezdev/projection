@@ -1,10 +1,9 @@
 import { api } from "@magi/backend/api";
-import type { Id } from "@magi/backend/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { useDeferredValue, useState } from "react";
 import { useSafe } from "../../lib/errors";
 
-export function AddSong({ serviceId }: { serviceId: Id<"services"> }) {
+export function AddSong({ serviceId }: { serviceId: string }) {
   const safe = useSafe();
   const addSong = useMutation(api.services.addSong);
   const [search, setSearch] = useState("");
@@ -22,15 +21,15 @@ export function AddSong({ serviceId }: { serviceId: Id<"services"> }) {
       />
       {results?.map((song) => (
         <button
-          key={song._id}
+          key={song.id}
           className="flex w-full items-baseline gap-3 rounded-lg px-3 py-2 text-left hover:bg-hover"
           onClick={async () => {
             setSearch("");
-            await safe(addSong)({ serviceId, songId: song._id });
+            await safe(addSong)({ serviceId, songId: song.id });
           }}
         >
           <span>{song.title}</span>
-          <span className="text-sm text-muted">{song.artist}</span>
+          <span className="text-sm text-muted">{song.credits.authors?.map((a) => a.name).join(", ")}</span>
         </button>
       ))}
       {results?.length === 0 && <p className="px-3 text-sm text-muted">No songs match.</p>}

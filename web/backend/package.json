@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "convex": "^1.46.0"
+    "convex": "^1.46.0",
+    "@magi/shared": "workspace:*"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

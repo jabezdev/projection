@@ -26,13 +26,15 @@ pub struct MediaEntry {
 
 pub fn media_list(db: &Repository, logo_path: &str) -> anyhow::Result<Vec<MediaEntry>> {
     let mut uses: Vec<(String, Option<String>, Option<String>)> = Vec::new();
-    for media in db.list_media()? {
-        uses.push((media.path, Some(media.title), None));
+    for media in db.list_media_files()? {
+        if let Some(path) = media.path {
+            uses.push((path, Some(media.title), None));
+        }
     }
-    for header in db.list_projects()? {
-        let project = db.get_project(header.id)?;
-        for item in &project.session.items {
-            let mut paths: Vec<&str> = item.background.as_deref().into_iter().collect();
+    for service in db.list_services()? {
+        let live = db.resolve_service(&service)?;
+        for item in &live.items {
+            let mut paths: Vec<&str> = item.background.as_deref().filter(|p| !p.starts_with(protocol::SHADER_PREFIX)).into_iter().collect();
             match &item.kind {
                 SessionItemKind::Image { path } | SessionItemKind::Video { path, .. } | SessionItemKind::Audio { path, .. } => paths.push(path),
                 SessionItemKind::Presentation { path, slides } => {
@@ -42,7 +44,7 @@ pub fn media_list(db: &Repository, logo_path: &str) -> anyhow::Result<Vec<MediaE
                 SessionItemKind::Text { .. } | SessionItemKind::Capture { .. } | SessionItemKind::Section {} => {}
             }
             for path in paths.into_iter().filter(|p| !p.is_empty()) {
-                uses.push((path.to_string(), None, Some(project.name.clone())));
+                uses.push((path.to_string(), None, Some(service.title.clone())));
             }
         }
     }
@@ -136,7 +138,7 @@ pub fn automatic_if_due(db: &Repository, data_dir: &Path, logo_path: &str, now: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocol::{SessionItem, VideoOptions};
+    use protocol::model::{new_id, ItemContent, MediaFile, MediaKind, Service, ServiceItem};
     use std::io::Read;
 
     fn temp_dir() -> PathBuf {
@@ -152,10 +154,12 @@ mod tests {
         std::fs::write(&present, b"png").unwrap();
         std::fs::write(dir.join("output-settings.json"), r#"{"size":5}"#).unwrap();
         let db = Repository::new(dir.join("app.db")).unwrap();
-        db.create_media("Still".into(), protocol::MediaKind::Image, present.to_string_lossy().into()).unwrap();
-        let mut service = db.create_project("Sunday", 1).unwrap();
-        service.session.items.push(SessionItem { id: 1, title: None, kind: SessionItemKind::Video { path: "/gone/clip.mp4".into(), options: VideoOptions::default() }, song: None, background: Some(present.to_string_lossy().into()) });
-        db.save_project(&mut service, 2).unwrap();
+        let still = MediaFile { id: new_id(), title: "Still".into(), kind: MediaKind::Image, hash: None, path: Some(present.to_string_lossy().into()) };
+        let clip = MediaFile { id: new_id(), title: "Clip".into(), kind: MediaKind::Video, hash: None, path: Some("/gone/clip.mp4".into()) };
+        db.save_media_file(&still).unwrap();
+        db.save_media_file(&clip).unwrap();
+        let item = ServiceItem { id: new_id(), title: None, notes: None, background: Some(still.id.clone()), content: ItemContent::Media { media_id: clip.id.clone(), options: Default::default() } };
+        db.save_service(&Service { id: new_id(), scheduled_at_ms: 1, title: "Sunday".into(), leader: None, notes: None, ended_at_ms: None, items: vec![item] }, 2).unwrap();
 
         let dest = dir.join("out.zip");
         write(&db, &dir, "", &dest).unwrap();

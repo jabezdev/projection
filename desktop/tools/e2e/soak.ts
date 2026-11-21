@@ -37,11 +37,11 @@ const app = await App.start(typeof args.app === 'string' ? args.app : defaultApp
 const failures: string[] = [];
 try {
   const serviceId = app.seedService('Soak test', [
-    { id: 1, title: 'Soak video', kind: { kind: 'video', data: { path: resolve(args.video), options: videoOptions({ confidence: true, looping: true }) } } },
+    { id: '1', title: 'Soak video', media: { kind: 'video', path: resolve(args.video), options: videoOptions({ confidence: true, looping: true }) } },
   ]);
   const remote = await Remote.connect(port);
-  await remote.command('load_project', { project_id: serviceId }, e => e.type === 'project_changed', 'the service to load');
-  await remote.command('cue', { item_id: 1, index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 30_000);
+  await remote.command('load_service', { service_id: serviceId }, e => e.type === 'service_changed', 'the service to load');
+  await remote.command('cue', { item_id: '1', index: 0 }, e => playback(e)?.phase === 'playing', 'the video to play', 30_000);
 
   console.log(args['manual-show'] ? 'Video is playing. Show the outputs now (Screens → Show); waiting for both outputs to present frames…' : 'Video is playing; waiting for both outputs to present frames…');
   const showDeadline = Date.now() + (args['manual-show'] ? 10 * 60_000 : 60_000);

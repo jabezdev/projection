@@ -1,27 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/Icons';
 import { invoke } from '../api/tauri';
-import { newItemId, type ProjectModel } from '../api/models';
-import type { ProjectHeader } from '../api/useEngine';
+import { isPast, type LiveService, type MediaFile, type Service, type Song } from '../api/models';
 import { ItemThumb } from '../library/Thumbs';
+import { catalog, resolveItem, type Catalog } from '../api/resolve';
+import { copyItem } from './serviceItems';
 
 type Props = {
-  project: ProjectModel | null;
-  projects: ProjectHeader[];
-  persist: (project: ProjectModel) => Promise<void>;
-  onLoad: (projectId: number) => Promise<boolean>;
+  live: LiveService | null;
+  services: Service[];
+  persist: (service: Service) => Promise<void>;
+  onLoad: (serviceId: string) => Promise<boolean>;
   onEdit: () => void;
   onListChanged: () => Promise<void>;
   confirm: (message: string, action: string) => Promise<boolean>;
   onError: (message: string) => void;
 };
 
-export default function ServiceMenu({ project, projects, persist, onLoad, onEdit, onListChanged, confirm, onError }: Props) {
+const when = (ms: number) => new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+export default function ServiceMenu({ live, services, persist, onLoad, onEdit, onListChanged, confirm, onError }: Props) {
+  const project = live?.service ?? null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [menu, setMenu] = useState<number | null>(null);
-  const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
-  const [covers, setCovers] = useState<Map<number, ProjectModel>>(new Map());
+  const [menu, setMenu] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [library, setLibrary] = useState<Catalog | null>(null);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -34,57 +38,58 @@ export default function ServiceMenu({ project, projects, persist, onLoad, onEdit
   useEffect(() => {
     if (!open) return;
     let disposed = false;
-    void Promise.all(projects.map(p => invoke<ProjectModel>('get_project', { projectId: p.id }).catch(() => null)))
-      .then(all => { if (!disposed) setCovers(new Map(all.filter((p): p is ProjectModel => !!p).map(p => [p.id, p]))); });
+    void Promise.all([invoke<Song[]>('list_songs', { includeArchived: true }), invoke<MediaFile[]>('list_media')])
+      .then(([songs, media]) => { if (!disposed) setLibrary(catalog(songs, media)); }).catch(() => {});
     return () => { disposed = true; };
-  }, [open, projects]);
+  }, [open]);
   function close() { setOpen(false); setMenu(null); setRenaming(null); setQuery(''); }
   async function act(work: () => Promise<void>) { try { await work(); } catch (e) { onError(String(e)); } }
-  async function saveService(id: number, change: (p: ProjectModel) => ProjectModel) {
+  async function saveService(id: string, change: (s: Service) => Service) {
     if (project?.id === id) await persist(change(project));
-    else await invoke('save_project', { project: change(await invoke<ProjectModel>('get_project', { projectId: id })) });
+    else await invoke('save_service', { service: change(await invoke<Service>('get_service', { serviceId: id })) });
     await onListChanged();
   }
-  async function create(name: string, from: ProjectModel | null) {
-    const created = await invoke<ProjectModel>('create_project', { name });
-    const items = (from?.session.items ?? []).map(item => ({ ...structuredClone(item), id: newItemId() }));
-    if (items.length) await invoke('save_project', { project: { ...created, session: { items } } });
+  async function create(title: string, from: Service | null) {
+    const created = await invoke<Service>('create_service', { title, scheduledAtMs: Date.now() });
+    const items = (from?.items ?? []).map(copyItem).map(item => item.content.kind === 'song' ? { ...item, content: { ...item.content, versionId: undefined } } : item);
+    if (items.length) await invoke('save_service', { service: { ...created, items } });
     await onListChanged();
     return created;
   }
   const q = query.trim().toLowerCase();
-  const list = projects.filter(p => !q || p.name.toLowerCase().includes(q));
+  const list = services.filter(p => !q || p.title.toLowerCase().includes(q));
   return <div className="service-menu" ref={root}>
     <div className="service-selector">
       <button className="service-name" aria-haspopup="dialog" aria-expanded={open} onClick={() => open ? close() : setOpen(true)}>
-        <span>{project?.name || 'Select a service'}</span><Icon name="chevron"/>
+        <span>{project?.title || 'Select a service'}</span><Icon name="chevron"/>
       </button>
       <button className="service-edit" aria-label="Edit service" title="Edit service" disabled={!project} onClick={() => { close(); onEdit(); }}><Icon name="edit"/></button>
     </div>
     {open && <div className="service-popover" role="dialog" aria-label="Services">
       <input autoFocus aria-label="Find a service" placeholder="Find a service…" value={query} onChange={e => setQuery(e.target.value)}/>
       <div className="service-list">
-        {list.map(p => { const cover = covers.get(p.id)?.session.items[0]; return <div key={p.id} className={`service-row ${p.id === project?.id ? 'is-current' : ''}`}>
+        {list.map(p => { const first = p.items[0]; const cover = first && library ? resolveItem(first, library) : null; return <div key={p.id} className={`service-row ${p.id === project?.id ? 'is-current' : ''}`}>
           {renaming?.id === p.id
-            ? <form className="service-rename" onSubmit={e => { e.preventDefault(); const name = renaming.name.trim(); if (!name) return; setRenaming(null); void act(() => saveService(p.id, s => ({ ...s, name }))); }}>
+            ? <form className="service-rename" onSubmit={e => { e.preventDefault(); const title = renaming.name.trim(); if (!title) return; setRenaming(null); void act(() => saveService(p.id, s => ({ ...s, title }))); }}>
                 <input autoFocus aria-label="Service name" value={renaming.name} onChange={e => setRenaming({ id: p.id, name: e.target.value })} onBlur={() => setRenaming(null)}/>
               </form>
             : <button className="service-row-main" onClick={() => { if (p.id === project?.id) { close(); return; } void act(async () => { if (await onLoad(p.id)) close(); }); }}>
                 {cover ? <ItemThumb item={cover}/> : <span className="thumb"><span className="thumb-tile">Empty</span></span>}
-                <span className="service-row-text"><strong>{p.name}</strong><small>{covers.get(p.id) ? `${covers.get(p.id)!.session.items.length} items` : ''}{p.id === project?.id ? ' · loaded' : ''}</small></span>
+                <span className="service-row-text"><strong>{p.title}</strong><small>{when(p.scheduledAtMs)} · {p.items.length} items{isPast(p) ? ' · past' : ''}{p.id === project?.id ? ' · loaded' : ''}</small></span>
               </button>}
-          <button className="icon-button service-row-more" aria-label={`More for ${p.name}`} aria-haspopup="menu" aria-expanded={menu === p.id} onClick={() => setMenu(menu === p.id ? null : p.id)}><Icon name="more"/></button>
+          <button className="icon-button service-row-more" aria-label={`More for ${p.title}`} aria-haspopup="menu" aria-expanded={menu === p.id} onClick={() => setMenu(menu === p.id ? null : p.id)}><Icon name="more"/></button>
           {menu === p.id && <div className="service-row-menu" role="menu">
-            <button role="menuitem" onClick={() => { setMenu(null); setRenaming({ id: p.id, name: p.name }); }}>Rename</button>
-            <button role="menuitem" onClick={() => { setMenu(null); void act(async () => { const source = covers.get(p.id) ?? await invoke<ProjectModel>('get_project', { projectId: p.id }); await create(`${p.name} (copy)`, source); }); }}>Duplicate</button>
-            <button role="menuitem" className="danger" disabled={p.id === project?.id} title={p.id === project?.id ? 'Load another service first' : undefined} onClick={() => { setMenu(null); void act(async () => { if (!(await confirm(`Delete “${p.name}”? This cannot be undone.`, 'Delete'))) return; await invoke('delete_project', { projectId: p.id }); await onListChanged(); }); }}>Delete…</button>
+            <button role="menuitem" onClick={() => { setMenu(null); setRenaming({ id: p.id, name: p.title }); }}>Rename</button>
+            <button role="menuitem" onClick={() => { setMenu(null); void act(async () => { await create(`${p.title} (copy)`, p); }); }}>Duplicate</button>
+            {!isPast(p) && <button role="menuitem" onClick={() => { setMenu(null); void act(async () => { if (!(await confirm(`End “${p.title}”? Its songs keep the words they have now, even if the library changes later.`, 'End service'))) return; await invoke('end_service', { serviceId: p.id }); await onListChanged(); }); }}>End service…</button>}
+            <button role="menuitem" className="danger" disabled={p.id === project?.id} title={p.id === project?.id ? 'Load another service first' : undefined} onClick={() => { setMenu(null); void act(async () => { if (!(await confirm(`Delete “${p.title}”? This cannot be undone.`, 'Delete'))) return; await invoke('delete_service', { serviceId: p.id }); await onListChanged(); }); }}>Delete…</button>
           </div>}
         </div>; })}
         {!list.length && <p className="empty-panel">{q ? 'No service matches.' : 'No services yet.'}</p>}
       </div>
       <div className="service-popover-foot">
         <button onClick={() => void act(async () => { const created = await create('New service', null); if (await onLoad(created.id)) { close(); onEdit(); } })}><Icon name="plus"/>New service</button>
-        <button disabled={!project} onClick={() => void act(async () => { if (!project) return; const created = await create(`${project.name} (copy)`, project); if (await onLoad(created.id)) { close(); onEdit(); } })}><Icon name="copy"/>Copy of this one</button>
+        <button disabled={!project} onClick={() => void act(async () => { if (!project) return; const created = await create(`${project.title} (copy)`, project); if (await onLoad(created.id)) { close(); onEdit(); } })}><Icon name="copy"/>Copy of this one</button>
       </div>
     </div>}
   </div>;

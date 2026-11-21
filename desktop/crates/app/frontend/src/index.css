@@ -466,6 +466,10 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .song-preview-caption { display: flex; justify-content: space-between; gap: 10px; color: var(--fg-3); font-size: 12px; }
 .song-field { display: grid; gap: 6px; color: var(--fg-3); font-size: 12px; font-weight: 600; flex-shrink: 0; }
 .song-field input { padding: 7px 10px; border-radius: 3px; background: var(--bg-0); color: var(--fg-1); font-size: 14px; font-weight: 500; }
+.song-credits { display: grid; gap: 10px; }
+.song-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lyric-part-name { min-width: 0; }
+input.lyric-part-name { padding: 2px 6px; border-radius: 3px; background: var(--bg-0); color: var(--fg-1); font: inherit; width: 10em; }
 .song-title-field input { font-size: 18px; font-weight: 600; }
 .arrangement-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .arrangement-chip { display: inline-flex; align-items: stretch; border-radius: 2px; overflow: hidden; background: var(--part-color); color: #0d0d0d; cursor: grab; transition: opacity var(--fast); }

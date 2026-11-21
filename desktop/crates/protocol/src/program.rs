@@ -42,8 +42,8 @@ pub struct ProgramState {
     pub display: DisplayMode,
     pub mode: Mode,
 
-    pub active_item_id: Option<i64>,
-    pub next_item_id: Option<i64>,
+    pub active_item_id: Option<String>,
+    pub next_item_id: Option<String>,
 
     pub active_step_index: Option<u32>,
 
@@ -71,7 +71,7 @@ pub struct EngineSnapshot {
     pub program_state: ProgramState,
     pub version: u64,
 
-    pub project: Option<ProjectModel>,
+    pub service: Option<LiveService>,
 
     #[serde(default)]
     pub playback: Option<PlaybackState>,

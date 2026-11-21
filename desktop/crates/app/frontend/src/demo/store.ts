@@ -1,29 +1,25 @@
-import type { UiOnlyStore, UiOnlyProgramState, UiOnlyProjectModel } from './types';
+import type { UiOnlyStore, UiOnlyProgramState } from './types';
 import { isTauri } from '../api/tauri';
-import { DEMO_LOGO, DEMO_PROJECT_ID, demoMedia, demoProject, demoSongs } from './service';
+import { DEMO_LOGO, demoMedia, demoService, demoSongs } from './service';
 
-export const UI_ONLY_STORAGE_KEY = 'magi.projection.ui_only.v1';
+export const UI_ONLY_STORAGE_KEY = 'magi.projection.ui_only.v2';
 
 export function defaultProgramState(): UiOnlyProgramState {
-  return {
-    mode: 'manual',
-    active_item_id: null,
-    next_item_id: null,
-    active_step_index: null,
-    active_text: '',
-    background: null,
-  };
+  return { mode: 'manual', active_item_id: null, next_item_id: null, active_step_index: null, active_text: '', background: null };
+}
+
+function empty(): UiOnlyStore {
+  return { version: 1, active_service_id: null, program_state: defaultProgramState(), media: [], songs: {}, versions: {}, services: {}, frozen: [] };
 }
 
 export function demoStore(): UiOnlyStore {
+  const service = demoService();
   const store: UiOnlyStore = {
-    version: 1,
-    active_project_id: DEMO_PROJECT_ID,
-    program_state: defaultProgramState(),
-    media: demoMedia,
-    songs: demoSongs,
-    projects: { [String(DEMO_PROJECT_ID)]: structuredClone(demoProject) as UiOnlyProjectModel },
-    project_updated_at: { [String(DEMO_PROJECT_ID)]: Date.now() },
+    ...empty(),
+    active_service_id: service.id,
+    media: structuredClone(demoMedia),
+    songs: Object.fromEntries(demoSongs.map(song => [song.id, structuredClone(song)])),
+    services: { [service.id]: service },
   };
   saveUiOnlyStore(store);
   return store;
@@ -39,37 +35,13 @@ export function startDemo(): void {
 }
 
 export function loadUiOnlyStore(): UiOnlyStore {
-  if (typeof window === 'undefined') {
-    return {
-      version: 1,
-      active_project_id: null,
-      program_state: defaultProgramState(),
-      projects: {},
-      project_updated_at: {},
-    };
-  }
-
+  if (typeof window === 'undefined') return empty();
   try {
     const raw = window.localStorage.getItem(UI_ONLY_STORAGE_KEY);
     if (!raw) return demoStore();
-    const parsed = JSON.parse(raw) as Partial<UiOnlyStore>;
-    return {
-      version: typeof parsed.version === 'number' ? parsed.version : 1,
-      active_project_id: typeof parsed.active_project_id === 'number' ? parsed.active_project_id : null,
-      program_state: (parsed.program_state as UiOnlyProgramState) || defaultProgramState(),
-      media: parsed.media || [],
-      songs: parsed.songs || {},
-      projects: (parsed.projects as UiOnlyStore['projects']) || {},
-      project_updated_at: (parsed.project_updated_at as UiOnlyStore['project_updated_at']) || {},
-    };
+    return { ...empty(), ...(JSON.parse(raw) as Partial<UiOnlyStore>) };
   } catch {
-    return {
-      version: 1,
-      active_project_id: null,
-      program_state: defaultProgramState(),
-      projects: {},
-      project_updated_at: {},
-    };
+    return empty();
   }
 }
 

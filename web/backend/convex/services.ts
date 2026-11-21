@@ -1,146 +1,160 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requirePermission } from "./lib/auth";
-import { resolveEntry, songSections, type Entry } from "./lib/sequence";
-import { defined, newEntryKey } from "./lib/util";
+import { freeze, indexFields, itemByUid, itemsOf, requireSong, serviceByUid, setSongContent, songByUid, versionByUid, versionFor, type Content } from "./lib/sequence";
+import { defined } from "./lib/util";
+import { sectionKind } from "./schema";
+import { applyPatch, entriesOf, labelToSection, newId, resolveEntries, sectionLabel, type Entry } from "@magi/shared";
+
+async function requireService(ctx: QueryCtx, uid: string): Promise<Doc<"services">> {
+  const service = await serviceByUid(ctx, uid);
+  if (!service) throw new ConvexError("Service not found");
+  return service;
+}
+
+async function describe(ctx: QueryCtx, item: Doc<"serviceItems">) {
+  const base = { id: item.uid, kind: item.content.kind, title: item.title ?? null, notes: item.notes, songId: null as string | null, key: undefined as string | undefined, versionNumber: null as number | null, edited: false, entries: [] as ReturnType<typeof resolveEntries>, librarySections: [] as { id: string; label: string }[] };
+  if (item.content.kind !== "song") return { ...base, title: item.title ?? item.content.kind };
+  const song = await songByUid(ctx, item.content.songId);
+  const version = await versionFor(ctx, item.content);
+  return {
+    ...base,
+    title: item.title ?? song?.title ?? "Missing song",
+    songId: song ? song.uid : null,
+    key: item.content.key ?? song?.key,
+    versionNumber: item.content.versionId ? (version?.number ?? null) : null,
+    edited: !!item.content.arrangement,
+    entries: version ? resolveEntries(item.content.arrangement, version) : [],
+    librarySections: version?.sections.map((s) => ({ id: s.id, label: sectionLabel(s) })) ?? [],
+  };
+}
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
     await requirePermission(ctx, "view");
-    return ctx.db.query("services").withIndex("by_date").order("desc").take(100);
+    const services = await ctx.db.query("services").withIndex("by_time").order("desc").take(100);
+    return services.map(({ uid, scheduledAtMs, title, endedAtMs, frozen }) => ({ id: uid, scheduledAtMs, title, endedAtMs, frozen }));
   },
 });
 
 export const get = query({
-  args: { serviceId: v.id("services") },
+  args: { serviceId: v.string() },
   handler: async (ctx, { serviceId }) => {
     await requirePermission(ctx, "view");
-    const service = await ctx.db.get(serviceId);
+    const service = await serviceByUid(ctx, serviceId);
     if (!service) return null;
-
     const leader = service.leaderId ? await ctx.db.get(service.leaderId) : null;
-    const items = await ctx.db
-      .query("serviceItems")
-      .withIndex("by_service", (q) => q.eq("serviceId", serviceId))
-      .collect();
-
-    return {
-      ...service,
-      leaderName: leader?.name ?? null,
-      items: await Promise.all(
-        items.map(async (item) => {
-          const librarySections = item.songId ? await songSections(ctx, item.songId) : [];
-          const byId = new Map(librarySections.map((s) => [s._id, s]));
-          return {
-            _id: item._id,
-            songId: item.songId ?? null,
-            title: item.title,
-            key: item.key,
-            notes: item.notes,
-            entries: item.sequence.map((entry) => resolveEntry(entry, byId)),
-            librarySections: librarySections.map(({ _id, label }) => ({ _id, label })),
-          };
-        }),
-      ),
-    };
+    const items = await Promise.all((await itemsOf(ctx, serviceId)).map((item) => describe(ctx, item)));
+    return { id: service.uid, scheduledAtMs: service.scheduledAtMs, title: service.title, notes: service.notes, endedAtMs: service.endedAtMs, frozen: service.frozen, leaderName: leader?.name ?? null, items };
   },
 });
 
 export const create = mutation({
-  args: { date: v.string(), title: v.string() },
-  handler: async (ctx, { date, title }) => {
+  args: { scheduledAtMs: v.number(), title: v.string() },
+  handler: async (ctx, { scheduledAtMs, title }) => {
     const user = await requirePermission(ctx, "arrange");
-    return ctx.db.insert("services", {
-      date,
-      title: title.trim() || "Service",
-      leaderId: user.role === "leader" ? user._id : undefined,
-    });
+    const uid = newId();
+    await ctx.db.insert("services", { uid, scheduledAtMs, title: title.trim() || "Service", frozen: false, leaderId: user.role === "leader" ? user._id : undefined });
+    return uid;
   },
 });
 
 export const update = mutation({
-  args: {
-    serviceId: v.id("services"),
-    date: v.optional(v.string()),
-    title: v.optional(v.string()),
-    notes: v.optional(v.string()),
-    leaderId: v.optional(v.id("users")),
-  },
+  args: { serviceId: v.string(), scheduledAtMs: v.optional(v.number()), title: v.optional(v.string()), notes: v.optional(v.string()), leaderId: v.optional(v.id("users")) },
   handler: async (ctx, { serviceId, ...fields }) => {
     await requirePermission(ctx, "arrange");
-    await ctx.db.patch(serviceId, defined(fields));
+    const service = await requireService(ctx, serviceId);
+    await ctx.db.patch(service._id, defined(fields));
   },
 });
 
 export const remove = mutation({
-  args: { serviceId: v.id("services") },
+  args: { serviceId: v.string() },
   handler: async (ctx, { serviceId }) => {
     await requirePermission(ctx, "arrange");
-    const items = await ctx.db
-      .query("serviceItems")
-      .withIndex("by_service", (q) => q.eq("serviceId", serviceId))
-      .collect();
-    for (const item of items) await ctx.db.delete(item._id);
-    await ctx.db.delete(serviceId);
+    const service = await requireService(ctx, serviceId);
+    for (const item of await itemsOf(ctx, serviceId)) await ctx.db.delete(item._id);
+    await ctx.db.delete(service._id);
   },
 });
 
+export const end = mutation({
+  args: { serviceId: v.string() },
+  handler: async (ctx, { serviceId }) => {
+    await requirePermission(ctx, "arrange");
+    const service = await requireService(ctx, serviceId);
+    await ctx.db.patch(service._id, { endedAtMs: service.endedAtMs ?? Date.now() });
+    await freeze(ctx, service);
+  },
+});
+
+export const freezePast = mutation({
+  args: { todayStartsAtMs: v.number() },
+  handler: async (ctx, { todayStartsAtMs }) => {
+    await requirePermission(ctx, "view");
+    const past = await ctx.db.query("services").withIndex("by_time", (q) => q.lt("scheduledAtMs", todayStartsAtMs)).collect();
+    const ended = (await ctx.db.query("services").collect()).filter((s) => s.endedAtMs !== undefined);
+    const due = [...past, ...ended].filter((s, i, all) => !s.frozen && all.findIndex((o) => o._id === s._id) === i);
+    for (const service of due) await freeze(ctx, service);
+    return due.length;
+  },
+});
+
+async function append(ctx: MutationCtx, service: Doc<"services">, content: Content, title?: string) {
+  const items = await itemsOf(ctx, service.uid);
+  const uid = newId();
+  await ctx.db.insert("serviceItems", { uid, serviceUid: service.uid, position: (items[items.length - 1]?.position ?? 0) + 1, title, content, ...indexFields(content) });
+  if (service.frozen) await freeze(ctx, service);
+  return uid;
+}
+
 export const addSong = mutation({
-  args: { serviceId: v.id("services"), songId: v.id("songs") },
+  args: { serviceId: v.string(), songId: v.string() },
   handler: async (ctx, { serviceId, songId }) => {
     await requirePermission(ctx, "arrange");
-    const song = await ctx.db.get(songId);
-    if (!song) throw new ConvexError("Song not found");
-    const last = await ctx.db
-      .query("serviceItems")
-      .withIndex("by_service", (q) => q.eq("serviceId", serviceId))
-      .order("desc")
-      .first();
-    return ctx.db.insert("serviceItems", {
-      serviceId,
-      position: (last?.position ?? 0) + 1,
-      songId,
-      title: song.title,
-      key: song.defaultKey,
-      sequence: song.defaultSequence.map((sectionId) => ({ key: newEntryKey(), sectionId })),
-    });
+    const service = await requireService(ctx, serviceId);
+    await requireSong(ctx, songId);
+    return append(ctx, service, { kind: "song", songId });
+  },
+});
+
+export const addHeader = mutation({
+  args: { serviceId: v.string(), title: v.string() },
+  handler: async (ctx, { serviceId, title }) => {
+    await requirePermission(ctx, "arrange");
+    return append(ctx, await requireService(ctx, serviceId), { kind: "header" }, title);
   },
 });
 
 export const updateItem = mutation({
-  args: {
-    itemId: v.id("serviceItems"),
-    key: v.optional(v.string()),
-    notes: v.optional(v.string()),
-  },
-  handler: async (ctx, { itemId, ...fields }) => {
+  args: { itemId: v.string(), key: v.optional(v.string()), notes: v.optional(v.string()), title: v.optional(v.string()) },
+  handler: async (ctx, { itemId, key, notes, title }) => {
     await requirePermission(ctx, "arrange");
-    await ctx.db.patch(itemId, defined(fields));
+    const item = await itemByUid(ctx, itemId);
+    const content = key !== undefined && item.content.kind === "song" ? { ...item.content, key: key.trim() || undefined } : item.content;
+    await ctx.db.patch(item._id, { ...defined({ notes, title }), content });
   },
 });
 
 export const removeItem = mutation({
-  args: { itemId: v.id("serviceItems") },
+  args: { itemId: v.string() },
   handler: async (ctx, { itemId }) => {
     await requirePermission(ctx, "arrange");
-    await ctx.db.delete(itemId);
+    await ctx.db.delete((await itemByUid(ctx, itemId))._id);
   },
 });
 
 export const moveItem = mutation({
-  args: { itemId: v.id("serviceItems"), direction: v.union(v.literal(-1), v.literal(1)) },
+  args: { itemId: v.string(), direction: v.union(v.literal(-1), v.literal(1)) },
   handler: async (ctx, { itemId, direction }) => {
     await requirePermission(ctx, "arrange");
-    const item = await ctx.db.get(itemId);
-    if (!item) return;
+    const item = await itemByUid(ctx, itemId);
     const neighbour = await ctx.db
       .query("serviceItems")
       .withIndex("by_service", (q) =>
-        direction < 0
-          ? q.eq("serviceId", item.serviceId).lt("position", item.position)
-          : q.eq("serviceId", item.serviceId).gt("position", item.position),
+        direction < 0 ? q.eq("serviceUid", item.serviceUid).lt("position", item.position) : q.eq("serviceUid", item.serviceUid).gt("position", item.position),
       )
       .order(direction < 0 ? "desc" : "asc")
       .first();
@@ -151,109 +165,104 @@ export const moveItem = mutation({
 });
 
 export const insertEntry = mutation({
-  args: {
-    itemId: v.id("serviceItems"),
-    index: v.number(),
-    sectionId: v.optional(v.id("sections")),
-    label: v.optional(v.string()),
-    lyrics: v.optional(v.string()),
-  },
-  handler: async (ctx, { itemId, index, sectionId, label, lyrics }) => {
-    await editSequence(ctx, itemId, async (item, sequence) => {
-      if (sectionId) {
-        const section = await ctx.db.get(sectionId);
-        if (!section || section.songId !== item.songId) {
-          throw new ConvexError("That section isn't part of this song");
-        }
-      }
-      const entry: Entry = sectionId
-        ? { key: newEntryKey(), sectionId }
-        : { key: newEntryKey(), label: label ?? "Part", lyrics: lyrics ?? "" };
-      sequence.splice(clamp(index, 0, sequence.length), 0, entry);
+  args: { itemId: v.string(), index: v.number(), sectionId: v.optional(v.string()), kind: v.optional(sectionKind), lyrics: v.optional(v.string()) },
+  handler: async (ctx, { itemId, index, sectionId, kind, lyrics }) => {
+    await editEntries(ctx, itemId, (entries, version) => {
+      if (sectionId && !version.sections.some((s) => s.id === sectionId)) throw new ConvexError("That part isn't in this song");
+      const entry: Entry = sectionId ? { id: newId(), sectionId } : { id: newId(), variation: { kind: kind ?? "tag", lyrics: lyrics ?? "" } };
+      entries.splice(clamp(index, 0, entries.length), 0, entry);
     });
   },
 });
 
 export const moveEntry = mutation({
-  args: { itemId: v.id("serviceItems"), entryKey: v.string(), toIndex: v.number() },
-  handler: async (ctx, { itemId, entryKey, toIndex }) => {
-    await editSequence(ctx, itemId, (_item, sequence) => {
-      const from = sequence.findIndex((e) => e.key === entryKey);
+  args: { itemId: v.string(), entryId: v.string(), toIndex: v.number() },
+  handler: async (ctx, { itemId, entryId, toIndex }) => {
+    await editEntries(ctx, itemId, (entries) => {
+      const from = entries.findIndex((e) => e.id === entryId);
       if (from < 0) return;
-      const [entry] = sequence.splice(from, 1);
-      sequence.splice(clamp(toIndex, 0, sequence.length), 0, entry);
+      const [entry] = entries.splice(from, 1);
+      entries.splice(clamp(toIndex, 0, entries.length), 0, entry);
     });
   },
 });
 
 export const removeEntry = mutation({
-  args: { itemId: v.id("serviceItems"), entryKey: v.string() },
-  handler: async (ctx, { itemId, entryKey }) => {
-    await editSequence(ctx, itemId, (_item, sequence) => {
-      const index = sequence.findIndex((e) => e.key === entryKey);
-      if (index >= 0) sequence.splice(index, 1);
+  args: { itemId: v.string(), entryId: v.string() },
+  handler: async (ctx, { itemId, entryId }) => {
+    await editEntries(ctx, itemId, (entries) => {
+      const index = entries.findIndex((e) => e.id === entryId);
+      if (index >= 0) entries.splice(index, 1);
     });
   },
 });
 
 export const setEntryText = mutation({
-  args: {
-    itemId: v.id("serviceItems"),
-    entryKey: v.string(),
-    label: v.optional(v.union(v.string(), v.null())),
-    lyrics: v.optional(v.union(v.string(), v.null())),
-  },
-  handler: async (ctx, { itemId, entryKey, label, lyrics }) => {
-    await editSequence(ctx, itemId, (_item, sequence) => {
-      const entry = sequence.find((e) => e.key === entryKey);
+  args: { itemId: v.string(), entryId: v.string(), label: v.optional(v.union(v.string(), v.null())), lyrics: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { itemId, entryId, label, lyrics }) => {
+    await editEntries(ctx, itemId, (entries) => {
+      const entry = entries.find((e) => e.id === entryId);
       if (!entry) return;
-      const canRevert = entry.sectionId !== undefined;
-      if (label !== undefined) entry.label = label ?? (canRevert ? undefined : "Part");
-      if (lyrics !== undefined) entry.lyrics = lyrics ?? (canRevert ? undefined : "");
+      const own = !entry.sectionId;
+      const variation = { ...entry.variation };
+      if (label !== undefined) {
+        const parsed = label === null ? null : labelToSection(label);
+        variation.kind = parsed?.kind ?? (own ? "other" : undefined);
+        variation.number = parsed?.number;
+        variation.name = parsed?.name;
+      }
+      if (lyrics !== undefined) variation.lyrics = lyrics ?? (own ? "" : undefined);
+      const kept = Object.fromEntries(Object.entries(variation).filter(([, value]) => value !== undefined));
+      entry.variation = Object.keys(kept).length ? kept : undefined;
     });
   },
 });
 
 export const promoteEntry = mutation({
-  args: { itemId: v.id("serviceItems"), entryKey: v.string() },
-  handler: async (ctx, { itemId, entryKey }) => {
-    await requirePermission(ctx, "editLibrary");
-    await editSequence(ctx, itemId, async (_item, sequence) => {
-      const entry = sequence.find((e) => e.key === entryKey);
-      if (!entry?.sectionId) return;
-      await ctx.db.patch(entry.sectionId, defined({ label: entry.label, lyrics: entry.lyrics }));
-      delete entry.label;
-      delete entry.lyrics;
-    });
+  args: { itemId: v.string(), entryId: v.string() },
+  handler: async (ctx, { itemId, entryId }) => {
+    const user = await requirePermission(ctx, "editLibrary");
+    const item = await itemByUid(ctx, itemId);
+    if (item.content.kind !== "song") return;
+    const song = await requireSong(ctx, item.content.songId);
+    const version = await versionByUid(ctx, song.currentVersion);
+    if (!version) return;
+    const entries = entriesOf(item.content.arrangement, version).map((e) => ({ ...e }));
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry?.sectionId || !entry.variation) return;
+    const sections = version.sections.map((s) => (s.id === entry.sectionId ? applyPatch(s.id, entry.variation, s) : s));
+    delete entry.variation;
+    await setSongContent(ctx, song, { sections, arrangement: version.arrangement, background: version.background }, user._id);
+    const content = { ...item.content, arrangement: entries };
+    await ctx.db.patch(item._id, { content, ...indexFields(content) });
   },
 });
 
 export const resetSequence = mutation({
-  args: { itemId: v.id("serviceItems") },
+  args: { itemId: v.string() },
   handler: async (ctx, { itemId }) => {
-    await editSequence(ctx, itemId, async (item, sequence) => {
-      const song = item.songId ? await ctx.db.get(item.songId) : null;
-      if (!song) return;
-      sequence.splice(
-        0,
-        sequence.length,
-        ...song.defaultSequence.map((sectionId) => ({ key: newEntryKey(), sectionId })),
-      );
-    });
+    await requirePermission(ctx, "arrange");
+    const item = await itemByUid(ctx, itemId);
+    if (item.content.kind !== "song") return;
+    const content = { ...item.content, arrangement: undefined };
+    await ctx.db.patch(item._id, { content, ...indexFields(content) });
   },
 });
 
-async function editSequence(
+async function editEntries(
   ctx: MutationCtx,
-  itemId: Id<"serviceItems">,
-  edit: (item: Doc<"serviceItems">, sequence: Entry[]) => void | Promise<void>,
+  itemId: string,
+  edit: (entries: Entry[], version: Doc<"songVersions">) => void,
 ) {
   await requirePermission(ctx, "arrange");
-  const item = await ctx.db.get(itemId);
-  if (!item) throw new ConvexError("This song was removed from the service");
-  const sequence = item.sequence.map((e) => ({ ...e }));
-  await edit(item, sequence);
-  await ctx.db.patch(itemId, { sequence });
+  const item = await itemByUid(ctx, itemId);
+  if (item.content.kind !== "song") throw new ConvexError("Only songs have parts");
+  const version = await versionFor(ctx, item.content);
+  if (!version) throw new ConvexError("This song is no longer in the library");
+  const entries = entriesOf(item.content.arrangement, version).map((e) => ({ ...e }));
+  edit(entries, version);
+  const content = { ...item.content, arrangement: entries };
+  await ctx.db.patch(item._id, { content, ...indexFields(content) });
 }
 
 function clamp(n: number, min: number, max: number) {

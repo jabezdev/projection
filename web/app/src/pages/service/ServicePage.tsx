@@ -1,16 +1,15 @@
 import { api } from "@magi/backend/api";
-import type { Id } from "@magi/backend/dataModel";
-import { shortLabel } from "@magi/shared";
+import { sectionCode, sectionLabel } from "@magi/shared";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { EditableText } from "../../components/EditableText";
 import { useSafe } from "../../lib/errors";
-import { formatDate, useMe } from "../../lib/me";
+import { formatWhen, fromLocalInput, toLocalInput, useMe } from "../../lib/me";
 import type { Service } from "./types";
 import { Arrange } from "./Arrange";
 
 export function ServicePage() {
-  const serviceId = useParams().serviceId as Id<"services">;
+  const serviceId = useParams().serviceId ?? "";
   const service = useQuery(api.services.get, { serviceId });
   const me = useMe();
   const [params, setParams] = useSearchParams();
@@ -48,14 +47,17 @@ function ServiceHeader({ service }: { service: Service }) {
   const navigate = useNavigate();
   const update = useMutation(api.services.update);
   const remove = useMutation(api.services.remove);
+  const end = useMutation(api.services.end);
+  const past = service.frozen || service.endedAtMs !== undefined;
 
   if (!me.can.arrange) {
     return (
       <div>
         <h1 className="text-xl font-semibold">{service.title}</h1>
         <p className="text-sm text-muted">
-          {formatDate(service.date)}
+          {formatWhen(service.scheduledAtMs)}
           {service.leaderName && ` · led by ${service.leaderName}`}
+          {past && " · past"}
         </p>
       </div>
     );
@@ -66,19 +68,29 @@ function ServiceHeader({ service }: { service: Service }) {
       <EditableText
         className="min-w-0 flex-1 border-transparent bg-transparent px-0 text-xl font-semibold"
         value={service.title}
-        onSave={(title) => safe(update)({ serviceId: service._id, title })}
+        onSave={(title) => safe(update)({ serviceId: service.id, title })}
       />
       <input
-        type="date"
-        value={service.date}
-        onChange={(e) => e.target.value && safe(update)({ serviceId: service._id, date: e.target.value })}
+        type="datetime-local"
+        value={toLocalInput(service.scheduledAtMs)}
+        onChange={(e) => e.target.value && safe(update)({ serviceId: service.id, scheduledAtMs: fromLocalInput(e.target.value) })}
       />
+      {past ? (
+        <span className="text-sm text-muted" title="Songs keep the words they had; library changes don't reach this service">Past</span>
+      ) : (
+        <button
+          className="btn"
+          onClick={() => confirm(`End “${service.title}”? Its songs keep the words they have now.`) && safe(end)({ serviceId: service.id })}
+        >
+          End
+        </button>
+      )}
       <button
         className="btn"
         onClick={async () => {
           if (!confirm(`Delete “${service.title}”?`)) return;
           navigate("/services", { replace: true });
-          await safe(remove)({ serviceId: service._id });
+          await safe(remove)({ serviceId: service.id });
         }}
       >
         Delete
@@ -91,21 +103,25 @@ function Lyrics({ service }: { service: Service }) {
   if (service.items.length === 0) return <p className="text-muted">No songs yet.</p>;
   return (
     <div className="space-y-10">
-      {service.items.map((item, n) => (
-        <article key={item._id} className="space-y-4">
+      {service.items.map((item, n) => item.kind === "header" ? (
+        <h2 key={item.id} className="border-b border-line pb-1 text-sm font-semibold tracking-wide text-muted uppercase">{item.title}</h2>
+      ) : item.kind !== "song" ? (
+        <p key={item.id} className="text-sm text-muted">{n + 1}. {item.title}</p>
+      ) : (
+        <article key={item.id} className="space-y-4">
           <header className="flex items-baseline gap-3 border-b border-line/60 pb-2">
             <span className="text-muted">{n + 1}.</span>
             <h2 className="text-lg font-semibold">{item.title}</h2>
             {item.key && <span className="text-sm text-muted">Key of {item.key}</span>}
             <span className="ml-auto text-xs text-muted">
-              {item.entries.map((e) => shortLabel(e.label)).join(" · ")}
+              {item.entries.map(sectionCode).join(" · ")}
             </span>
           </header>
           {item.notes && <p className="text-sm text-muted italic">{item.notes}</p>}
           {item.entries.map((entry) => (
-            <section key={entry.key}>
+            <section key={entry.entryId}>
               <h3 className="mb-1 text-xs font-semibold tracking-wide text-accent uppercase">
-                {entry.label}
+                {sectionLabel(entry)}
                 {entry.isVariation && <span className="ml-2 text-variation normal-case">changed for this service</span>}
               </h3>
               <p className="text-lg leading-relaxed whitespace-pre-line">{entry.lyrics}</p>

@@ -1,5 +1,5 @@
 import { api } from "@magi/backend/api";
-import { parseLyrics } from "@magi/shared";
+import { labelToSection, newId, parseLyrics, sectionLabel } from "@magi/shared";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
@@ -10,12 +10,17 @@ export function NewSong() {
   const safe = useSafe();
   const create = useMutation(api.songs.create);
   const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
+  const [authors, setAuthors] = useState("");
   const [text, setText] = useState("");
-  const sections = parseLyrics(text);
+  const sections = parseLyrics(text).map((s) => ({ ...labelToSection(s.label), lyrics: s.lyrics }));
 
   const submit = safe(async () => {
-    const songId = await create({ title, artist: artist || undefined, sections });
+    const names = authors.split(",").map((a) => a.trim()).filter(Boolean);
+    const songId = await create({
+      title,
+      credits: names.length ? { authors: names.map((name) => ({ name })) } : {},
+      sections: sections.map((s) => ({ ...s, id: newId() })),
+    });
     navigate(`/library/${songId}`, { replace: true });
   });
 
@@ -24,7 +29,7 @@ export function NewSong() {
       <h1 className="text-lg font-semibold">New song</h1>
       <div className="grid gap-2 sm:grid-cols-2">
         <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input placeholder="Artist (optional)" value={artist} onChange={(e) => setArtist(e.target.value)} />
+        <input placeholder="Authors, comma separated (optional)" value={authors} onChange={(e) => setAuthors(e.target.value)} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -45,7 +50,7 @@ export function NewSong() {
           <span className="text-sm text-muted">{sections.length} sections</span>
           {sections.map((section, i) => (
             <div key={i} className="card py-3">
-              <div className="mb-1 text-xs font-semibold text-accent uppercase">{section.label}</div>
+              <div className="mb-1 text-xs font-semibold text-accent uppercase">{sectionLabel(section)}</div>
               <p className="text-sm whitespace-pre-line">{section.lyrics}</p>
             </div>
           ))}

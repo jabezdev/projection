@@ -1,32 +1,32 @@
 import { api } from "@magi/backend/api";
-import type { Id } from "@magi/backend/dataModel";
-import { shortLabel } from "@magi/shared";
+import { labelToSection, newId, sectionCode, sectionLabel, type Section } from "@magi/shared";
 import { useMutation, useQuery } from "convex/react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { EditableText } from "../components/EditableText";
 import { useSafe } from "../lib/errors";
 import { useMe } from "../lib/me";
 
 export function SongPage() {
-  const songId = useParams().songId as Id<"songs">;
+  const songId = useParams().songId ?? "";
   const song = useQuery(api.songs.get, { songId });
   const me = useMe();
   const safe = useSafe();
-  const navigate = useNavigate();
   const update = useMutation(api.songs.update);
-  const updateSection = useMutation(api.songs.updateSection);
-  const addSection = useMutation(api.songs.addSection);
-  const removeSection = useMutation(api.songs.removeSection);
-  const setDefaultSequence = useMutation(api.songs.setDefaultSequence);
-  const removeSong = useMutation(api.songs.remove);
+  const setContent = useMutation(api.songs.setContent);
+  const archive = useMutation(api.songs.archive);
 
   if (song === undefined) return <p className="text-muted">Loading…</p>;
-  if (song === null) return <p className="text-muted">This song was deleted.</p>;
+  if (song === null) return <p className="text-muted">This song was not found.</p>;
 
   const editable = me.can.editLibrary;
-  const byId = new Map(song.sections.map((s) => [s._id, s]));
-  const sequence = song.defaultSequence;
-  const setSequence = (next: Id<"sections">[]) => safe(setDefaultSequence)({ songId, sequence: next });
+  const { sections, arrangement, background } = song.current;
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const save = (next: { sections?: Section[]; arrangement?: string[] }) =>
+    safe(setContent)({ songId, sections: next.sections ?? sections, arrangement: next.arrangement ?? arrangement, background });
+  const setSection = (id: string, patch: Partial<Section>) => save({ sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
+  const credits = song.credits;
+  const setCredits = (patch: Partial<typeof credits>) => safe(update)({ songId, credits: { ...credits, ...patch } });
+  const text = (value: string) => value.trim() || undefined;
 
   return (
     <div className="space-y-6">
@@ -37,24 +37,26 @@ export function SongPage() {
           readOnly={!editable}
           onSave={(title) => safe(update)({ songId, title })}
         />
+        {song.archived && <p className="text-sm text-muted">Archived: hidden from the library, still shown in services that use it.</p>}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <EditableText
-            placeholder="Artist"
-            value={song.artist ?? ""}
+            placeholder="Authors, comma separated"
+            value={credits.authors?.map((a) => a.name).join(", ") ?? ""}
             readOnly={!editable}
-            onSave={(artist) => safe(update)({ songId, artist })}
+            onSave={(value) => {
+              const names = value.split(",").map((n) => n.trim()).filter(Boolean);
+              return setCredits({ authors: names.length ? names.map((name) => credits.authors?.find((a) => a.name === name) ?? { name }) : undefined });
+            }}
           />
+          <EditableText placeholder="Key" value={song.key ?? ""} readOnly={!editable} onSave={(key) => safe(update)({ songId, key })} />
+          <EditableText placeholder="CCLI #" value={credits.ccli ?? ""} readOnly={!editable} onSave={(ccli) => setCredits({ ccli: text(ccli) })} />
+          <EditableText placeholder="Copyright" value={credits.copyright ?? ""} readOnly={!editable} onSave={(copyright) => setCredits({ copyright: text(copyright) })} />
+          <EditableText placeholder="Publisher" value={credits.publisher ?? ""} readOnly={!editable} onSave={(publisher) => setCredits({ publisher: text(publisher) })} />
           <EditableText
-            placeholder="Key"
-            value={song.defaultKey ?? ""}
+            placeholder="Year"
+            value={credits.year ? String(credits.year) : ""}
             readOnly={!editable}
-            onSave={(defaultKey) => safe(update)({ songId, defaultKey })}
-          />
-          <EditableText
-            placeholder="CCLI #"
-            value={song.ccli ?? ""}
-            readOnly={!editable}
-            onSave={(ccli) => safe(update)({ songId, ccli })}
+            onSave={(year) => setCredits({ year: Number.isInteger(Number(year)) && year.trim() ? Number(year) : undefined })}
           />
         </div>
       </div>
@@ -62,57 +64,53 @@ export function SongPage() {
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-muted">Usual order</h2>
         <div className="flex flex-wrap gap-1.5">
-          {sequence.map((id, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded-md bg-accent-soft px-2 py-1 text-sm">
-              {editable && i > 0 && (
-                <button
-                  title="Move earlier"
-                  className="text-muted hover:text-white"
-                  onClick={() => setSequence(swap(sequence, i, i - 1))}
-                >
-                  ‹
-                </button>
-              )}
-              <span title={byId.get(id)?.label}>{shortLabel(byId.get(id)?.label ?? "?")}</span>
-              {editable && (
-                <button
-                  title="Remove from order"
-                  className="text-muted hover:text-white"
-                  onClick={() => setSequence(sequence.filter((_, j) => j !== i))}
-                >
-                  ×
-                </button>
-              )}
-            </span>
-          ))}
-          {sequence.length === 0 && <span className="text-sm text-muted">No sections in the order yet.</span>}
+          {arrangement.map((id, i) => {
+            const section = byId.get(id);
+            return (
+              <span key={i} className="inline-flex items-center gap-1 rounded-md bg-accent-soft px-2 py-1 text-sm">
+                {editable && i > 0 && (
+                  <button title="Move earlier" className="text-muted hover:text-white" onClick={() => save({ arrangement: swap(arrangement, i, i - 1) })}>
+                    ‹
+                  </button>
+                )}
+                <span title={section ? sectionLabel(section) : undefined}>{section ? sectionCode(section) : "?"}</span>
+                {editable && (
+                  <button title="Remove from order" className="text-muted hover:text-white" onClick={() => save({ arrangement: arrangement.filter((_, j) => j !== i) })}>
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {arrangement.length === 0 && <span className="text-sm text-muted">No sections in the order yet.</span>}
         </div>
         <p className="text-xs text-muted">
-          New services start from this order. Use “+ order” on a section to repeat it (e.g. a second chorus).
+          Services follow this order unless they change it. Use “+ order” on a section to repeat it (e.g. a second chorus). Past services keep the
+          version they used.
         </p>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-muted">Sections</h2>
-        {song.sections.map((section) => (
-          <div key={section._id} className="card space-y-2">
+        {sections.map((section) => (
+          <div key={section.id} className="card space-y-2">
             <div className="flex items-center gap-2">
               <EditableText
                 className="w-40 font-semibold"
-                value={section.label}
+                value={sectionLabel(section)}
                 readOnly={!editable}
-                onSave={(label) => safe(updateSection)({ sectionId: section._id, label })}
+                onSave={(label) => setSection(section.id, { ...labelToSection(label), color: section.color })}
               />
               {editable && (
                 <>
-                  <button className="btn ml-auto" onClick={() => setSequence([...sequence, section._id])}>
+                  <button className="btn ml-auto" onClick={() => save({ arrangement: [...arrangement, section.id] })}>
                     + order
                   </button>
                   <button
                     className="btn"
                     onClick={() => {
-                      if (confirm(`Delete “${section.label}”? Services that use it keep their copy.`)) {
-                        void safe(removeSection)({ sectionId: section._id });
+                      if (confirm(`Delete “${sectionLabel(section)}”? Past services keep the words they had.`)) {
+                        void save({ sections: sections.filter((s) => s.id !== section.id), arrangement: arrangement.filter((id) => id !== section.id) });
                       }
                     }}
                   >
@@ -121,18 +119,17 @@ export function SongPage() {
                 </>
               )}
             </div>
-            <EditableText
-              multiline
-              value={section.lyrics}
-              readOnly={!editable}
-              onSave={(lyrics) => safe(updateSection)({ sectionId: section._id, lyrics })}
-            />
+            <EditableText multiline value={section.lyrics} readOnly={!editable} onSave={(lyrics) => setSection(section.id, { lyrics })} />
           </div>
         ))}
         {editable && (
           <button
             className="btn"
-            onClick={() => safe(addSection)({ songId, label: nextLabel(song.sections.map((s) => s.label)), lyrics: "" })}
+            onClick={() => {
+              const id = newId();
+              const number = sections.filter((s) => s.kind === "verse").length + 1;
+              return save({ sections: [...sections, { id, kind: "verse", number, lyrics: "" }], arrangement: [...arrangement, id] });
+            }}
           >
             Add section
           </button>
@@ -142,13 +139,12 @@ export function SongPage() {
       {editable && (
         <button
           className="btn border-red-500/50 text-red-400"
-          onClick={async () => {
-            if (!confirm(`Delete “${song.title}” from the library? Services that use it keep their copy.`)) return;
-            navigate("/library", { replace: true });
-            await safe(removeSong)({ songId });
+          onClick={() => {
+            if (!song.archived && !confirm(`Archive “${song.title}”? It leaves the library but stays in services that use it.`)) return;
+            void safe(archive)({ songId, archived: !song.archived });
           }}
         >
-          Delete song
+          {song.archived ? "Restore to library" : "Archive song"}
         </button>
       )}
     </div>
@@ -159,9 +155,4 @@ function swap<T>(list: T[], a: number, b: number): T[] {
   const next = [...list];
   [next[a], next[b]] = [next[b], next[a]];
   return next;
-}
-
-function nextLabel(existing: string[]): string {
-  const verses = existing.filter((l) => /^verse/i.test(l)).length;
-  return `Verse ${verses + 1}`;
 }

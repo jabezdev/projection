@@ -1,6 +1,6 @@
 # Architecture
 
-PALTO: a React control panel in Tauri; the projection and confidence screens are native wgpu windows with no webview. `core_engine` decides what is on air. One `media_engine` session decodes each video once for both screens and owns the only audio output. `render_engine` draws, `protocol` holds the wire types, `persistence` is SQLite, `network_server` is the remote and OSC.
+PALTO: a React control panel in Tauri; the projection and confidence screens are native wgpu windows with no webview. `core_engine` decides what is on air. One `media_engine` session decodes each video once for both screens and owns the only audio output. `render_engine` draws, `protocol` holds the wire types and the shared data model (`protocol::model`, mirrored in Convex), `persistence` is SQLite and resolves a service into what the engine plays, `network_server` is the remote and OSC.
 
 ## Decisions
 

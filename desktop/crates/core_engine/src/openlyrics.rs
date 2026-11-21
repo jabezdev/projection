@@ -1,25 +1,21 @@
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
-use crate::song::SONG_FORMAT;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ImportedSong {
-    pub title: String,
-    pub document: String,
-}
+use protocol::model::{new_id, Author, AuthorRole, Credits, Section, SectionKind, Song, SongVersion};
 
 struct Verse {
     name: String,
     slides: Vec<String>,
 }
 
-pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
+pub fn parse(xml: &str) -> anyhow::Result<Song> {
     let mut reader = Reader::from_str(xml);
     let mut path: Vec<String> = Vec::new();
     let mut title: Option<String> = None;
     let mut verse_order = String::new();
     let mut verses: Vec<Verse> = Vec::new();
+    let mut credits = Credits::default();
+    let mut role: Option<AuthorRole> = None;
     let mut language: Option<String> = None;
     let mut text = String::new();
     let mut skip_depth = 0usize;
@@ -49,7 +45,16 @@ pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
                         }
                         verses.push(Verse { name: attribute(&element, "name").unwrap_or_default(), slides: Vec::new() });
                     }
-                    "title" | "verseOrder" | "lines" => text.clear(),
+                    "author" => {
+                        role = match attribute(&element, "type").as_deref() {
+                            Some("words") => Some(AuthorRole::Words),
+                            Some("music") => Some(AuthorRole::Music),
+                            Some("translation") => Some(AuthorRole::Translation),
+                            _ => None,
+                        };
+                        text.clear();
+                    }
+                    "title" | "verseOrder" | "lines" | "copyright" | "ccliNo" | "publisher" | "released" => text.clear(),
                     _ => {}
                 }
                 path.push(name);
@@ -77,6 +82,11 @@ pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
                 match name.as_str() {
                     "title" if path.iter().any(|n| n == "titles") && title.is_none() => title = Some(text.trim().to_string()),
                     "verseOrder" => verse_order = text.trim().to_string(),
+                    "author" if !text.trim().is_empty() => credits.authors.push(Author { name: text.trim().to_string(), role: role.take() }),
+                    "copyright" => credits.copyright = non_empty(&text),
+                    "ccliNo" => credits.ccli = non_empty(&text),
+                    "publisher" => credits.publisher = non_empty(&text),
+                    "released" => credits.year = text.trim().get(..4).and_then(|y| y.parse().ok()),
                     "lines" => {
                         let slide = clean(&text);
                         if let (Some(verse), false) = (verses.last_mut(), slide.is_empty()) {
@@ -95,7 +105,13 @@ pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
     verses.retain(|v| !v.slides.is_empty());
     anyhow::ensure!(!verses.is_empty(), "the song has no lyrics");
     let title = title.filter(|t| !t.is_empty()).unwrap_or_else(|| "Untitled".into());
-    Ok(ImportedSong { title, document: document(&verses, &verse_order).to_string() })
+    let (sections, arrangement) = sections(&verses, &verse_order);
+    let current = SongVersion { id: new_id(), number: 1, sections, arrangement, background: None };
+    Ok(Song { id: new_id(), title, archived: false, credits, key: None, tags: Vec::new(), current })
+}
+
+fn non_empty(text: &str) -> Option<String> {
+    Some(text.trim().to_string()).filter(|t| !t.is_empty())
 }
 
 fn local(element: &BytesStart) -> String {
@@ -124,24 +140,24 @@ fn clean(text: &str) -> String {
     text.split('\n').map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
 }
 
-fn part_kind(name: &str) -> (&'static str, Option<u32>) {
+fn part_kind(name: &str) -> (SectionKind, Option<u32>) {
     let mut chars = name.chars();
     let kind = match chars.next().map(|c| c.to_ascii_lowercase()) {
-        Some('c') => "Chorus",
-        Some('p') => "Pre-chorus",
-        Some('b') => "Bridge",
-        Some('i') => "Intro",
-        Some('e') => "Outro",
-        Some('o') => "Tag",
-        _ => "Verse",
+        Some('c') => SectionKind::Chorus,
+        Some('p') => SectionKind::PreChorus,
+        Some('b') => SectionKind::Bridge,
+        Some('i') => SectionKind::Intro,
+        Some('e') => SectionKind::Outro,
+        Some('o') => SectionKind::Tag,
+        _ => SectionKind::Verse,
     };
     let digits: String = chars.take_while(|c| c.is_ascii_digit()).collect();
     (kind, digits.parse().ok())
 }
 
-fn document(verses: &[Verse], verse_order: &str) -> serde_json::Value {
-    let mut used: Vec<(&str, u32)> = Vec::new();
-    let parts: Vec<serde_json::Value> = verses
+fn sections(verses: &[Verse], verse_order: &str) -> (Vec<Section>, Vec<String>) {
+    let mut used: Vec<(SectionKind, u32)> = Vec::new();
+    let sections: Vec<Section> = verses
         .iter()
         .enumerate()
         .map(|(index, verse)| {
@@ -151,7 +167,7 @@ fn document(verses: &[Verse], verse_order: &str) -> serde_json::Value {
                 number += 1;
             }
             used.push((kind, number));
-            serde_json::json!({ "id": part_id(index, verse), "type": kind, "number": number, "lyrics": verse.slides.join("\n\n") })
+            Section { id: part_id(index, verse), kind, number: Some(number), name: None, color: None, lyrics: verse.slides.join("\n\n") }
         })
         .collect();
     let by_name = |name: &str| verses.iter().position(|v| v.name.eq_ignore_ascii_case(name));
@@ -159,7 +175,7 @@ fn document(verses: &[Verse], verse_order: &str) -> serde_json::Value {
     if arrangement.is_empty() {
         arrangement = verses.iter().enumerate().map(|(i, v)| part_id(i, v)).collect();
     }
-    serde_json::json!({ "format": SONG_FORMAT, "slideSeparator": "blank-line", "parts": parts, "arrangement": arrangement, "background": "" })
+    (sections, arrangement)
 }
 
 fn part_id(index: usize, verse: &Verse) -> String {
@@ -169,13 +185,16 @@ fn part_id(index: usize, verse: &Verse) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::song::Song;
+    use protocol::model::AuthorRole;
 
     const AMAZING_GRACE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <song xmlns="http://openlyrics.info/namespace/2009/song" version="0.9" createdIn="OpenLP 3.0">
   <properties>
     <titles><title>Amazing Grace</title><title lang="es">Sublime Gracia</title></titles>
-    <authors><author>John Newton</author></authors>
+    <authors><author type="words">John Newton</author><author>Edwin Excell</author></authors>
+    <copyright>Public Domain</copyright>
+    <ccliNo>22025</ccliNo>
+    <released>1779</released>
     <verseOrder>v1 c v2 c</verseOrder>
   </properties>
   <lyrics>
@@ -196,21 +215,28 @@ mod tests {
     fn verses_become_parts_and_lines_become_slides() {
         let song = parse(AMAZING_GRACE).unwrap();
         assert_eq!(song.title, "Amazing Grace");
-        let parsed = Song::decode(&song.document);
-        let codes: Vec<String> = parsed.parts.iter().map(|p| p.code()).collect();
+        let version = &song.current;
+        let codes: Vec<String> = version.sections.iter().map(|p| p.code()).collect();
         assert_eq!(codes, ["V1", "C1", "V2"]);
-        assert_eq!(parsed.parts[0].slides(), ["Amazing grace how sweet the sound\nThat saved a wretch like me", "I once was lost & now am found\nWas blind but now I see"]);
-        assert_eq!(parsed.parts[2].slides(), ["'Twas grace that taught\nMy heart to fear"]);
-        let order: Vec<&str> = parsed.arrangement.iter().map(|id| parsed.parts.iter().find(|p| &p.id == id).unwrap().part_type.as_str()).collect();
-        assert_eq!(order, ["Verse", "Chorus", "Verse", "Chorus"]);
+        assert_eq!(version.sections[0].slides(), ["Amazing grace how sweet the sound\nThat saved a wretch like me", "I once was lost & now am found\nWas blind but now I see"]);
+        assert_eq!(version.sections[2].slides(), ["'Twas grace that taught\nMy heart to fear"]);
+        let order: Vec<String> = version.arrangement.iter().map(|id| version.section(id).unwrap().code()).collect();
+        assert_eq!(order, ["V1", "C1", "V2", "C1"]);
+    }
+
+    #[test]
+    fn credits_come_from_the_properties() {
+        let credits = parse(AMAZING_GRACE).unwrap().credits;
+        assert_eq!(credits.authors.iter().map(|a| (a.name.as_str(), a.role)).collect::<Vec<_>>(), [("John Newton", Some(AuthorRole::Words)), ("Edwin Excell", None)]);
+        assert_eq!((credits.copyright.as_deref(), credits.ccli.as_deref(), credits.year), (Some("Public Domain"), Some("22025"), Some(1779)));
     }
 
     #[test]
     fn without_a_verse_order_parts_play_in_document_order() {
         let xml = r#"<song><properties><titles><title>Short</title></titles></properties><lyrics>
             <verse name="v1"><lines>One</lines></verse><verse name="v1a"><lines>Two</lines></verse></lyrics></song>"#;
-        let song = Song::decode(&parse(xml).unwrap().document);
-        assert_eq!(song.parts.iter().map(|p| p.code()).collect::<Vec<_>>(), ["V1", "V2"], "duplicate labels are renumbered");
+        let song = parse(xml).unwrap().current;
+        assert_eq!(song.sections.iter().map(|p| p.code()).collect::<Vec<_>>(), ["V1", "V2"], "duplicate labels are renumbered");
         assert_eq!(song.arrangement.len(), 2);
     }
 

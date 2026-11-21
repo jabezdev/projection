@@ -1,5 +1,5 @@
 import { api } from "@magi/backend/api";
-import type { Id } from "@magi/backend/dataModel";
+import { sectionLabel } from "@magi/shared";
 import { useMutation } from "convex/react";
 import { EditableText } from "../../components/EditableText";
 import { useSafe } from "../../lib/errors";
@@ -12,7 +12,7 @@ export function EntryEditor({
   entry,
   onClose,
 }: {
-  itemId: Id<"serviceItems">;
+  itemId: string;
   entries: Entry[];
   entry: Entry;
   onClose: () => void;
@@ -24,24 +24,24 @@ export function EntryEditor({
   const insertEntry = useMutation(api.services.insertEntry);
   const setEntryText = useMutation(api.services.setEntryText);
   const promoteEntry = useMutation(api.services.promoteEntry);
-  const index = entries.findIndex((e) => e.key === entry.key);
-  const entryKey = entry.key;
+  const index = entries.findIndex((e) => e.entryId === entry.entryId);
+  const entryId = entry.entryId;
 
   return (
     <div className="space-y-2 rounded-lg border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
         <EditableText
           className="w-36 font-semibold"
-          value={entry.label}
-          onSave={(label) => safe(setEntryText)({ itemId, entryKey, label })}
+          value={sectionLabel(entry)}
+          onSave={(label) => safe(setEntryText)({ itemId, entryId, label })}
         />
-        <button className="btn" disabled={index === 0} onClick={() => safe(moveEntry)({ itemId, entryKey, toIndex: index - 1 })}>
+        <button className="btn" disabled={index === 0} onClick={() => safe(moveEntry)({ itemId, entryId, toIndex: index - 1 })}>
           ← Earlier
         </button>
         <button
           className="btn"
           disabled={index === entries.length - 1}
-          onClick={() => safe(moveEntry)({ itemId, entryKey, toIndex: index + 1 })}
+          onClick={() => safe(moveEntry)({ itemId, entryId, toIndex: index + 1 })}
         >
           Later →
         </button>
@@ -58,14 +58,14 @@ export function EntryEditor({
           className="btn"
           onClick={() => {
             onClose();
-            void safe(removeEntry)({ itemId, entryKey });
+            void safe(removeEntry)({ itemId, entryId });
           }}
         >
           Remove
         </button>
       </div>
 
-      <EditableText multiline value={entry.lyrics} onSave={(lyrics) => safe(setEntryText)({ itemId, entryKey, lyrics })} />
+      <EditableText multiline value={entry.lyrics} onSave={(lyrics) => safe(setEntryText)({ itemId, entryId, lyrics })} />
 
       <p className="text-xs text-muted">
         {!entry.sectionId
@@ -76,7 +76,7 @@ export function EntryEditor({
       </p>
       {entry.isVariation && (
         <div className="flex gap-2">
-          <button className="btn" onClick={() => safe(setEntryText)({ itemId, entryKey, lyrics: null, label: null })}>
+          <button className="btn" onClick={() => safe(setEntryText)({ itemId, entryId, lyrics: null, label: null })}>
             Use library version
           </button>
           {me.can.editLibrary && (
@@ -84,7 +84,7 @@ export function EntryEditor({
               className="btn"
               onClick={() =>
                 confirm("Replace the library's lyrics with this version? Every future service will get it.") &&
-                safe(promoteEntry)({ itemId, entryKey })
+                safe(promoteEntry)({ itemId, entryId })
               }
             >
               Save to library

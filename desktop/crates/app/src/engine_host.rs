@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossbeam::channel::{bounded, Receiver, RecvTimeoutError, Sender, TrySendError};
 use tokio::sync::broadcast;
 
-use core_engine::{coalesce, Assets, Engine, EngineInput, MediaBackend, Ports, ProjectStore};
+use core_engine::{coalesce, Assets, Engine, EngineInput, MediaBackend, Ports, ServiceStore};
 use protocol::{EngineCommand, EngineEvent, EngineSnapshot, PlaybackReport};
 
 const QUEUE_CAPACITY: usize = 1024;
@@ -46,7 +46,7 @@ pub struct EngineLoop<A, M, S> {
     pub shutdown: Arc<AtomicBool>,
 }
 
-impl<A: Assets, M: MediaBackend, S: ProjectStore> EngineLoop<A, M, S> {
+impl<A: Assets, M: MediaBackend, S: ServiceStore> EngineLoop<A, M, S> {
     pub fn run(mut self) {
         let mut engine = Engine::with_session_seed(crate::now_ms().max(1) as u64);
         while !self.shutdown.load(Ordering::Acquire) {

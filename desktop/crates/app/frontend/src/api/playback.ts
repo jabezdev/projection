@@ -3,7 +3,7 @@ import { invoke, listen } from './tauri';
 
 export type PlaybackPhase = 'preparing' | 'ready' | 'playing' | 'paused' | 'ended' | 'failed';
 export type PlaybackState = {
-  session_id: number; generation: number; item_id: number; path: string; kind: 'video' | 'audio';
+  session_id: number; generation: number; item_id: string; path: string; kind: 'video' | 'audio';
   paused: boolean; suspended: boolean; phase: PlaybackPhase;
   position_ms: number; duration_ms: number | null; position_at_ms: number;
   volume: number; muted: boolean; rate_percent: number; looping: boolean;

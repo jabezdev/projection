@@ -1,5 +1,5 @@
 use protocol::{
-    Background, EngineCommand, EngineEvent, EngineSnapshot, MediaDirective, PlaybackPhase, PlaybackReport, ProjectModel, SessionId,
+    Background, EngineCommand, EngineEvent, EngineSnapshot, MediaDirective, PlaybackPhase, PlaybackReport, LiveService, SessionId,
 };
 
 mod background;
@@ -23,15 +23,16 @@ pub trait MediaBackend {
     fn send(&mut self, directive: MediaDirective);
 }
 
-pub trait ProjectStore {
-    fn load_project(&self, project_id: i64) -> anyhow::Result<ProjectModel>;
-    fn save_project(&self, project: &mut ProjectModel) -> anyhow::Result<()>;
+pub trait ServiceStore {
+    fn load_service(&self, service_id: &str) -> anyhow::Result<LiveService>;
+    fn save_service(&self, service: &protocol::model::Service) -> anyhow::Result<LiveService>;
+    fn resolve_service(&self, service: &protocol::model::Service) -> anyhow::Result<LiveService>;
 }
 
 pub struct Ports<'a> {
     pub assets: &'a dyn Assets,
     pub media: &'a mut dyn MediaBackend,
-    pub store: &'a dyn ProjectStore,
+    pub store: &'a dyn ServiceStore,
     pub now_ms: i64,
 }
 
@@ -104,16 +105,16 @@ impl Engine {
         let program_before = self.state.program_state.clone();
         let playback_before = self.state.playback.clone();
         let mut errors = Vec::new();
-        let project_changed = change(self, ports, &mut errors);
+        let service_changed = change(self, ports, &mut errors);
         let program_changed = self.state.program_state != program_before;
 
         let mut events = Vec::new();
-        if project_changed || program_changed {
+        if service_changed || program_changed {
             self.state.version += 1;
             let version = self.state.version;
-            if project_changed {
-                events.push(EngineEvent::ProjectChanged {
-                    project: self.state.project.clone(),
+            if service_changed {
+                events.push(EngineEvent::ServiceChanged {
+                    service: self.state.service.clone(),
                     version,
                 });
             }

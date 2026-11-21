@@ -69,12 +69,22 @@ export class App {
     throw new Error(`The app's WebSocket did not open on port ${this.port}`);
   }
 
-  seedService(name: string, items: Json[]): number {
+  seedService(title: string, items: Seed[]): string {
     const db = new Database(join(this.dataDir, 'app.db'));
     try {
       const now = Date.now();
-      const id = Number(db.query('INSERT INTO projects(name, created_at_ms, updated_at_ms, model_json) VALUES (?, ?, ?, NULL)').run(name, now, now).lastInsertRowid);
-      db.query('UPDATE projects SET model_json = ? WHERE id = ?').run(JSON.stringify({ id, name, session: { items } }), id);
+      const id = `e2e-${now}`;
+      db.query('INSERT INTO service(id, scheduled_at_ms, title, updated_at_ms) VALUES (?, ?, ?, ?)').run(id, now, title, now);
+      items.forEach((item, position) => {
+        let content: Json = { kind: 'text', steps: item.steps ?? [] };
+        if (item.media) {
+          const mediaId = `media-${item.id}`;
+          db.query('INSERT INTO media_file(id, title, kind) VALUES (?, ?, ?)').run(mediaId, item.title, item.media.kind);
+          db.query('INSERT INTO media_path(media_id, path) VALUES (?, ?)').run(mediaId, item.media.path);
+          content = { kind: 'media', mediaId, options: item.media.options ?? videoOptions() };
+        }
+        db.query('INSERT INTO service_item(id, service_id, position, body) VALUES (?, ?, ?, ?)').run(item.id, id, position, JSON.stringify({ id: item.id, title: item.title, content }));
+      });
       return id;
     } finally {
       db.close();
@@ -130,7 +140,8 @@ export class Remote {
 
 export const program = (event: EngineEvent) => event.type === 'program_changed' ? event.payload.program_state as Json : null;
 export const playback = (event: EngineEvent) => event.type === 'playback_changed' ? event.payload.playback as Json | null : undefined;
-export const project = (event: EngineEvent) => event.type === 'project_changed' ? event.payload.project as Json | null : undefined;
+export const service = (event: EngineEvent) => event.type === 'service_changed' ? ((event.payload.service as Json | null)?.service as Json | undefined) ?? null : undefined;
+export type Seed = { id: string; title: string; steps?: string[]; media?: { kind: 'image' | 'video' | 'audio'; path: string; options?: Json } };
 
 export const videoOptions = (overrides: Json = {}) => ({ confidence: false, looping: false, start_ms: 0, end_ms: null, volume: 100, rate_percent: 100, ...overrides });
 

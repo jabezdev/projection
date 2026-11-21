@@ -1,19 +1,20 @@
 use protocol::{
     EngineCommand,
-    ProgramState, ProjectModel, SessionItemKind,
+    LiveService, ProgramState, SessionItemKind,
 };
 
 use super::*;
 
 pub(super) fn navigation_target(
-    project: &ProjectModel,
+    service: &LiveService,
     program: &ProgramState,
     cmd: &EngineCommand,
-) -> (Option<i64>, Option<u32>) {
-    let items = &project.session.items;
+) -> (Option<String>, Option<u32>) {
+    let items = &service.items;
     let mut idx = program
         .active_item_id
-        .and_then(|id| items.iter().position(|it| it.id == id))
+        .as_ref()
+        .and_then(|id| items.iter().position(|it| &it.id == id))
         .unwrap_or(0);
     let mut step = program.active_step_index;
     let steps = match items.get(idx).map(|it| &it.kind) {
@@ -85,5 +86,5 @@ pub(super) fn navigation_target(
         _ => {}
     }
 
-    (items.get(idx).map(|it| it.id), step)
+    (items.get(idx).map(|it| it.id.clone()), step)
 }

@@ -1,70 +1,37 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectModel {
-    pub id: i64,
-    pub name: String,
-    pub session: SessionModel,
-}
+use crate::model::{Section, Service};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectHeader {
-    pub id: i64,
-    pub name: String,
-    pub updated_at_ms: i64,
+pub struct LiveService {
+    pub service: Service,
+    pub items: Vec<SessionItem>,
 }
 
-impl ProjectModel {
-    pub fn empty(id: i64, name: impl Into<String>) -> Self {
-        Self {
-            id,
-            name: name.into(),
-            session: SessionModel::default(),
-        }
+impl LiveService {
+    pub fn id(&self) -> &str {
+        &self.service.id
+    }
+
+    pub fn item(&self, id: &str) -> Option<&SessionItem> {
+        self.items.iter().find(|item| item.id == id)
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SongModel {
-    pub id: i64,
-    pub title: String,
-    pub lyrics: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SongHeader {
-    pub id: i64,
-    pub title: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MediaKind {
-    Image,
-    Video,
-    Audio,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MediaModel {
-    pub id: i64,
-    pub title: String,
-    pub kind: MediaKind,
-    pub path: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct SessionModel {
-    pub items: Vec<SessionItem>,
+pub struct LiveSong {
+    pub song_id: String,
+    pub version_id: String,
+    pub sections: Vec<Section>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionItem {
-    pub id: i64,
+    pub id: String,
     pub title: Option<String>,
     pub kind: SessionItemKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub song: Option<String>,
+    pub song: Option<LiveSong>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background: Option<String>,
 }

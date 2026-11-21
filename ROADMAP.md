@@ -16,21 +16,21 @@ Many features have so far only been compile-checked for Windows. Prove them on t
 
 ## 2. One data model for desktop and web
 
-PALTO stores a song as a title plus one lyrics string with numeric IDs. The web app has sections, arrangements and credits. Sync, undo, credits and the OBS plugin all depend on closing this gap.
+PALTO and the web app now share one model: `protocol::model` on the desktop, the same shape in Convex. The engine plays a resolved copy of the loaded service.
 
 Decided: a library song is a reference that service edits never change; library fixes reach upcoming services but not past ones; string IDs shared with Convex; edits as small operations, the same shape on both sides.
 
-- [ ] Shared model: songs with sections, services with arrangements and service-only variations, upcoming and past.
+- [x] Shared model: songs with sections, services with arrangements and service-only variations, upcoming and past.
   - A section is a type (Verse, Chorus, Bridge…) with an optional number, name and colour; a blank line splits slides.
   - Songs have versions. An edit changes the current version in place unless a past service points at it, then it starts a new one.
   - A service becomes past the day after its date, or when the operator ends it live; it then pins the song versions it used.
   - A service item may override, for that service only: the arrangement, a section's lyrics or slide breaks, the key, notes, background and shown title.
   - Every item kind syncs (songs, text, media, presentations, captures, headers). File paths and capture sources stay per device; media matches by content hash.
-  - Desktop "projects" become services with a date, title, leader and notes.
+  - Desktop "projects" became services with a date and time, title, leader and notes. Times are stored as UTC and shown in local time.
   - Deleting a song archives it, so services still resolve it and it can be restored.
-- [ ] Migrate SQLite to it, after an automatic backup.
+- [x] Move SQLite to it. Dev data was dropped instead of migrated.
 - [ ] Undo and redo from a stored edit history.
-- [ ] Song credits, all optional: authors with a role (words, music, translation), copyright, CCLI number, publisher, year. Filled by OpenLyrics import.
+- [x] Song credits, all optional: authors with a role (words, music, translation), copyright, CCLI number, publisher, year. Filled by OpenLyrics import.
 - [ ] Service templates ("Sunday", "Youth night") with fixed items and empty slots.
 
 ## 3. Cloud sync, offline-first

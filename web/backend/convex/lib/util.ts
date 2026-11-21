@@ -4,10 +4,6 @@ export function randomToken(bytes = 16): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function newEntryKey(): string {
-  return randomToken(6);
-}
-
 export function defined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, value]) => value !== undefined),

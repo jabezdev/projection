@@ -17,7 +17,6 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use core_engine::{EngineCommand, EngineSnapshot};
 use engine_host::EngineHandle;
 use persistence::Repository;
-use protocol::ProjectModel;
 
 pub(crate) use shutdown::shutdown_native;
 
@@ -35,13 +34,17 @@ impl Db {
     }
 }
 
-impl library::storage::ProjectWriter for Db {
-    fn load(&self, project_id: i64) -> anyhow::Result<ProjectModel> {
-        self.lock()?.get_project(project_id)
+impl library::storage::ServiceWriter for Db {
+    fn load(&self, service_id: &str) -> anyhow::Result<protocol::model::Service> {
+        self.lock()?.service(service_id)?.ok_or_else(|| anyhow::anyhow!("service {service_id} not found"))
     }
 
-    fn save(&self, project: &mut ProjectModel) -> anyhow::Result<()> {
-        self.lock()?.save_project(project, now_ms())
+    fn save(&self, service: &protocol::model::Service) -> anyhow::Result<()> {
+        self.lock()?.save_service(service, now_ms())
+    }
+
+    fn resolve(&self, service: &protocol::model::Service) -> anyhow::Result<protocol::LiveService> {
+        self.lock()?.resolve_service(service)
     }
 }
 

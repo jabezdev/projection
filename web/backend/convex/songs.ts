@@ -1,160 +1,104 @@
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requirePermission } from "./lib/auth";
-import { detachSections, songSections } from "./lib/sequence";
+import { requireSong, setSongContent, songByUid, touch, versionByUid } from "./lib/sequence";
 import { defined } from "./lib/util";
+import { credits, section } from "./schema";
+import { newId } from "@magi/shared";
+
+async function withVersion(ctx: QueryCtx, song: Doc<"songs">) {
+  const current = await versionByUid(ctx, song.currentVersion);
+  if (!current) throw new ConvexError("Song has no current version");
+  const { uid, title, archived, credits, key, tags } = song;
+  return { id: uid, title, archived, credits, key, tags, current: { id: current.uid, number: current.number, sections: current.sections, arrangement: current.arrangement, background: current.background } };
+}
 
 export const list = query({
-  args: { search: v.optional(v.string()) },
-  handler: async (ctx, { search }) => {
+  args: { search: v.optional(v.string()), includeArchived: v.optional(v.boolean()) },
+  handler: async (ctx, { search, includeArchived }) => {
     await requirePermission(ctx, "view");
     const term = search?.trim();
     const songs = term
-      ? await ctx.db
-          .query("songs")
-          .withSearchIndex("search", (q) => q.search("searchText", term))
-          .take(50)
-      : (await ctx.db.query("songs").collect()).sort((a, b) => a.title.localeCompare(b.title));
-    return songs.map(({ _id, title, artist, defaultKey, tags }) => ({
-      _id,
-      title,
-      artist,
-      defaultKey,
-      tags,
-    }));
+      ? await ctx.db.query("songs").withSearchIndex("search", (q) => (includeArchived ? q.search("searchText", term) : q.search("searchText", term).eq("archived", false))).take(50)
+      : (await ctx.db.query("songs").collect()).filter((s) => includeArchived || !s.archived).sort((a, b) => a.title.localeCompare(b.title));
+    return songs.map(({ uid, title, archived, credits, key, tags }) => ({ id: uid, title, archived, credits, key, tags }));
   },
 });
 
 export const get = query({
-  args: { songId: v.id("songs") },
+  args: { songId: v.string() },
   handler: async (ctx, { songId }) => {
     await requirePermission(ctx, "view");
-    const song = await ctx.db.get(songId);
-    if (!song) return null;
-    return { ...song, sections: await songSections(ctx, songId) };
+    const song = await songByUid(ctx, songId);
+    return song ? withVersion(ctx, song) : null;
+  },
+});
+
+export const version = query({
+  args: { versionId: v.string() },
+  handler: async (ctx, { versionId }) => {
+    await requirePermission(ctx, "view");
+    const found = await versionByUid(ctx, versionId);
+    return found ? { id: found.uid, number: found.number, sections: found.sections, arrangement: found.arrangement, background: found.background } : null;
   },
 });
 
 export const create = mutation({
-  args: {
-    title: v.string(),
-    artist: v.optional(v.string()),
-    sections: v.array(v.object({ label: v.string(), lyrics: v.string() })),
-  },
-  handler: async (ctx, { title, artist, sections }) => {
+  args: { title: v.string(), credits: v.optional(credits), sections: v.array(section) },
+  handler: async (ctx, { title, credits, sections }) => {
     const user = await requirePermission(ctx, "editLibrary");
-    const songId = await ctx.db.insert("songs", {
+    const uid = newId();
+    const versionUid = newId();
+    await ctx.db.insert("songVersions", { uid: versionUid, songUid: uid, number: 1, sections, arrangement: sections.map((s) => s.id) });
+    const id = await ctx.db.insert("songs", {
+      uid,
       title: title.trim() || "Untitled",
-      artist,
+      archived: false,
+      credits: credits ?? {},
       tags: [],
-      defaultSequence: [],
+      currentVersion: versionUid,
       searchText: "",
       updatedAt: Date.now(),
       updatedBy: user._id,
     });
-    const sectionIds = [];
-    for (const [order, section] of sections.entries()) {
-      sectionIds.push(await ctx.db.insert("sections", { songId, order, ...section }));
-    }
-    await ctx.db.patch(songId, { defaultSequence: sectionIds });
-    await touch(ctx, songId, user._id);
-    return songId;
+    await touch(ctx, id, user._id);
+    return uid;
   },
 });
 
 export const update = mutation({
   args: {
-    songId: v.id("songs"),
+    songId: v.string(),
     title: v.optional(v.string()),
-    artist: v.optional(v.string()),
-    ccli: v.optional(v.string()),
-    defaultKey: v.optional(v.string()),
+    credits: v.optional(credits),
+    key: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, { songId, ...fields }) => {
     const user = await requirePermission(ctx, "editLibrary");
-    await ctx.db.patch(songId, defined(fields));
-    await touch(ctx, songId, user._id);
+    const song = await requireSong(ctx, songId);
+    await ctx.db.patch(song._id, defined(fields));
+    await touch(ctx, song._id, user._id);
   },
 });
 
-export const remove = mutation({
-  args: { songId: v.id("songs") },
-  handler: async (ctx, { songId }) => {
+export const setContent = mutation({
+  args: { songId: v.string(), sections: v.array(section), arrangement: v.array(v.string()), background: v.optional(v.string()) },
+  handler: async (ctx, { songId, ...content }) => {
+    const user = await requirePermission(ctx, "editLibrary");
+    const song = await requireSong(ctx, songId);
+    const ids = new Set(content.sections.map((s) => s.id));
+    if (content.arrangement.some((id) => !ids.has(id))) throw new ConvexError("The arrangement names a part that isn't in the song");
+    return setSongContent(ctx, song, content, user._id);
+  },
+});
+
+export const archive = mutation({
+  args: { songId: v.string(), archived: v.boolean() },
+  handler: async (ctx, { songId, archived }) => {
     await requirePermission(ctx, "editLibrary");
-    const sections = await songSections(ctx, songId);
-    await detachSections(ctx, songId, sections, { unlinkSong: true });
-    for (const section of sections) await ctx.db.delete(section._id);
-    await ctx.db.delete(songId);
+    const song = await requireSong(ctx, songId);
+    await ctx.db.patch(song._id, { archived });
   },
 });
-
-export const setDefaultSequence = mutation({
-  args: { songId: v.id("songs"), sequence: v.array(v.id("sections")) },
-  handler: async (ctx, { songId, sequence }) => {
-    const user = await requirePermission(ctx, "editLibrary");
-    for (const id of sequence) {
-      const section = await ctx.db.get(id);
-      if (section?.songId !== songId) throw new ConvexError("Section belongs to another song");
-    }
-    await ctx.db.patch(songId, { defaultSequence: sequence });
-    await touch(ctx, songId, user._id);
-  },
-});
-
-export const addSection = mutation({
-  args: { songId: v.id("songs"), label: v.string(), lyrics: v.string() },
-  handler: async (ctx, { songId, label, lyrics }) => {
-    const user = await requirePermission(ctx, "editLibrary");
-    const song = await ctx.db.get(songId);
-    if (!song) throw new ConvexError("Song not found");
-    const sections = await songSections(ctx, songId);
-    const order = sections.length ? sections[sections.length - 1].order + 1 : 0;
-    const sectionId = await ctx.db.insert("sections", { songId, label, lyrics, order });
-    await ctx.db.patch(songId, { defaultSequence: [...song.defaultSequence, sectionId] });
-    await touch(ctx, songId, user._id);
-    return sectionId;
-  },
-});
-
-export const updateSection = mutation({
-  args: {
-    sectionId: v.id("sections"),
-    label: v.optional(v.string()),
-    lyrics: v.optional(v.string()),
-  },
-  handler: async (ctx, { sectionId, ...fields }) => {
-    const user = await requirePermission(ctx, "editLibrary");
-    const section = await ctx.db.get(sectionId);
-    if (!section) throw new ConvexError("Section not found");
-    await ctx.db.patch(sectionId, defined(fields));
-    await touch(ctx, section.songId, user._id);
-  },
-});
-
-export const removeSection = mutation({
-  args: { sectionId: v.id("sections") },
-  handler: async (ctx, { sectionId }) => {
-    const user = await requirePermission(ctx, "editLibrary");
-    const section = await ctx.db.get(sectionId);
-    if (!section) return;
-    const song = await ctx.db.get(section.songId);
-    await detachSections(ctx, section.songId, [section], { unlinkSong: false });
-    if (song) {
-      await ctx.db.patch(song._id, {
-        defaultSequence: song.defaultSequence.filter((id) => id !== sectionId),
-      });
-    }
-    await ctx.db.delete(sectionId);
-    await touch(ctx, section.songId, user._id);
-  },
-});
-
-async function touch(ctx: MutationCtx, songId: Id<"songs">, userId: Id<"users">) {
-  const song = await ctx.db.get(songId);
-  if (!song) return;
-  const sections = await songSections(ctx, songId);
-  const searchText = [song.title, song.artist ?? "", ...sections.map((s) => s.lyrics)].join("\n");
-  await ctx.db.patch(songId, { searchText, updatedAt: Date.now(), updatedBy: userId });
-}

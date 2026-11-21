@@ -3,6 +3,7 @@ mod output_config;
 mod commands;
 mod events;
 mod library;
+pub mod model;
 mod playback;
 mod program;
 

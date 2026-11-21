@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
+use protocol::model::{Author, AuthorRole, Credits, Entry, ItemContent, MediaFile, MediaKind, Section, SectionKind, SectionPatch, Service, ServiceItem, Song, SongItem, SongVersion};
 use protocol::{
-    CaptureFit, CaptureKind, CaptureOptions, CaptureSource, EngineCommand, EngineEvent, InputBinding, InputBindings, InputTrigger, MediaAction, MediaDirective, MidiMessage, OutputConfig, PlaybackKind,
+    CaptureFit, LiveService, LiveSong, CaptureKind, CaptureOptions, CaptureSource, EngineCommand, EngineEvent, InputBinding, InputBindings, InputTrigger, MediaAction, MediaDirective, MidiMessage, OutputConfig, PlaybackKind,
     PlaybackPhase, PlaybackReport, PlaybackState, SessionItem, SessionItemKind, VideoOptions,
 };
 use serde::Serialize;
@@ -10,7 +11,7 @@ fn playback(kind: PlaybackKind) -> PlaybackState {
     PlaybackState {
         session_id: 7,
         generation: 2,
-        item_id: 30,
+        item_id: "30".into(),
         path: "/media/clip.mp4".into(),
         kind,
         paused: false,
@@ -31,7 +32,35 @@ fn playback(kind: PlaybackKind) -> PlaybackState {
 }
 
 fn item(id: i64, kind: SessionItemKind) -> SessionItem {
-    SessionItem { id, title: Some("Item".into()), kind, song: None, background: None }
+    SessionItem { id: id.to_string(), title: Some("Item".into()), kind, song: None, background: None }
+}
+
+fn section(id: &str, kind: SectionKind, lyrics: &str) -> Section {
+    Section { id: id.into(), kind, number: Some(1), name: None, color: None, lyrics: lyrics.into() }
+}
+
+fn song() -> Song {
+    let current = SongVersion { id: "ver1".into(), number: 1, sections: vec![section("v1", SectionKind::Verse, "Line one\n\nLine two"), Section { name: Some("Vamp".into()), color: Some("#123456".into()), number: None, ..section("x", SectionKind::Other, "Oh") }], arrangement: vec!["v1".into(), "x".into()], background: Some("med1".into()) };
+    let credits = Credits { authors: vec![Author { name: "John Newton".into(), role: Some(AuthorRole::Words) }, Author { name: "Anon".into(), role: None }], copyright: Some("Public Domain".into()), ccli: Some("22025".into()), publisher: None, year: Some(1779) };
+    Song { id: "song1".into(), title: "Amazing Grace".into(), archived: false, credits, key: Some("G".into()), tags: vec!["hymn".into()], current }
+}
+
+fn service(options: VideoOptions) -> Service {
+    let entry = |id: &str, section_id: Option<&str>, variation: SectionPatch| Entry { id: id.into(), section_id: section_id.map(Into::into), variation };
+    let content = [
+        ItemContent::Song(SongItem { song_id: "song1".into(), version_id: Some("ver1".into()), key: Some("A".into()), arrangement: Some(vec![
+            entry("e1", Some("v1"), SectionPatch::default()),
+            entry("e2", Some("v1"), SectionPatch { lyrics: Some("Softly".into()), ..Default::default() }),
+            entry("e3", None, SectionPatch { kind: Some(SectionKind::Tag), number: Some(2), name: Some("End".into()), color: Some("#ffffff".into()), lyrics: Some("Amen".into()) }),
+        ]) }),
+        ItemContent::Text { steps: vec!["Welcome".into()] },
+        ItemContent::Media { media_id: "med1".into(), options },
+        ItemContent::Presentation { media_id: Some("med2".into()), slides: vec!["/media/p1.png".into()] },
+        ItemContent::Capture { options: CaptureOptions::default(), source: Some(CaptureSource { kind: CaptureKind::Screen, id: "screen:1".into(), name: "Main".into() }) },
+        ItemContent::Header,
+    ];
+    let items = content.into_iter().enumerate().map(|(i, content)| ServiceItem { id: format!("item{i}"), title: Some("Item".into()), notes: Some("Note".into()), background: Some("shader:aurora".into()), content }).collect();
+    Service { id: "svc1".into(), scheduled_at_ms: 1_795_000_000_000, title: "Sunday".into(), leader: Some("Ana".into()), notes: None, ended_at_ms: Some(1_795_000_100_000), items }
 }
 
 fn sample(name: &str, ts_type: &str, value: impl Serialize) -> String {
@@ -87,7 +116,7 @@ fn generated() -> String {
             "items",
             "SessionItem[]",
             [
-                item(1, SessionItemKind::Text { steps: vec!["Line one".into()] }),
+                SessionItem { song: Some(LiveSong { song_id: "song1".into(), version_id: "ver1".into(), sections: song().current.sections }), ..item(1, SessionItemKind::Text { steps: vec!["Line one".into()] }) },
                 item(2, SessionItemKind::Image { path: "/media/a.png".into() }),
                 item(3, SessionItemKind::Video { path: "/media/b.mp4".into(), options: options.clone() }),
                 item(4, SessionItemKind::Audio { path: "/media/c.mp3".into(), options }),
@@ -102,6 +131,13 @@ fn generated() -> String {
                 item(7, SessionItemKind::Section {}),
             ],
         ),
+        sample("song", "Song", song()),
+        sample("media", "MediaFile[]", [
+            MediaFile { id: "med1".into(), title: "Loop".into(), kind: MediaKind::Video, hash: None, path: Some("/media/loop.mp4".into()) },
+            MediaFile { id: "med2".into(), title: "Slides".into(), kind: MediaKind::Presentation, hash: Some("abc".into()), path: None },
+        ]),
+        sample("service", "Service", service(VideoOptions::default())),
+        sample("serviceEvent", "{ type: 'service_changed'; payload: { service: LiveService | null; version: number } }", EngineEvent::ServiceChanged { service: Some(LiveService { service: service(VideoOptions::default()), items: vec![item(9, SessionItemKind::Section {})] }), version: 3 }),
         sample("outputConfig", "OutputConfig", OutputConfig::default()),
         sample("inputBindings", "InputBindings", {
             let mut map = InputBindings::default();
@@ -114,7 +150,7 @@ fn generated() -> String {
     let mut text = String::from(
         "// Generated by `cargo test -p protocol --test typescript`; do not edit.\n\
          import type { MediaAction, MediaDirective, PlaybackReport, PlaybackState } from './playback';\n\
-         import type { SessionItem } from './models';\n\
+         import type { LiveService, MediaFile, Service, SessionItem, Song } from './models';\n\
          import type { OutputConfig } from '../settings/outputState';\n\
          import type { InputBindings } from './input';\n\n",
     );

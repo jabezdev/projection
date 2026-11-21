@@ -30,7 +30,7 @@ fn addressed_media_commands_have_a_stable_wire_format() {
 
 #[test]
 fn snapshots_from_before_playback_existed_still_load() {
-    let old = r#"{"program_state":{"mode":"manual","transport":"stopped","time_ms":0,"active_item_id":null,"next_item_id":null,"active_step_index":null,"active_text":"","background":null},"version":3,"project":null}"#;
+    let old = r#"{"program_state":{"mode":"manual","transport":"stopped","time_ms":0,"active_item_id":null,"next_item_id":null,"active_step_index":null,"active_text":"","background":null},"version":3,"service":null}"#;
     let snapshot: EngineSnapshot = serde_json::from_str(old).unwrap();
     assert_eq!((snapshot.version, snapshot.playback, snapshot.playback_revision), (3, None, 0));
 }

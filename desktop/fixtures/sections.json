@@ -1,0 +1,19 @@
+{
+  "slides": [
+    { "name": "a blank line starts a slide", "lyrics": "A\nB\n\nC", "slides": ["A\nB", "C"] },
+    { "name": "CRLF and whitespace-only lines separate slides", "lyrics": "\r\n First\r\nSecond\r\n \t\r\n\r\nThird\r\n\r\n", "slides": ["First\nSecond", "Third"] },
+    { "name": "empty lyrics have no slides", "lyrics": " \n\n ", "slides": [] }
+  ],
+  "codes": [
+    { "section": { "kind": "verse", "number": 1 }, "code": "V1", "color": "#4f91e8" },
+    { "section": { "kind": "chorus" }, "code": "C", "color": "#e76774" },
+    { "section": { "kind": "pre_chorus", "number": 2 }, "code": "PC2", "color": "#efa34a" },
+    { "section": { "kind": "bridge" }, "code": "BR", "color": "#aa84df" },
+    { "section": { "kind": "intro" }, "code": "I", "color": "#50c6d6" },
+    { "section": { "kind": "outro" }, "code": "O", "color": "#ddbd53" },
+    { "section": { "kind": "tag" }, "code": "T", "color": "#79c56b" },
+    { "section": { "kind": "other", "name": "interlude" }, "code": "I", "color": "#a3a8b2" },
+    { "section": { "kind": "other" }, "code": "P", "color": "#a3a8b2" },
+    { "section": { "kind": "verse", "color": "#123456" }, "code": "V", "color": "#123456" }
+  ]
+}

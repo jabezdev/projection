@@ -24,7 +24,7 @@ pub fn coalesce(inputs: Vec<EngineInput>) -> Vec<EngineInput> {
 }
 
 fn supersedes(next: &EngineInput, previous: &EngineInput) -> bool {
-    use EngineCommand::{Media, SaveProject};
+    use EngineCommand::{Media, SaveService};
     use EngineInput::{Command, Report};
     match (previous, next) {
         (Report(a), Report(b)) => a.session_id == b.session_id && a.phase == b.phase,
@@ -36,7 +36,7 @@ fn supersedes(next: &EngineInput, previous: &EngineInput) -> bool {
             Command(Media { session_id: a, action: MediaAction::SetVolume { .. } }),
             Command(Media { session_id: b, action: MediaAction::SetVolume { .. } }),
         ) => a == b,
-        (Command(SaveProject { project: a }), Command(SaveProject { project: b })) => a.id == b.id,
+        (Command(SaveService { service: a }), Command(SaveService { service: b })) => a.id == b.id,
         _ => false,
     }
 }

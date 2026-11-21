@@ -14,13 +14,13 @@ pub(super) fn restore_last_service(app: &tauri::App, dir: &Path, db: &Db, channe
     let (recovery, previous) = Recovery::start(dir);
     let warning = match previous {
         Previous::Clean => None,
-        Previous::Restore(state) => match state.project_id.map(|id| db.lock().and_then(|db| db.get_project(id))) {
-            Some(Ok(project)) => {
-                log::warn!("Previous run ended unexpectedly; reopening {} at its last cue", project.name);
-                for command in restore_commands(&state, &project) {
+        Previous::Restore(state) => match state.service_id.as_deref().map(|id| load_live(db, id)) {
+            Some(Ok(service)) => {
+                log::warn!("Previous run ended unexpectedly; reopening {} at its last cue", service.service.title);
+                for command in restore_commands(&state, &service) {
                     let _ = channels.engine.command(command);
                 }
-                Some(format!("PALTO did not close normally. \"{}\" was reopened at its last cue with media paused. Outputs stay hidden until you show them.", project.name))
+                Some(format!("PALTO did not close normally. \"{}\" was reopened at its last cue with media paused. Outputs stay hidden until you show them.", service.service.title))
             }
             _ => Some("PALTO did not close normally, and the last service could not be reopened.".into()),
         },
@@ -42,7 +42,7 @@ fn record_on_air_state(recovery: Arc<Recovery>, channels: &Channels) -> std::io:
     let snapshot = channels.snapshot.clone();
     thread::Builder::new().name("recovery".into()).spawn(move || loop {
         match events.blocking_recv() {
-            Ok(EngineEvent::ProjectChanged { .. } | EngineEvent::ProgramChanged { .. }) | Err(RecvError::Lagged(_)) => {
+            Ok(EngineEvent::ServiceChanged { .. } | EngineEvent::ProgramChanged { .. }) | Err(RecvError::Lagged(_)) => {
                 let current = snapshot.read().expect("snapshot lock poisoned").clone();
                 recovery.observe(&current);
             }
@@ -51,4 +51,10 @@ fn record_on_air_state(recovery: Arc<Recovery>, channels: &Channels) -> std::io:
         }
     })?;
     Ok(())
+}
+
+fn load_live(db: &Db, id: &str) -> anyhow::Result<protocol::LiveService> {
+    let db = db.lock()?;
+    let service = db.service(id)?.ok_or_else(|| anyhow::anyhow!("service {id} not found"))?;
+    db.resolve_service(&service)
 }

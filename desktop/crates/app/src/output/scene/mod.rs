@@ -1,5 +1,5 @@
 use protocol::{
-    CaptureFit, PlaybackState, ProgramState, ProjectModel,
+    CaptureFit, LiveService, PlaybackState, ProgramState,
     SessionItem, SessionItemKind,
 };
 use render_engine::VideoKey;
@@ -26,9 +26,8 @@ fn is_video(path: &str) -> bool {
         .is_some_and(|e| VIDEO_EXTENSIONS.iter().any(|v| v.eq_ignore_ascii_case(e)))
 }
 
-fn active_item<'a>(program: &ProgramState, project: Option<&'a ProjectModel>) -> Option<&'a SessionItem> {
-    let id = program.active_item_id?;
-    project?.session.items.iter().find(|item| item.id == id)
+fn active_item<'a>(program: &ProgramState, service: Option<&'a LiveService>) -> Option<&'a SessionItem> {
+    service?.item(program.active_item_id.as_deref()?)
 }
 
 fn foreground_video(item: Option<&SessionItem>, playback: Option<&PlaybackState>) -> Option<VideoKey> {

@@ -255,7 +255,7 @@ mod tests {
         PlaybackState {
             session_id,
             generation: 0,
-            item_id: 1,
+            item_id: "1".into(),
             path: "/nonexistent/media".into(),
             kind,
             paused: true,

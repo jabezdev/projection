@@ -1,6 +1,5 @@
 import { api } from "@magi/backend/api";
-import type { Id } from "@magi/backend/dataModel";
-import { shortLabel } from "@magi/shared";
+import { SECTION_KINDS, sectionCode, sectionLabel, type SectionKind } from "@magi/shared";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { EditableText } from "../../components/EditableText";
@@ -12,10 +11,28 @@ import { AddSong } from "./AddSong";
 export function Arrange({ service }: { service: Service }) {
   return (
     <div className="space-y-3">
-      {service.items.map((item, i) => (
-        <ItemCard key={item._id} item={item} isFirst={i === 0} isLast={i === service.items.length - 1} />
+      {service.items.map((item, i) => item.kind === "song" ? (
+        <ItemCard key={item.id} item={item} isFirst={i === 0} isLast={i === service.items.length - 1} />
+      ) : (
+        <OtherItem key={item.id} item={item} isFirst={i === 0} isLast={i === service.items.length - 1} />
       ))}
-      <AddSong serviceId={service._id} />
+      <AddSong serviceId={service.id} />
+    </div>
+  );
+}
+
+function OtherItem({ item, isFirst, isLast }: { item: Item; isFirst: boolean; isLast: boolean }) {
+  const safe = useSafe();
+  const moveItem = useMutation(api.services.moveItem);
+  const removeItem = useMutation(api.services.removeItem);
+  const itemId = item.id;
+  const kind = { header: "Section", text: "Text", media: "Media", presentation: "Slides", capture: "Screen capture", song: "Song" }[item.kind];
+  return (
+    <div className={`flex items-center gap-2 px-1 ${item.kind === "header" ? "pt-3 font-semibold" : "text-sm"}`}>
+      <span className="mr-auto">{item.title}<span className="ml-2 text-xs font-normal text-muted">{kind}</span></span>
+      <button className="btn" disabled={isFirst} title="Move up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}>↑</button>
+      <button className="btn" disabled={isLast} title="Move down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}>↓</button>
+      <button className="btn" title="Remove from service" onClick={() => confirm(`Remove “${item.title}” from this service?`) && safe(removeItem)({ itemId })}>✕</button>
     </div>
   );
 }
@@ -28,13 +45,16 @@ export function ItemCard({ item, isFirst, isLast }: { item: Item; isFirst: boole
   const insertEntry = useMutation(api.services.insertEntry);
   const resetSequence = useMutation(api.services.resetSequence);
   const [selected, setSelected] = useState<string | null>(null);
-  const selectedEntry = item.entries.find((e) => e.key === selected);
-  const itemId = item._id;
+  const selectedEntry = item.entries.find((e) => e.entryId === selected);
+  const itemId = item.id;
 
   return (
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto font-semibold">{item.title}</h2>
+        <h2 className="mr-auto font-semibold">
+          {item.title}
+          {item.versionNumber !== null && <span className="ml-2 text-xs font-normal text-muted">past · version {item.versionNumber}</span>}
+        </h2>
         <EditableText
           className="w-20"
           placeholder="Key"
@@ -59,14 +79,14 @@ export function ItemCard({ item, isFirst, isLast }: { item: Item; isFirst: boole
       <div className="flex flex-wrap gap-1.5">
         {item.entries.map((entry) => (
           <button
-            key={entry.key}
-            title={entry.label}
-            onClick={() => setSelected(selected === entry.key ? null : entry.key)}
+            key={entry.entryId}
+            title={sectionLabel(entry)}
+            onClick={() => setSelected(selected === entry.entryId ? null : entry.entryId)}
             className={`rounded-md px-2.5 py-1 text-sm ${
-              selected === entry.key ? "bg-accent text-white" : "bg-accent-soft hover:bg-accent/40"
+              selected === entry.entryId ? "bg-accent text-white" : "bg-accent-soft hover:bg-accent/40"
             } ${entry.isVariation || !entry.sectionId ? "ring-1 ring-variation" : ""}`}
           >
-            {shortLabel(entry.label)}
+            {sectionCode(entry)}
           </button>
         ))}
         <select
@@ -75,20 +95,24 @@ export function ItemCard({ item, isFirst, isLast }: { item: Item; isFirst: boole
           onChange={async (e) => {
             const value = e.target.value;
             const index = item.entries.length;
-            if (value === "__new") {
-              await safe(insertEntry)({ itemId, index, label: "Tag", lyrics: "" });
+            if (value.startsWith("__new:")) {
+              await safe(insertEntry)({ itemId, index, kind: value.slice(6) as SectionKind, lyrics: "" });
             } else if (value) {
-              await safe(insertEntry)({ itemId, index, sectionId: value as Id<"sections"> });
+              await safe(insertEntry)({ itemId, index, sectionId: value });
             }
           }}
         >
           <option value="">+ section</option>
           {item.librarySections.map((s) => (
-            <option key={s._id} value={s._id}>
+            <option key={s.id} value={s.id}>
               {s.label}
             </option>
           ))}
-          <option value="__new">New part for this service only…</option>
+          <optgroup label="New part for this service only">
+            {SECTION_KINDS.map((k) => (
+              <option key={k.kind} value={`__new:${k.kind}`}>{k.label}</option>
+            ))}
+          </optgroup>
         </select>
       </div>
 

@@ -1,6 +1,6 @@
 use protocol::{
     Background, DisplayMode, EngineCommand, EngineEvent,
-    MediaAction, MediaDirective, PlaybackKind, PlaybackPhase, ProjectModel, SessionId,
+    MediaAction, MediaDirective, LiveService, PlaybackKind, PlaybackPhase, SessionId,
 };
 
 use super::*;
@@ -40,40 +40,23 @@ impl Engine {
                 self.show_background(Some(background), ports, errors);
             }
 
-            EngineCommand::LoadProject { project_id } => match ports.store.load_project(project_id) {
-                Ok(project) => {
-                    self.state.project = Some(project);
+            EngineCommand::LoadService { service_id } => match ports.store.load_service(&service_id) {
+                Ok(service) => {
+                    self.state.service = Some(service);
                     self.song_background = None;
                     self.select(None, None, true, ports, errors);
                     return true;
                 }
-                Err(e) => errors.push(error(
-                    "project",
-                    format!("Failed to load project {project_id}: {e:#}"),
-                )),
+                Err(e) => errors.push(error("service", format!("Failed to load service {service_id}: {e:#}"))),
             },
-            EngineCommand::SaveProject { mut project } => {
-                if let Err(e) = ports.store.save_project(&mut project) {
-                    errors.push(error(
-                        "project",
-                        format!("Failed to save project {}: {e:#}", project.id),
-                    ));
-                    return false;
-                }
-                if self.state.project.as_ref().map(|p| p.id) != Some(project.id) {
-                    return false;
-                }
-                let active_id = self.state.program_state.active_item_id;
-                let find = |p: &ProjectModel| p.session.items.iter().find(|item| Some(item.id) == active_id).cloned();
-                let old_item = self.state.project.as_ref().and_then(find);
-                let new_item = find(&project);
-                let media_changed = old_item.as_ref().map(|i| (&i.background, &i.kind))
-                    != new_item.as_ref().map(|i| (&i.background, &i.kind));
-                self.state.project = Some(project);
-                let program = &self.state.program_state;
-                let (item, step) = (program.active_item_id, program.active_step_index);
-                self.select(item, step, media_changed, ports, errors);
-                return true;
+            EngineCommand::SaveService { service } => {
+                let saved = ports.store.save_service(&service);
+                return self.replace_service(saved, &service.id, ports, errors);
+            }
+            EngineCommand::RefreshService => {
+                let Some(current) = self.state.service.as_ref().map(|s| s.service.clone()) else { return false };
+                let resolved = ports.store.resolve_service(&current);
+                return self.replace_service(resolved, &current.id, ports, errors);
             }
 
             nav @ (EngineCommand::Next
@@ -85,18 +68,38 @@ impl Engine {
             | EngineCommand::NextStep
             | EngineCommand::PrevStep
             | EngineCommand::GoToStep { .. }) => {
-                let Some(project) = &self.state.project else {
-                    errors.push(error(
-                        "navigation",
-                        "No project loaded; navigation has no effect.",
-                    ));
+                let Some(service) = &self.state.service else {
+                    errors.push(error("navigation", "No service loaded; navigation has no effect."));
                     return false;
                 };
-                let (item, step) = navigation_target(project, &self.state.program_state, &nav);
+                let (item, step) = navigation_target(service, &self.state.program_state, &nav);
                 self.select(item, step, false, ports, errors);
             }
         }
         false
+    }
+
+    fn replace_service(&mut self, resolved: anyhow::Result<LiveService>, id: &str, ports: &mut Ports, errors: &mut Vec<EngineEvent>) -> bool {
+        let live = match resolved {
+            Ok(live) => live,
+            Err(e) => {
+                errors.push(error("service", format!("Failed to save service {id}: {e:#}")));
+                return false;
+            }
+        };
+        if self.state.service.as_ref().map(|s| s.id()) != Some(id) {
+            return false;
+        }
+        let active_id = self.state.program_state.active_item_id.clone();
+        let find = |s: &LiveService| active_id.as_deref().and_then(|id| s.item(id)).cloned();
+        let old_item = self.state.service.as_ref().and_then(find);
+        let new_item = find(&live);
+        let media_changed = old_item.as_ref().map(|i| (&i.background, &i.kind)) != new_item.as_ref().map(|i| (&i.background, &i.kind));
+        self.state.service = Some(live);
+        let program = &self.state.program_state;
+        let (item, step) = (program.active_item_id.clone(), program.active_step_index);
+        self.select(item, step, media_changed, ports, errors);
+        true
     }
 
     pub(super) fn media(

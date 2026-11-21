@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '../ui/Icons';
 
-export type PartEdit = { itemId: number; partId: string; label: string; lyrics: string };
+export type PartEdit = { itemId: string; occurrence: number; label: string; lyrics: string };
 
 export default function PartEditor({ part, onClose, onSave }: { part: PartEdit; onClose: () => void; onSave: (part: PartEdit) => Promise<void> }) {
   const [lyrics, setLyrics] = useState(part.lyrics);
@@ -17,7 +17,7 @@ export default function PartEditor({ part, onClose, onSave }: { part: PartEdit; 
   }}><form className="compact-modal part-edit-modal" role="dialog" aria-modal="true" aria-label={`Edit ${part.label}`} onSubmit={e => { e.preventDefault(); setSaving(true); void onSave({ ...part, lyrics }).finally(() => setSaving(false)); }}>
     <header><h2>{part.label}</h2><button type="button" aria-label="Close part editor" disabled={saving} onClick={onClose}><Icon name="close"/></button></header>
     <textarea autoFocus aria-label="Part lyrics" value={lyrics} onChange={e => setLyrics(e.target.value)}/>
-    <small>A blank line creates a new slide. Changes apply to every occurrence of this part.</small>
+    <small>A blank line creates a new slide. Changes apply to every occurrence of this part, in this service only.</small>
     <div className="modal-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button><button className="primary-action" disabled={saving}>{saving ? 'Saving…' : 'Save part'}</button></div>
   </form></div>;
 }

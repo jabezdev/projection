@@ -1,4 +1,6 @@
-import type { UiOnlyStore, UiOnlyEngineEvent, UiOnlyEngineSnapshot, UiOnlyListener, UiOnlyOutput, UiOnlyPlayback, UiOnlyProjectModel, UiOnlySessionItem } from './types';
+import type { UiOnlyStore, UiOnlyEngineEvent, UiOnlyEngineSnapshot, UiOnlyListener, UiOnlyOutput, UiOnlyPlayback } from './types';
+import type { LiveService, SessionItem } from '../api/models';
+import { catalog, resolveService } from '../api/resolve';
 import { UI_ONLY_STORAGE_KEY, loadUiOnlyStore, saveUiOnlyStore } from './store';
 import { runDemoCommand } from './commands';
 import type { UnlistenFn } from '../api/tauri';
@@ -34,16 +36,21 @@ export class UiOnlyEngine {
     return this.store.version;
   }
 
-  activeProject(): UiOnlyProjectModel | null {
-    if (this.store.active_project_id == null) return null;
-    return this.store.projects[String(this.store.active_project_id)] || null;
+  live(id: string | null = this.store.active_service_id): LiveService | null {
+    const service = id == null ? null : this.store.services[id];
+    if (!service) return null;
+    return resolveService(service, catalog(Object.values(this.store.songs), this.store.media, Object.values(this.store.versions)));
+  }
+
+  items(): SessionItem[] {
+    return this.live()?.items ?? [];
   }
 
   snapshot(): UiOnlyEngineSnapshot & { playback: UiOnlyPlayback | null; playback_revision: number } {
     return structuredClone({
       program_state: this.store.program_state,
       version: this.store.version,
-      project: this.activeProject(),
+      service: this.live(),
       playback: this.playback,
       playback_revision: this.playbackRevision,
     });
@@ -60,7 +67,7 @@ export class UiOnlyEngine {
   position(p: UiOnlyPlayback) {
     return p.paused ? p.position_ms : p.position_ms + (Date.now() - p.position_at_ms) * p.rate_percent / 100;
   }
-  syncPlayback(item: UiOnlySessionItem | null): void {
+  syncPlayback(item: SessionItem | null): void {
     const media = item && (item.kind.kind === 'video' || item.kind.kind === 'audio') ? item : null;
     if (this.playback && media && this.playback.item_id === media.id) return;
     this.playback = null;
@@ -105,7 +112,7 @@ export class UiOnlyEngine {
   syncEvents(): UiOnlyEngineEvent[] {
     const snapshot = this.snapshot();
     return [
-      { type: 'project_changed', payload: { project: snapshot.project, version: snapshot.version } },
+      { type: 'service_changed', payload: { service: snapshot.service, version: snapshot.version } },
       { type: 'program_changed', payload: { program_state: snapshot.program_state, version: snapshot.version } },
     ];
   }
@@ -122,20 +129,15 @@ export class UiOnlyEngine {
   }
 
   recomputeNextItem(): void {
-    const project = this.activeProject();
-    if (!project) {
-      this.store.program_state.next_item_id = null;
-      return;
-    }
-    const items = project.session.items || [];
+    const items = this.items();
     const activeId = this.store.program_state.active_item_id;
     const idx = activeId == null ? -1 : items.findIndex((it) => it.id === activeId);
     const next = idx >= 0 ? items.slice(idx + 1).find(it => it.kind.kind !== 'section') ?? null : null;
     this.store.program_state.next_item_id = next ? next.id : null;
   }
 
-  setActiveItem(itemId: number | null): void {
-    const listed = this.activeProject()?.session.items ?? [];
+  setActiveItem(itemId: string | null): void {
+    const listed = this.items();
     let index = itemId == null ? -1 : listed.findIndex(it => it.id === itemId);
     while (index >= 0 && index < listed.length && listed[index].kind.kind === 'section') index++;
     if (index >= listed.length) index = -1;
@@ -144,9 +146,7 @@ export class UiOnlyEngine {
     this.syncPlayback(index >= 0 ? listed[index] : null);
     this.recomputeNextItem();
 
-    const project = this.activeProject();
-    const item =
-      project && itemId != null ? project.session.items.find((it) => it.id === itemId) || null : null;
+    const item = itemId != null ? listed.find((it) => it.id === itemId) || null : null;
 
     if (item?.kind.kind === 'text') {
       if (item.background) this.store.program_state.background = { kind: /\.(mp4|mov|webm|mkv)$/i.test(item.background) ? 'video' : 'image', path: item.background };

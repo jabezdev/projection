@@ -12,26 +12,27 @@ export function useMe(): Me {
   return me;
 }
 
-export function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+export function formatWhen(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function todayIso(): string {
+export function startOfToday(): number {
   const d = new Date();
-  return toIso(d);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
-export function nextSundayIso(): string {
+export function nextSundayMorning(): number {
   const d = new Date();
   d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-  return toIso(d);
+  d.setHours(10, 0, 0, 0);
+  return d.getTime();
 }
 
-function toIso(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function toLocalInput(ms: number): string {
+  const d = new Date(ms);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
 }
+
+export const fromLocalInput = (value: string) => new Date(value).getTime();

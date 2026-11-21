@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use protocol::{EngineCommand, EngineSnapshot, MediaAction, ProjectModel, SessionItemKind};
+use protocol::{EngineCommand, EngineSnapshot, LiveService, MediaAction, SessionItemKind};
 
 use crate::settings::write_atomic;
 
@@ -13,8 +13,8 @@ pub const FILENAME: &str = "session-state.json";
 #[serde(default)]
 pub struct SessionState {
     pub running: bool,
-    pub project_id: Option<i64>,
-    pub item_id: Option<i64>,
+    pub service_id: Option<String>,
+    pub item_id: Option<String>,
     pub step: Option<u32>,
     pub recovered: bool,
 }
@@ -38,7 +38,7 @@ impl Recovery {
         let outcome = match &previous {
             state if !state.running => Previous::Clean,
             state if state.recovered => Previous::RepeatedCrash,
-            state if state.project_id.is_some() => Previous::Restore(state.clone()),
+            state if state.service_id.is_some() => Previous::Restore(state.clone()),
             _ => Previous::Crashed,
         };
         let state = match &outcome {
@@ -53,11 +53,11 @@ impl Recovery {
     pub fn observe(&self, snapshot: &EngineSnapshot) {
         let program = &snapshot.program_state;
         let Ok(current) = self.state.lock().map(|s| s.clone()) else { return };
-        let cue = (snapshot.project.as_ref().map(|p| p.id), program.active_item_id, program.active_step_index);
-        if cue == (current.project_id, current.item_id, current.step) {
+        let cue = (snapshot.service.as_ref().map(|s| s.id().to_string()), program.active_item_id.clone(), program.active_step_index);
+        if cue == (current.service_id.clone(), current.item_id.clone(), current.step) {
             return;
         }
-        self.write(SessionState { running: true, project_id: cue.0, item_id: cue.1, step: cue.2, recovered: false });
+        self.write(SessionState { running: true, service_id: cue.0, item_id: cue.1, step: cue.2, recovered: false });
     }
 
     pub fn clean_exit(&self) {
@@ -74,11 +74,11 @@ impl Recovery {
     }
 }
 
-pub fn restore_commands(state: &SessionState, project: &ProjectModel) -> Vec<EngineCommand> {
-    let mut commands = vec![EngineCommand::LoadProject { project_id: project.id }];
-    let item = state.item_id.and_then(|id| project.session.items.iter().find(|item| item.id == id));
+pub fn restore_commands(state: &SessionState, service: &LiveService) -> Vec<EngineCommand> {
+    let mut commands = vec![EngineCommand::LoadService { service_id: service.id().to_string() }];
+    let item = state.item_id.as_deref().and_then(|id| service.item(id));
     if let Some(item) = item {
-        commands.push(EngineCommand::Cue { item_id: item.id, index: state.step.unwrap_or(0) });
+        commands.push(EngineCommand::Cue { item_id: item.id.clone(), index: state.step.unwrap_or(0) });
         if matches!(item.kind, SessionItemKind::Video { .. } | SessionItemKind::Audio { .. }) {
             commands.push(EngineCommand::Media { session_id: None, action: MediaAction::Pause });
         }
@@ -89,7 +89,12 @@ pub fn restore_commands(state: &SessionState, project: &ProjectModel) -> Vec<Eng
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocol::{SessionItem, SessionModel, VideoOptions};
+    use protocol::model::Service;
+    use protocol::{SessionItem, VideoOptions};
+
+    fn live(id: &str, items: Vec<SessionItem>) -> LiveService {
+        LiveService { service: Service { id: id.into(), scheduled_at_ms: 0, title: "Sunday".into(), leader: None, notes: None, ended_at_ms: None, items: Vec::new() }, items }
+    }
 
     fn temp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("magi-recovery-{}", uuid::Uuid::new_v4()));
@@ -97,9 +102,9 @@ mod tests {
         dir
     }
 
-    fn snapshot(project_id: i64, item_id: i64, step: u32) -> EngineSnapshot {
-        let mut snapshot = EngineSnapshot { project: Some(ProjectModel::empty(project_id, "Sunday")), ..Default::default() };
-        snapshot.program_state.active_item_id = Some(item_id);
+    fn snapshot(service_id: &str, item_id: &str, step: u32) -> EngineSnapshot {
+        let mut snapshot = EngineSnapshot { service: Some(live(service_id, Vec::new())), ..Default::default() };
+        snapshot.program_state.active_item_id = Some(item_id.into());
         snapshot.program_state.active_step_index = Some(step);
         snapshot
     }
@@ -109,7 +114,7 @@ mod tests {
         let dir = temp_dir();
         let (recovery, previous) = Recovery::start(&dir);
         assert!(matches!(previous, Previous::Clean));
-        recovery.observe(&snapshot(3, 30, 2));
+        recovery.observe(&snapshot("3", "30", 2));
         recovery.clean_exit();
         assert!(matches!(Recovery::start(&dir).1, Previous::Clean));
         std::fs::remove_dir_all(dir).unwrap();
@@ -119,13 +124,13 @@ mod tests {
     fn a_crash_restores_the_last_cue_once() {
         let dir = temp_dir();
         let (recovery, _) = Recovery::start(&dir);
-        recovery.observe(&snapshot(3, 30, 2));
+        recovery.observe(&snapshot("3", "30", 2));
         drop(recovery);
         let (recovery, previous) = Recovery::start(&dir);
         let Previous::Restore(state) = previous else { panic!("expected a restore") };
-        assert_eq!((state.project_id, state.item_id, state.step), (Some(3), Some(30), Some(2)));
+        assert_eq!((state.service_id.as_deref(), state.item_id.as_deref(), state.step), (Some("3"), Some("30"), Some(2)));
 
-        recovery.observe(&snapshot(3, 30, 2));
+        recovery.observe(&snapshot("3", "30", 2));
         drop(recovery);
         assert!(matches!(Recovery::start(&dir).1, Previous::RepeatedCrash));
         std::fs::remove_dir_all(dir).unwrap();
@@ -135,28 +140,28 @@ mod tests {
     fn moving_on_after_a_restore_allows_the_next_recovery() {
         let dir = temp_dir();
         let (recovery, _) = Recovery::start(&dir);
-        recovery.observe(&snapshot(3, 30, 2));
+        recovery.observe(&snapshot("3", "30", 2));
         drop(recovery);
         let (recovery, _) = Recovery::start(&dir);
-        recovery.observe(&snapshot(3, 31, 0));
+        recovery.observe(&snapshot("3", "31", 0));
         drop(recovery);
         let Previous::Restore(state) = Recovery::start(&dir).1 else { panic!("expected a restore") };
-        assert_eq!(state.item_id, Some(31));
+        assert_eq!(state.item_id.as_deref(), Some("31"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn restoring_media_pauses_it() {
-        let video = SessionItem { id: 30, title: None, kind: SessionItemKind::Video { path: "a.mp4".into(), options: VideoOptions::default() }, song: None, background: None };
-        let project = ProjectModel { id: 3, name: "Sunday".into(), session: SessionModel { items: vec![video] } };
-        let state = SessionState { running: true, project_id: Some(3), item_id: Some(30), step: None, recovered: false };
-        let commands = restore_commands(&state, &project);
+        let video = SessionItem { id: "30".into(), title: None, kind: SessionItemKind::Video { path: "a.mp4".into(), options: VideoOptions::default() }, song: None, background: None };
+        let service = live("3", vec![video]);
+        let state = SessionState { running: true, service_id: Some("3".into()), item_id: Some("30".into()), step: None, recovered: false };
+        let commands = restore_commands(&state, &service);
         assert!(matches!(commands.as_slice(), [
-            EngineCommand::LoadProject { project_id: 3 },
-            EngineCommand::Cue { item_id: 30, index: 0 },
+            EngineCommand::LoadService { service_id },
+            EngineCommand::Cue { item_id, index: 0 },
             EngineCommand::Media { session_id: None, action: MediaAction::Pause },
-        ]));
-        let gone = SessionState { item_id: Some(99), ..state };
-        assert_eq!(restore_commands(&gone, &project).len(), 1);
+        ] if service_id == "3" && item_id == "30"));
+        let gone = SessionState { item_id: Some("99".into()), ..state };
+        assert_eq!(restore_commands(&gone, &service).len(), 1);
     }
 }

@@ -1,5 +1,5 @@
 use protocol::{
-    BackgroundFit, BackgroundKind, DisplayMode, OutputConfig, PlaybackState, ProgramState, ProjectModel, SessionItemKind,
+    BackgroundFit, BackgroundKind, DisplayMode, OutputConfig, PlaybackState, ProgramState, LiveService, SessionItemKind,
 };
 use render_engine::{
     Display, MainScene, MediaLayer, MediaSource, VideoKey,
@@ -7,8 +7,8 @@ use render_engine::{
 
 use super::*;
 
-pub fn main_scene(config: &OutputConfig, program: &ProgramState, project: Option<&ProjectModel>, playback: Option<&PlaybackState>) -> MainScene {
-    let item = active_item(program, project);
+pub fn main_scene(config: &OutputConfig, program: &ProgramState, service: Option<&LiveService>, playback: Option<&PlaybackState>) -> MainScene {
+    let item = active_item(program, service);
     let item_is_video = matches!(item.map(|i| &i.kind), Some(SessionItemKind::Video { .. }));
     let fit_cover = config.background_fit == BackgroundFit::Cover;
     let capture = capture_on(item, false).map(|(key, cover)| MediaLayer { source: MediaSource::Video(key), cover });

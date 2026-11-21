@@ -4,12 +4,14 @@ use std::time::Duration;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use tokio::sync::broadcast;
 
-use core_engine::ProjectStore;
-use protocol::{EngineEvent, ProjectModel};
+use core_engine::ServiceStore;
+use protocol::model::Service;
+use protocol::{EngineEvent, LiveService};
 
-pub trait ProjectWriter: Send + 'static {
-    fn load(&self, project_id: i64) -> anyhow::Result<ProjectModel>;
-    fn save(&self, project: &mut ProjectModel) -> anyhow::Result<()>;
+pub trait ServiceWriter: Send + 'static {
+    fn load(&self, service_id: &str) -> anyhow::Result<Service>;
+    fn save(&self, service: &Service) -> anyhow::Result<()>;
+    fn resolve(&self, service: &Service) -> anyhow::Result<LiveService>;
 }
 
 #[derive(Default)]
@@ -21,11 +23,11 @@ struct Queued {
 #[derive(Clone)]
 pub struct StorageWorker<W> {
     writer: Arc<W>,
-    saves: Sender<ProjectModel>,
+    saves: Sender<Service>,
     queued: Arc<Queued>,
 }
 
-impl<W: ProjectWriter + Sync> StorageWorker<W> {
+impl<W: ServiceWriter + Sync> StorageWorker<W> {
     pub fn start(writer: W, events: broadcast::Sender<EngineEvent>) -> anyhow::Result<Self> {
         let writer = Arc::new(writer);
         let queued = Arc::new(Queued::default());
@@ -52,21 +54,26 @@ impl<W: ProjectWriter + Sync> StorageWorker<W> {
 
 const LOAD_WAIT: Duration = Duration::from_secs(10);
 
-impl<W: ProjectWriter + Sync> ProjectStore for StorageWorker<W> {
-    fn load_project(&self, project_id: i64) -> anyhow::Result<ProjectModel> {
+impl<W: ServiceWriter + Sync> ServiceStore for StorageWorker<W> {
+    fn load_service(&self, service_id: &str) -> anyhow::Result<LiveService> {
         if !self.flush(LOAD_WAIT) {
-            log::warn!("Loading project {project_id} while earlier saves are still being written");
+            log::warn!("Loading service {service_id} while earlier saves are still being written");
         }
-        self.writer.load(project_id)
+        let service = self.writer.load(service_id)?;
+        self.writer.resolve(&service)
     }
 
-    fn save_project(&self, project: &mut ProjectModel) -> anyhow::Result<()> {
+    fn save_service(&self, service: &Service) -> anyhow::Result<LiveService> {
         *self.queued.count.lock().expect("storage queue poisoned") += 1;
-        if self.saves.send(project.clone()).is_err() {
+        if self.saves.send(service.clone()).is_err() {
             self.finished(1);
             anyhow::bail!("The storage worker has stopped");
         }
-        Ok(())
+        self.writer.resolve(service)
+    }
+
+    fn resolve_service(&self, service: &Service) -> anyhow::Result<LiveService> {
+        self.writer.resolve(service)
     }
 }
 
@@ -84,24 +91,24 @@ fn finish(queued: &Queued, saves: usize) {
     }
 }
 
-fn run<W: ProjectWriter>(writer: &W, saves: &Receiver<ProjectModel>, queued: &Queued, events: &broadcast::Sender<EngineEvent>) {
+fn run<W: ServiceWriter>(writer: &W, saves: &Receiver<Service>, queued: &Queued, events: &broadcast::Sender<EngineEvent>) {
     while let Ok(first) = saves.recv() {
         let mut batch = vec![first];
         batch.extend(saves.try_iter());
         let count = batch.len();
-        let mut latest: Vec<ProjectModel> = Vec::new();
-        for project in batch {
+        let mut latest: Vec<Service> = Vec::new();
+        for service in batch {
             match latest.last_mut() {
-                Some(last) if last.id == project.id => *last = project,
-                _ => latest.push(project),
+                Some(last) if last.id == service.id => *last = service,
+                _ => latest.push(service),
             }
         }
-        for mut project in latest {
-            if let Err(e) = writer.save(&mut project) {
-                log::error!("Saving project {}: {e:#}", project.id);
+        for service in latest {
+            if let Err(e) = writer.save(&service) {
+                log::error!("Saving service {}: {e:#}", service.id);
                 let _ = events.send(EngineEvent::Error {
-                    source: "project".into(),
-                    message: format!("Failed to save project {}: {e:#}", project.id),
+                    source: "service".into(),
+                    message: format!("Failed to save service {}: {e:#}", service.id),
                     recoverable: true,
                 });
             }
@@ -117,30 +124,34 @@ mod tests {
 
     #[derive(Default)]
     struct SlowDisk {
-        written: Mutex<Vec<(i64, String)>>,
+        written: Mutex<Vec<(String, String)>>,
         blocked: AtomicBool,
         fail: AtomicBool,
     }
 
-    impl ProjectWriter for Arc<SlowDisk> {
-        fn load(&self, project_id: i64) -> anyhow::Result<ProjectModel> {
+    impl ServiceWriter for Arc<SlowDisk> {
+        fn load(&self, service_id: &str) -> anyhow::Result<Service> {
             let written = self.written.lock().unwrap();
-            let name = written.iter().rev().find(|(id, _)| *id == project_id).map(|(_, name)| name.clone()).unwrap_or_default();
-            Ok(ProjectModel { id: project_id, name, session: Default::default() })
+            let title = written.iter().rev().find(|(id, _)| id == service_id).map(|(_, title)| title.clone()).unwrap_or_default();
+            Ok(service(service_id, &title))
         }
 
-        fn save(&self, project: &mut ProjectModel) -> anyhow::Result<()> {
+        fn save(&self, service: &Service) -> anyhow::Result<()> {
             while self.blocked.load(Ordering::Acquire) {
                 std::thread::sleep(Duration::from_millis(5));
             }
             anyhow::ensure!(!self.fail.load(Ordering::Acquire), "disk full");
-            self.written.lock().unwrap().push((project.id, project.name.clone()));
+            self.written.lock().unwrap().push((service.id.clone(), service.title.clone()));
             Ok(())
+        }
+
+        fn resolve(&self, service: &Service) -> anyhow::Result<LiveService> {
+            Ok(LiveService { service: service.clone(), items: Vec::new() })
         }
     }
 
-    fn project(id: i64, name: &str) -> ProjectModel {
-        ProjectModel { id, name: name.into(), session: Default::default() }
+    fn service(id: &str, title: &str) -> Service {
+        Service { id: id.into(), scheduled_at_ms: 0, title: title.into(), leader: None, notes: None, ended_at_ms: None, items: Vec::new() }
     }
 
     #[test]
@@ -150,30 +161,30 @@ mod tests {
         let (events, _) = broadcast::channel(8);
         let store = StorageWorker::start(disk.clone(), events).unwrap();
         for name in ["a", "b", "c"] {
-            store.save_project(&mut project(1, name)).unwrap();
+            store.save_service(&service("1", name)).unwrap();
         }
         assert!(!store.flush(Duration::from_millis(50)), "the disk is still blocked");
         disk.blocked.store(false, Ordering::Release);
-        assert_eq!(store.load_project(1).unwrap().name, "c");
+        assert_eq!(store.load_service("1").unwrap().service.title, "c");
         let written = disk.written.lock().unwrap();
-        assert_eq!(written.last(), Some(&(1, "c".to_string())));
-        assert!(written.len() <= 3, "bursts of saves of one project may merge");
+        assert_eq!(written.last(), Some(&("1".to_string(), "c".to_string())));
+        assert!(written.len() <= 3, "bursts of saves of one service may merge");
     }
 
     #[test]
-    fn saves_of_different_projects_are_all_written_in_order() {
+    fn saves_of_different_services_are_all_written_in_order() {
         let disk = Arc::new(SlowDisk::default());
         disk.blocked.store(true, Ordering::Release);
         let (events, _) = broadcast::channel(8);
         let store = StorageWorker::start(disk.clone(), events).unwrap();
-        store.save_project(&mut project(1, "first")).unwrap();
-        store.save_project(&mut project(2, "second")).unwrap();
-        store.save_project(&mut project(1, "third")).unwrap();
+        store.save_service(&service("1", "first")).unwrap();
+        store.save_service(&service("2", "second")).unwrap();
+        store.save_service(&service("1", "third")).unwrap();
         disk.blocked.store(false, Ordering::Release);
         assert!(store.flush(Duration::from_secs(5)));
         let written = disk.written.lock().unwrap().clone();
         let names: Vec<_> = written.iter().map(|(_, name)| name.as_str()).collect();
-        assert_eq!(names, ["first", "second", "third"], "only adjacent saves of one project merge");
+        assert_eq!(names, ["first", "second", "third"], "only adjacent saves of one service merge");
     }
 
     #[test]
@@ -182,11 +193,11 @@ mod tests {
         disk.fail.store(true, Ordering::Release);
         let (events, mut errors) = broadcast::channel(8);
         let store = StorageWorker::start(disk, events).unwrap();
-        store.save_project(&mut project(4, "lost")).unwrap();
+        store.save_service(&service("4", "lost")).unwrap();
         assert!(store.flush(Duration::from_secs(5)));
         match errors.try_recv() {
             Ok(EngineEvent::Error { source, message, .. }) => {
-                assert_eq!(source, "project");
+                assert_eq!(source, "service");
                 assert!(message.contains("disk full"), "{message}");
             }
             other => panic!("expected a save error, got {other:?}"),

@@ -43,7 +43,7 @@ pub fn nav_prev(state: tauri::State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn cue(state: tauri::State<AppState>, item_id: i64, index: u32) -> Result<(), String> {
+pub fn cue(state: tauri::State<AppState>, item_id: String, index: u32) -> Result<(), String> {
     state.send(EngineCommand::Cue { item_id, index })
 }
 
@@ -53,7 +53,7 @@ pub fn engine_command(state: tauri::State<AppState>, command: EngineCommand) -> 
 }
 
 #[tauri::command]
-pub fn go_to_item(state: tauri::State<AppState>, item_id: i64) -> Result<(), String> {
+pub fn go_to_item(state: tauri::State<AppState>, item_id: String) -> Result<(), String> {
     state.send(EngineCommand::GoToItem { item_id })
 }
 

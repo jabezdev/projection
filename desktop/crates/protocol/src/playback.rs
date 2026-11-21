@@ -25,7 +25,7 @@ pub enum PlaybackPhase {
 pub struct PlaybackState {
     pub session_id: SessionId,
     pub generation: u64,
-    pub item_id: i64,
+    pub item_id: String,
     pub path: String,
     pub kind: PlaybackKind,
     pub paused: bool,

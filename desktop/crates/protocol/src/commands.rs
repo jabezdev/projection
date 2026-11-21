@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::model::Service;
 use crate::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,9 +21,9 @@ pub enum EngineCommand {
 
     NextItem,
     PrevItem,
-    Cue { item_id: i64, index: u32 },
+    Cue { item_id: String, index: u32 },
     GoToItem {
-        item_id: i64,
+        item_id: String,
     },
     NextStep,
     PrevStep,
@@ -46,12 +47,13 @@ pub enum EngineCommand {
         path: String,
     },
 
-    LoadProject {
-        project_id: i64,
+    LoadService {
+        service_id: String,
     },
-    SaveProject {
-        project: ProjectModel,
+    SaveService {
+        service: Service,
     },
+    RefreshService,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,7 +77,7 @@ impl EngineCommand {
 
     pub fn domain(&self) -> CommandDomain {
         match self {
-            EngineCommand::LoadProject { .. } | EngineCommand::SaveProject { .. } => {
+            EngineCommand::LoadService { .. } | EngineCommand::SaveService { .. } | EngineCommand::RefreshService => {
                 CommandDomain::Editor
             }
 

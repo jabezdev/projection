@@ -1,5 +1,5 @@
 use protocol::{
-    Background, EngineEvent, ProjectModel, SessionItem, SessionItemKind,
+    Background, EngineEvent, LiveService, SessionItem, SessionItemKind,
 };
 
 use super::*;
@@ -7,20 +7,17 @@ use super::*;
 impl Engine {
     pub(super) fn select(
         &mut self,
-        item_id: Option<i64>,
+        item_id: Option<String>,
         step: Option<u32>,
         force_media: bool,
         ports: &mut Ports,
         errors: &mut Vec<EngineEvent>,
     ) {
-        let Some(project) = &self.state.project else {
+        let Some(service) = &self.state.service else {
             return;
         };
-        let sel = resolve_selection(project, item_id, step);
-        let active_item = sel
-            .active_item_id
-            .and_then(|id| project.session.items.iter().find(|it| it.id == id))
-            .cloned();
+        let sel = resolve_selection(service, item_id.as_deref(), step);
+        let active_item = sel.active_item_id.as_deref().and_then(|id| service.item(id)).cloned();
 
         let program = &mut self.state.program_state;
         let item_changed = program.active_item_id != sel.active_item_id;
@@ -52,14 +49,14 @@ impl Engine {
 }
 
 pub(super) struct Selection {
-    active_item_id: Option<i64>,
-    next_item_id: Option<i64>,
+    active_item_id: Option<String>,
+    next_item_id: Option<String>,
     step: Option<u32>,
     text: String,
 }
 
-pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, step: Option<u32>) -> Selection {
-    let items = &project.session.items;
+pub(super) fn resolve_selection(service: &LiveService, item_id: Option<&str>, step: Option<u32>) -> Selection {
+    let items = &service.items;
     if items.is_empty() {
         return Selection {
             active_item_id: None,
@@ -74,7 +71,7 @@ pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, st
         return Selection { active_item_id: None, next_item_id: None, step: None, text: String::new() };
     };
     let item = &items[idx];
-    let next_item_id = next_cueable(items, idx + 1).map(|i| items[i].id);
+    let next_item_id = next_cueable(items, idx + 1).map(|i| items[i].id.clone());
 
     let (step, text) = match &item.kind {
         SessionItemKind::Text { steps } if !steps.is_empty() => {
@@ -88,7 +85,7 @@ pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, st
     };
 
     Selection {
-        active_item_id: Some(item.id),
+        active_item_id: Some(item.id.clone()),
         next_item_id,
         step,
         text,

@@ -1,5 +1,5 @@
 use protocol::{
-    CaptureSource, OutputConfig, PlaybackState, ProgramState, ProjectModel,
+    CaptureSource, LiveService, OutputConfig, PlaybackState, ProgramState,
     SessionItem, SessionItemKind,
 };
 use render_engine::{
@@ -30,7 +30,7 @@ pub struct MediaPlan {
     pub captures: Vec<CaptureSource>,
 }
 
-pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramState, project: Option<&ProjectModel>, playback: Option<&PlaybackState>) -> MediaPlan {
+pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramState, service: Option<&LiveService>, playback: Option<&PlaybackState>) -> MediaPlan {
     let mut plan = MediaPlan { ambient: ambient_videos(main), ..Default::default() };
     let add = |list: &mut Vec<String>, path: &str| {
         if !path.is_empty() && !list.iter().any(|p| p == path) {
@@ -43,8 +43,8 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
     } else {
         add(&mut plan.images, logo);
     }
-    let items = project.map(|p| p.session.items.as_slice()).unwrap_or_default();
-    let current = program.active_item_id.and_then(|id| items.iter().position(|item| item.id == id));
+    let items = service.map(|s| s.items.as_slice()).unwrap_or_default();
+    let current = program.active_item_id.as_ref().and_then(|id| items.iter().position(|item| &item.id == id));
     if let Some(SessionItemKind::Capture { source, options }) = current.map(|i| &items[i].kind) {
         if options.projection || options.confidence {
             plan.captures.push(source.clone());
