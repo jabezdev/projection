@@ -6,7 +6,7 @@ import { Navigate, NavLink, Route, Routes } from "react-router";
 import { MeContext } from "./lib/me";
 import { Library } from "./pages/Library";
 import { NewSong } from "./pages/NewSong";
-import { ServicePage } from "./pages/ServicePage";
+import { ServicePage } from "./pages/service/ServicePage";
 import { Services } from "./pages/Services";
 import { SongPage } from "./pages/SongPage";
 import { Team } from "./pages/Team";
