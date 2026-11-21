@@ -1,0 +1,46 @@
+use protocol::{
+    EngineCommand,
+    MediaAction,
+};
+
+use super::*;
+
+/// Merges adjacent inputs where only the latest matters (seek scrubbing,
+/// volume drags, position reports, repeated saves of one project), keeping
+/// every other input in order.
+pub fn coalesce(inputs: Vec<EngineInput>) -> Vec<EngineInput> {
+    let mut merged: Vec<EngineInput> = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        // Shorthands such as `Seek` merge with their addressed equivalents.
+        let input = match input {
+            EngineInput::Command(cmd) => EngineInput::Command(cmd.normalize()),
+            report => report,
+        };
+        if let Some(last) = merged.last_mut() {
+            if supersedes(&input, last) {
+                *last = input;
+                continue;
+            }
+        }
+        merged.push(input);
+    }
+    merged
+}
+
+fn supersedes(next: &EngineInput, previous: &EngineInput) -> bool {
+    use EngineCommand::{Media, SaveProject};
+    use EngineInput::{Command, Report};
+    match (previous, next) {
+        (Report(a), Report(b)) => a.session_id == b.session_id && a.phase == b.phase,
+        (
+            Command(Media { session_id: a, action: MediaAction::Seek { .. } }),
+            Command(Media { session_id: b, action: MediaAction::Seek { .. } }),
+        )
+        | (
+            Command(Media { session_id: a, action: MediaAction::SetVolume { .. } }),
+            Command(Media { session_id: b, action: MediaAction::SetVolume { .. } }),
+        ) => a == b,
+        (Command(SaveProject { project: a }), Command(SaveProject { project: b })) => a.id == b.id,
+        _ => false,
+    }
+}
