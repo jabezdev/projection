@@ -1,6 +1,12 @@
 import type { SessionItem } from './models';
 export type Part = { id: string; type: string; number: number; lyrics: string; slideTexts?: string[]; color?: string };
-export type SongDocument = { format: 'magi.song.v1'; slideSeparator?: 'blank-line'; parts: Part[]; arrangement: string[]; background: string; authorSinger?: string };
+export type SongDocument = {
+  format: 'magi.song.v1'; slideSeparator?: 'blank-line'; parts: Part[]; arrangement: string[]; background: string; authorSinger?: string;
+  /** In a service: the library song this copy came from. */
+  librarySongId?: number;
+  /** In a service: changed for this service only; the library song is untouched. */
+  editedInService?: boolean;
+};
 export const emptySong = (): SongDocument => ({ format: 'magi.song.v1', slideSeparator: 'blank-line', parts: [], arrangement: [], background: '' });
 export const splitSlides = (lyrics: string) => lyrics.replace(/\r\n?/g, '\n').split(/\n[ \t]*\n(?:[ \t]*\n)*/).map(slide => slide.trim()).filter(Boolean);
 export const partColors: Record<string, string> = { Verse: '#4f91e8', Chorus: '#e76774', 'Pre-chorus': '#efa34a', Bridge: '#aa84df', Intro: '#50c6d6', Outro: '#ddbd53', Tag: '#79c56b' };
@@ -41,4 +47,25 @@ export function itemSong(item: SessionItem): SongDocument {
   if (item.song) return decodeSong(item.song);
   const steps = item.kind.kind === 'text' ? item.kind.data.steps : [];
   return { format: 'magi.song.v1', slideSeparator: 'blank-line', background: item.background || '', parts: [{ id: 'legacy', type: 'Verse', number: 1, lyrics: steps.join('\n\n'), slideTexts: steps }], arrangement: ['legacy'] };
+}
+
+/** A library song's document, without the service-only markers. */
+export function librarySong(song: SongDocument): SongDocument {
+  const copy = { ...song };
+  delete copy.librarySongId;
+  delete copy.editedInService;
+  return copy;
+}
+
+/** The slide of a part that a caret position in its lyrics falls on. */
+export function slideAtCaret(lyrics: string, caret: number) {
+  const separator = /\n[ \t]*\n(?:[ \t]*\n)*/g;
+  let index = 0;
+  for (let match = separator.exec(lyrics); match; match = separator.exec(lyrics)) {
+    const end = match.index + match[0].length;
+    if (end > caret) break;
+    // Blank lines before the first or after the last slide separate nothing.
+    if (/\S/.test(lyrics.slice(0, match.index)) && /\S/.test(lyrics.slice(end))) index++;
+  }
+  return Math.max(0, Math.min(index, splitSlides(lyrics).length - 1));
 }

@@ -327,6 +327,77 @@ pub async fn create_media(app: tauri::AppHandle, title: String, kind: protocol::
     created.map_err(|e| e.to_string())
 }
 
+/// Deletes a service. The loaded service cannot be deleted.
+#[tauri::command]
+pub fn delete_project(state: tauri::State<AppState>, project_id: i64) -> Result<(), String> {
+    let loaded = state.snapshot.read().map_err(|e| e.to_string())?.project.as_ref().map(|p| p.id);
+    if loaded == Some(project_id) {
+        return Err("This service is loaded. Load another service before deleting it.".into());
+    }
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_project(project_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Deletes a library song; services keep their own copies of it.
+#[tauri::command]
+pub fn delete_song(state: tauri::State<AppState>, id: i64) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_song(id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Removes a media item from the library. Its file stays, so services that
+/// use it keep working.
+#[tauri::command]
+pub fn delete_media(state: tauri::State<AppState>, id: i64) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_media(id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn rename_media(state: tauri::State<AppState>, id: i64, title: String) -> Result<(), String> {
+    let title = title.trim();
+    if title.is_empty() { return Err("Enter a title.".into()); }
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.rename_media(id, title).map_err(|e| e.to_string())
+}
+
+/// The library kind of a file, from its extension.
+pub fn media_kind_of(path: &std::path::Path) -> Option<protocol::MediaKind> {
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    match extension.as_str() {
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => Some(protocol::MediaKind::Image),
+        "mp4" | "m4v" | "mov" | "mkv" | "webm" | "avi" => Some(protocol::MediaKind::Video),
+        "mp3" | "wav" | "ogg" | "flac" | "m4a" | "aac" => Some(protocol::MediaKind::Audio),
+        _ => None,
+    }
+}
+
+/// Asks for any number of image, video and audio files and imports each into
+/// the library, titled by its file name. Empty when cancelled.
+#[tauri::command]
+pub async fn import_media_files(app: tauri::AppHandle) -> Result<Vec<protocol::MediaModel>, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title("Import media")
+        .add_filter("Images, videos and audio", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "m4v", "mov", "mkv", "webm", "avi", "mp3", "wav", "ogg", "flac", "m4a", "aac"])
+        .pick_files(move |files| { let _ = sender.send(files); });
+    let Some(files) = receiver.await.map_err(|e| e.to_string())? else { return Ok(Vec::new()) };
+    let mut imported = Vec::new();
+    for file in files {
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        let Some(kind) = media_kind_of(&path) else { continue };
+        let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into());
+        let copy = import_into_library(&app, path).await?;
+        app.asset_protocol_scope().allow_file(&copy).map_err(|e| e.to_string())?;
+        let db = app.state::<AppState>().db.clone();
+        let created = db.lock().map_err(|e| e.to_string())?.create_media(title, kind, copy).map_err(|e| e.to_string())?;
+        imported.push(created);
+    }
+    Ok(imported)
+}
+
 #[derive(serde::Serialize)]
 pub struct MissingMedia { path: String, title: Option<String>, services: Vec<String> }
 

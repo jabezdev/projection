@@ -77,6 +77,8 @@ pub struct AppConfig {
     pub osc_allowed: Vec<String>,
     /// Screen capture method (`wgc`, `dxgi`, `portal`, `x11`); empty for the default.
     pub capture_method: String,
+    /// Cued video and audio start playing at once; otherwise they wait paused.
+    pub media_autoplay: bool,
 }
 
 impl Default for AppConfig {
@@ -90,6 +92,7 @@ impl Default for AppConfig {
             osc_port: 9000,
             osc_allowed: Vec::new(),
             capture_method: String::new(),
+            media_autoplay: true,
         }
     }
 }
@@ -151,6 +154,19 @@ pub fn set_video_decoder(config: tauri::State<ConfigStore>, choice: String) -> R
     log::info!("Video decoder set to {choice}");
     media_engine::hwaccel::set_choice(parsed);
     Ok(())
+}
+
+/// Whether cued video and audio start playing at once.
+#[tauri::command]
+pub fn get_media_autoplay(config: tauri::State<ConfigStore>) -> bool {
+    config.get().media_autoplay
+}
+
+/// Saves and applies whether cued video and audio start playing at once.
+#[tauri::command]
+pub fn set_media_autoplay(config: tauri::State<ConfigStore>, state: tauri::State<crate::AppState>, enabled: bool) -> Result<(), String> {
+    config.update(|c| c.media_autoplay = enabled)?;
+    state.send(core_engine::EngineCommand::SetAutoplay { enabled })
 }
 
 /// Overrides the data folder (library, settings and logs), so test scripts

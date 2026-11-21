@@ -46,6 +46,11 @@ function profileWindows(text: string): Window[] {
   return windows;
 }
 
+/** Refreshes each output missed between back-to-back frames (older logs have none). */
+function droppedFrames(text: string, role: string): number {
+  return [...text.matchAll(new RegExp(`\\b${role}: [\\d.]+ fps while active, worst interval [\\d.]+ ms, dropped (\\d+)`, 'g'))].reduce((n, m) => n + Number(m[1]), 0);
+}
+
 function fpsLines(text: string, role: string): number[] {
   return [...text.matchAll(new RegExp(`\\b${role}: ([\\d.]+) fps while active, worst interval ([\\d.]+) ms`, 'g'))].map(m => Number(m[1]));
 }
@@ -107,6 +112,7 @@ for (const decoder of decoders) {
       `- CPU: ${cpu === null ? 'unknown' : `${cpu.toFixed(0)}% of one thread (${(cpu / cores).toFixed(1)}% of the whole CPU)`}`,
       `- Memory: ${memory.length ? `${(mean(memory) / 2 ** 20).toFixed(0)} MB (max ${(Math.max(...memory) / 2 ** 20).toFixed(0)} MB)` : 'unknown'}`,
       `- Frame rate: projection ${mean(fpsLines(recent, 'projection')).toFixed(1)} fps, confidence ${mean(fpsLines(recent, 'confidence')).toFixed(1)} fps`,
+      `- Dropped frames: projection ${droppedFrames(recent, 'projection')}, confidence ${droppedFrames(recent, 'confidence')}`,
       '',
       '| Stage | per second | mean ms | worst ms |',
       '|---|---|---|---|',

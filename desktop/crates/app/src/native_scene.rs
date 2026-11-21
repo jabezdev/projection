@@ -217,6 +217,8 @@ pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, Con
             SessionItemKind::Audio { .. } => ("audio", &Vec::new()),
             SessionItemKind::Presentation { .. } => ("presentation", &Vec::new()),
             SessionItemKind::Capture { .. } => ("capture", &Vec::new()),
+            // Headings group the operator's list; the stage does not need them.
+            SessionItemKind::Section {} => continue,
         };
         if kind != "text" {
             let label = title.clone().unwrap_or_else(|| kind.to_string());
@@ -341,9 +343,11 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
             }
         }
     }
+    // Neighbours skip section headings, which never go on air.
+    let cueable = |item: &&SessionItem| item.kind.is_cueable();
     let neighbors = match current {
-        Some(i) => vec![items.get(i + 1), i.checked_sub(1).and_then(|p| items.get(p))],
-        None => vec![items.first()],
+        Some(i) => vec![items.iter().skip(i + 1).find(cueable), items.iter().take(i).rev().find(cueable)],
+        None => vec![items.iter().find(cueable)],
     };
     for item in neighbors.into_iter().flatten() {
         match &item.kind {
@@ -355,7 +359,7 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
                     plan.foreground = Some(path.clone());
                 }
             }
-            SessionItemKind::Text { .. } | SessionItemKind::Capture { .. } => {}
+            SessionItemKind::Text { .. } | SessionItemKind::Capture { .. } | SessionItemKind::Section {} => {}
         }
         if let Some(background) = item.background.as_deref().filter(|b| !b.starts_with(protocol::SHADER_PREFIX)) {
             if is_video(background) {

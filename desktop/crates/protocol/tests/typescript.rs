@@ -107,6 +107,7 @@ fn generated() -> String {
                         options: CaptureOptions { projection: true, confidence: true, projection_fit: CaptureFit::Fill, confidence_fit: CaptureFit::Fit },
                     },
                 ),
+                item(7, SessionItemKind::Section {}),
             ],
         ),
         sample("outputConfig", "OutputConfig", OutputConfig::default()),

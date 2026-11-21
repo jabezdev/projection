@@ -1,4 +1,4 @@
-import { ScreenShare, ChevronDown, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
+import { Ellipsis, Copy, Search, Upload, Trash2, ScreenShare, ChevronDown, Monitor, MonitorOff, RemoveFormatting, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
 
 // The operator UI's one icon set: Lucide (https://lucide.dev, ISC license).
 const icons = {
@@ -12,7 +12,7 @@ const icons = {
   grip: GripVertical,
   logo: Image,
   black: Square,
-  clear: Square,
+  clear: RemoveFormatting,
   live: MonitorPlay,
   video: Film,
   library: Library,
@@ -22,12 +22,19 @@ const icons = {
   down: ChevronDown,
   close: X,
   capture: ScreenShare,
+  screen: Monitor,
+  copy: Copy,
+  more: Ellipsis,
+  search: Search,
+  import: Upload,
+  trash: Trash2,
+  'screen-off': MonitorOff,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
 
 export function Icon({ name, className = '' }: { name: IconName; className?: string }) {
   const Glyph = icons[name];
-  // Black is the filled square, Clear the empty one.
+  // Black is a filled square.
   return <Glyph className={`ui-icon ${className}`} strokeWidth={1.6} fill={name === 'black' ? 'currentColor' : 'none'} aria-hidden="true"/>;
 }

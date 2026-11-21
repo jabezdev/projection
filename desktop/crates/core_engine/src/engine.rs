@@ -51,6 +51,8 @@ pub struct Engine {
     /// never becomes one.
     song_background: Option<Background>,
     next_session_id: SessionId,
+    /// Cued video and audio start playing at once; otherwise they wait paused.
+    autoplay: bool,
 }
 
 impl Default for Engine {
@@ -67,7 +69,7 @@ impl Engine {
     /// Session ids start at `seed`; seeding from the clock keeps ids from a
     /// previous run from matching new sessions.
     pub fn with_session_seed(seed: SessionId) -> Self {
-        Self { state: EngineSnapshot::default(), song_background: None, next_session_id: seed }
+        Self { state: EngineSnapshot::default(), song_background: None, next_session_id: seed, autoplay: true }
     }
 
     pub fn snapshot(&self) -> &EngineSnapshot {
@@ -151,6 +153,10 @@ impl Engine {
     fn apply(&mut self, cmd: EngineCommand, ports: &mut Ports, errors: &mut Vec<EngineEvent>) -> bool {
         let program = &mut self.state.program_state;
         match cmd {
+            EngineCommand::SetAutoplay { enabled } => {
+                self.autoplay = enabled;
+                return false;
+            }
             EngineCommand::SetDisplay { display } => {
                 let was_logo = program.display == DisplayMode::Logo;
                 program.display = display;
@@ -367,7 +373,7 @@ impl Engine {
         match &item.kind {
             // A capture is drawn over the song background by the scene feed,
             // on the screens it is routed to.
-            SessionItemKind::Text { .. } | SessionItemKind::Audio { .. } | SessionItemKind::Capture { .. } => self.song_background.clone(),
+            SessionItemKind::Text { .. } | SessionItemKind::Audio { .. } | SessionItemKind::Capture { .. } | SessionItemKind::Section {} => self.song_background.clone(),
             SessionItemKind::Image { path } => Some(Background { kind: BackgroundKind::Image, path: path.clone() }),
             SessionItemKind::Video { path, .. } => Some(Background { kind: BackgroundKind::Video, path: path.clone() }),
             SessionItemKind::Presentation { path, slides } => {
@@ -407,7 +413,7 @@ impl Engine {
                 item_id,
                 path: path.clone(),
                 kind,
-                paused: false,
+                paused: !self.autoplay,
                 suspended: kind == PlaybackKind::Video && self.state.program_state.display == DisplayMode::Logo,
                 phase: PlaybackPhase::Preparing,
                 position_ms: options.start_ms,
@@ -567,11 +573,13 @@ fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, step: Option<
         };
     }
 
-    let idx = item_id
-        .and_then(|id| items.iter().position(|it| it.id == id))
-        .unwrap_or(0);
+    // Section headings are never on air: a cue on one lands on the item after it.
+    let requested = item_id.and_then(|id| items.iter().position(|it| it.id == id)).unwrap_or(0);
+    let Some(idx) = next_cueable(items, requested).or_else(|| previous_cueable(items, requested)) else {
+        return Selection { active_item_id: None, next_item_id: None, step: None, text: String::new() };
+    };
     let item = &items[idx];
-    let next_item_id = items.get(idx + 1).map(|it| it.id);
+    let next_item_id = next_cueable(items, idx + 1).map(|i| items[i].id);
 
     let (step, text) = match &item.kind {
         SessionItemKind::Text { steps } if !steps.is_empty() => {
@@ -590,6 +598,16 @@ fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, step: Option<
         step,
         text,
     }
+}
+
+/// The first item at or after `from` that can go on air.
+fn next_cueable(items: &[SessionItem], from: usize) -> Option<usize> {
+    (from..items.len()).find(|&i| items[i].kind.is_cueable())
+}
+
+/// The last item at or before `from` that can go on air.
+fn previous_cueable(items: &[SessionItem], from: usize) -> Option<usize> {
+    (0..=from.min(items.len().checked_sub(1)?)).rev().find(|&i| items[i].kind.is_cueable())
 }
 
 /// Where a navigation command wants to go, as `(item_id, step)`.
@@ -625,14 +643,17 @@ fn navigation_target(
         cur => cur.map(|i| i.saturating_sub(1)),
     };
 
+    // Neighbouring items skip section headings.
+    let next = |from: usize| next_cueable(items, from);
+    let previous = |from: Option<usize>| from.and_then(|from| previous_cueable(items, from));
     match cmd {
         // Smart next/prev: move within the item, else to the neighbouring item.
         EngineCommand::Next => {
             let stepped = step_forward(step);
             if stepped != step {
                 step = stepped;
-            } else if idx + 1 < items.len() {
-                idx += 1;
+            } else if let Some(i) = next(idx + 1) {
+                idx = i;
                 step = None;
             }
         }
@@ -640,26 +661,32 @@ fn navigation_target(
             let stepped = step_back(step);
             if stepped != step {
                 step = stepped;
-            } else if idx > 0 {
-                idx -= 1;
+            } else if let Some(i) = previous(idx.checked_sub(1)) {
+                idx = i;
                 step = None;
             }
         }
-        EngineCommand::NextItem if idx + 1 < items.len() => {
-            idx += 1;
-            step = None;
+        EngineCommand::NextItem => {
+            if let Some(i) = next(idx + 1) {
+                idx = i;
+                step = None;
+            }
         }
-        EngineCommand::PrevItem if idx > 0 => {
-            idx -= 1;
-            step = None;
+        EngineCommand::PrevItem => {
+            if let Some(i) = previous(idx.checked_sub(1)) {
+                idx = i;
+                step = None;
+            }
         }
         EngineCommand::Cue { item_id, index } => {
-            if let Some(i) = items.iter().position(|it| it.id == *item_id) { idx = i; step = Some(*index); }
+            if let Some(i) = items.iter().position(|it| it.id == *item_id) {
+                // A cue on a heading goes to the first item it groups.
+                if let Some(c) = next(i) { idx = c; step = if c == i { Some(*index) } else { None }; }
+            }
         }
         EngineCommand::GoToItem { item_id } => {
             if let Some(i) = items.iter().position(|it| it.id == *item_id) {
-                idx = i;
-                step = None;
+                if let Some(c) = next(i) { idx = c; step = None; }
             }
         }
         EngineCommand::NextStep => step = step_forward(step),
@@ -812,6 +839,37 @@ mod tests {
             p.active_step_index,
             p.active_text.as_str(),
         )
+    }
+
+    fn section(id: i64) -> SessionItem {
+        SessionItem { song: None, background: None, id, title: Some("Worship".into()), kind: SessionItemKind::Section {} }
+    }
+
+    #[test]
+    fn navigation_passes_over_section_headings() {
+        let mut h = setup();
+        {
+            let mut projects = h.store.projects.borrow_mut();
+            let items = &mut projects[0].session.items;
+            items.insert(0, section(5));
+            items.insert(2, section(15));
+            items.insert(4, section(25));
+        }
+        // Heading, Text(a, b), Heading, Image, Heading, Text(c)
+        h.load();
+        assert_eq!(selection(&h.engine), (Some(10), Some(0), "a"), "a service never opens on a heading");
+        assert_eq!(h.engine.snapshot().program_state.next_item_id, Some(20));
+        h.send(EngineCommand::Next);
+        h.send(EngineCommand::Next);
+        assert_eq!(selection(&h.engine).0, Some(20));
+        h.send(EngineCommand::NextItem);
+        assert_eq!(selection(&h.engine).0, Some(30));
+        h.send(EngineCommand::PrevItem);
+        assert_eq!(selection(&h.engine).0, Some(20));
+        h.send(EngineCommand::Prev);
+        assert_eq!(selection(&h.engine), (Some(10), Some(0), "a"), "back to the song, not a heading");
+        h.send(EngineCommand::GoToItem { item_id: 25 });
+        assert_eq!(selection(&h.engine).0, Some(30), "cueing a heading goes to its first item");
     }
 
     #[test]
@@ -1074,6 +1132,16 @@ mod tests {
     fn report(h: &Harness, phase: PlaybackPhase, position_ms: u64) -> PlaybackReport {
         let p = h.playback();
         PlaybackReport { session_id: p.session_id, generation: p.generation, phase, position_ms, duration_ms: Some(10_000), error: None }
+    }
+
+    #[test]
+    fn without_autoplay_a_cued_video_waits_paused_on_its_first_frame() {
+        let mut h = video_setup();
+        h.send(EngineCommand::SetAutoplay { enabled: false });
+        h.take_directives();
+        h.send(EngineCommand::GoToItem { item_id: 20 });
+        assert!(h.playback().paused);
+        assert!(matches!(h.take_directives().as_slice(), [MediaDirective::Open { playback }] if playback.paused));
     }
 
     #[test]

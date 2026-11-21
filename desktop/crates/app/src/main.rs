@@ -5,12 +5,14 @@ mod awake;
 mod backup;
 mod capture;
 mod commands;
+mod display_names;
 mod displays;
 mod engine_host;
 mod input;
 mod library;
 mod logging;
 mod midi;
+mod monitor_window;
 mod native_media;
 mod native_output;
 mod native_scene;
@@ -111,15 +113,18 @@ fn main() -> anyhow::Result<()> {
         .invoke_handler(tauri::generate_handler![
             get_output_sizes,
             get_output_preview,
+            set_output_monitor,
             preview_output_style,
             get_output_displays,
             set_output_display,
-            set_outputs_shown,
+            set_output_shown,
             get_startup_warnings,
             open_logs_folder,
             get_app_info,
             get_video_decoding,
             set_video_decoder,
+            get_media_autoplay,
+            set_media_autoplay,
             capture::get_capture_methods,
             capture::set_capture_method,
             capture::list_capture_sources,
@@ -176,6 +181,11 @@ fn main() -> anyhow::Result<()> {
             create_song,
             get_song,
             update_song,
+            delete_project,
+            delete_song,
+            delete_media,
+            rename_media,
+            import_media_files,
             list_media,
             create_media,
             choose_media_file
@@ -195,11 +205,14 @@ fn main() -> anyhow::Result<()> {
                 .map(|aside| format!("A settings file could not be read, so defaults are in use. The original was kept as {}.", aside.display()))
                 .collect();
             app.manage(OutputState { config: Mutex::new(output_config.value), path: output_path });
-            app.manage(OutputRoutes { values: Mutex::new(saved_routes.value), path: routes_path, shown: AtomicBool::new(false) });
+            app.manage(OutputRoutes::new(saved_routes.value, routes_path));
             let config_path = app_data_dir.join(CONFIG_FILENAME);
             let config = Arc::new(RwLock::new(load_config(&config_path)));
             media_engine::hwaccel::set_choice(media_engine::hwaccel::DecoderChoice::parse(&config.read().expect("config lock poisoned").video_decoder));
             app.manage(ConfigStore { value: config.clone(), path: config_path.clone() });
+            // Apply before recovery queues any cues, including a restored clip.
+            let autoplay = config.read().map(|c| c.media_autoplay).unwrap_or(true);
+            if let Err(e) = engine.command(EngineCommand::SetAutoplay { enabled: autoplay }) { warn!("Applying media autoplay: {e}"); }
             let db = Db(Arc::new(Mutex::new(Repository::new(
                 app_data_dir.join(DB_FILENAME),
             )?)));
@@ -479,6 +492,9 @@ pub(crate) fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
     if let Some(outputs) = app.try_state::<NativeOutputs>() {
         outputs.shutdown();
+    }
+    if let Some(monitors) = app.try_state::<monitor_window::Monitors>() {
+        monitors.destroy();
     }
     if let Some(awake) = app.try_state::<awake::KeepAwake>() {
         awake.set(false);

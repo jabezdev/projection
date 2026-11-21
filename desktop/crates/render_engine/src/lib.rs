@@ -10,6 +10,7 @@ mod confidence;
 mod frame;
 mod main_scene;
 mod media;
+mod monitor;
 mod output;
 mod paint;
 mod preview;
@@ -29,6 +30,7 @@ pub use capture::Capture;
 pub use frame::{FramePixels, PixelFrame, SharedFrame, VideoFrames, VideoKey};
 pub use main_scene::LyricGeometry;
 pub use media::MediaTextures;
+pub use monitor::MonitorSpec;
 pub use output::{OutputRole, OutputStats, StatusSink};
 pub use paint::{css_color, Rgba, TextEffects};
 pub use preview::{PreviewTarget, Snapshot, SnapshotSink};
@@ -41,6 +43,7 @@ pub use test_source::TestPatternSource;
 pub use text::{Fonts, TextAlign};
 pub use yuv::{YuvLayout, YuvMatrix, YuvPixels};
 
+use monitor::MonitorWorker;
 use output::{OutputWorker, Resources};
 use preview::Previews;
 
@@ -80,9 +83,17 @@ impl Gpu {
 }
 
 /// Vulkan and DX12 need no instance display handle; each surface brings its
-/// window's own (`SurfaceTarget::DisplayAndWindow`).
+/// window's own (`SurfaceTarget::DisplayAndWindow`). `WGPU_BACKEND`
+/// (`vulkan`, `dx12`) narrows the choice, for comparing them on one computer.
 fn new_instance() -> wgpu::Instance {
-    wgpu::Instance::new(wgpu::InstanceDescriptor { backends: wgpu::Backends::PRIMARY, ..wgpu::InstanceDescriptor::new_without_display_handle() })
+    let backends = match wgpu::Backends::from_env() {
+        Some(chosen) => {
+            log::info!("GPU backends limited by WGPU_BACKEND to {chosen:?}");
+            chosen
+        }
+        None => wgpu::Backends::PRIMARY,
+    };
+    wgpu::Instance::new(wgpu::InstanceDescriptor { backends, ..wgpu::InstanceDescriptor::new_without_display_handle() })
 }
 
 /// A window to present into. The window must outlive the [`RenderEngine`];
@@ -109,6 +120,8 @@ pub struct RenderEngine {
     sizes: Mutex<HashMap<OutputRole, (u32, u32)>>,
     aspects: Mutex<HashMap<OutputRole, (u32, u32)>>,
     previews: Mutex<Option<Previews>>,
+    /// Live views of the outputs in the operator window, added on first use.
+    monitors: Mutex<HashMap<OutputRole, MonitorWorker>>,
     /// Stills loaded ahead of their cue, kept with the scenes' own media.
     preloads: Mutex<HashSet<String>>,
 }
@@ -165,6 +178,7 @@ impl RenderEngine {
             sizes: Mutex::new(sizes),
             aspects: Mutex::default(),
             previews: Mutex::default(),
+            monitors: Mutex::default(),
             preloads: Mutex::default(),
         })
     }
@@ -193,6 +207,45 @@ impl RenderEngine {
         let _ = self.resources.status.set(sink);
     }
 
+    /// Starts a live monitor of `spec.role` presenting into `spec.target`,
+    /// parked until [`RenderEngine::set_monitor`] gives it a size. Call on the
+    /// thread that owns the window, like [`RenderEngine::start`].
+    pub fn add_monitor(&self, spec: MonitorSpec) -> anyhow::Result<()> {
+        let role = spec.role;
+        let surface = self
+            .gpu
+            .instance
+            .create_surface(wgpu::SurfaceTarget::DisplayAndWindow(spec.target))
+            .with_context(|| format!("Creating the {} monitor surface", role.label()))?;
+        anyhow::ensure!(self.gpu.adapter.is_surface_supported(&surface), "The operator display is not supported by the output GPU");
+        let scene = self.scenes.lock().expect("scenes poisoned").get(&role).cloned();
+        let worker = MonitorWorker::spawn(self.resources.clone(), role, surface, self.content_size(role), scene)?;
+        if let Some(old) = self.monitors.lock().expect("monitors poisoned").insert(role, worker) {
+            old.signal_stop();
+            old.join();
+        }
+        Ok(())
+    }
+
+    /// Shows `role`'s monitor at `size` physical pixels, or parks it.
+    pub fn set_monitor(&self, role: OutputRole, size: Option<(u32, u32)>) {
+        if let Some(monitor) = self.monitors.lock().expect("monitors poisoned").get(&role) {
+            monitor.set_surface(size);
+        }
+    }
+
+    pub fn has_monitor(&self, role: OutputRole) -> bool {
+        self.monitors.lock().expect("monitors poisoned").contains_key(&role)
+    }
+
+    /// `role`'s letterboxed content size.
+    fn content_size(&self, role: OutputRole) -> (u32, u32) {
+        let size = self.sizes.lock().expect("sizes poisoned").get(&role).copied().unwrap_or((1920, 1080));
+        let aspect = self.aspects.lock().expect("aspects poisoned").get(&role).copied();
+        let [_, _, width, height] = fit_aspect(size, aspect);
+        (width, height)
+    }
+
     /// Previews a scene that no output shows: a style sample of the
     /// projection (main scene) or the confidence screen.
     pub fn preview_style(&self, scene: Scene) {
@@ -218,6 +271,9 @@ impl RenderEngine {
         drop(scenes);
         if let Some(previews) = self.previews.lock().expect("previews poisoned").as_ref() {
             previews.set_scene(preview_target(role), scene.clone());
+        }
+        if let Some(monitor) = self.monitors.lock().expect("monitors poisoned").get(&role) {
+            monitor.set_scene(scene.clone());
         }
         if let Some(worker) = self.outputs.get(&role) {
             worker.set_scene(scene);
@@ -285,11 +341,15 @@ impl RenderEngine {
         }
     }
 
-    /// Previews render the letterboxed content only.
+    /// Previews and monitors render the letterboxed content only.
     fn resize_preview(&self, role: OutputRole) {
-        let Some(&size) = self.sizes.lock().expect("sizes poisoned").get(&role) else { return };
-        let aspect = self.aspects.lock().expect("aspects poisoned").get(&role).copied();
-        let [_, _, width, height] = fit_aspect(size, aspect);
+        if !self.sizes.lock().expect("sizes poisoned").contains_key(&role) {
+            return;
+        }
+        let (width, height) = self.content_size(role);
+        if let Some(monitor) = self.monitors.lock().expect("monitors poisoned").get(&role) {
+            monitor.set_content_size((width, height));
+        }
         if let Some(previews) = self.previews.lock().expect("previews poisoned").as_ref() {
             previews.resize(role, width, height);
         }
@@ -311,6 +371,13 @@ impl RenderEngine {
     pub fn shutdown(&mut self) {
         if let Some(previews) = self.previews.lock().ok().and_then(|mut p| p.take()) {
             previews.stop();
+        }
+        let monitors: Vec<_> = self.monitors.lock().map(|mut m| m.drain().map(|(_, w)| w).collect()).unwrap_or_default();
+        for monitor in &monitors {
+            monitor.signal_stop();
+        }
+        for monitor in monitors {
+            monitor.join();
         }
         if let Some(pump) = self.pump.take() {
             pump.stop();

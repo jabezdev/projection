@@ -282,6 +282,14 @@ export const items = [
         }
       }
     }
+  },
+  {
+    "id": 7,
+    "title": "Item",
+    "kind": {
+      "kind": "section",
+      "data": {}
+    }
   }
 ] satisfies SessionItem[];
 export const outputConfig = {

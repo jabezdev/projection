@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 
 [build-dependencies]
@@ -24,6 +24,7 @@ tauri = { workspace = true, features = ["protocol-asset", "unstable"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 uuid = { version = "1", features = ["v4"] }
+raw-window-handle = "0.6"
 dirs = "7"
 image = { workspace = true }
 zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2"] }
@@ -36,10 +37,10 @@ gtk = "0.18"
 # Screen capture: the xdg screen-cast portal and PipeWire (Wayland), X11.
 ashpd = { version = "0.12", default-features = false, features = ["tokio"] }
 pipewire = "0.9"
-x11rb = { version = "0.13", features = ["randr", "composite"] }
+x11rb = { version = "0.13", features = ["randr", "composite", "shape"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_Power"] }
+windows-sys = { version = "0.61", features = ["Win32_System_Power", "Win32_Foundation", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging", "Win32_Devices_Display", "Win32_Graphics_Gdi"] }
 # Screen capture: Windows.Graphics.Capture and Desktop Duplication.
 windows-capture = "1.5"
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common"] }

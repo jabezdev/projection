@@ -8,7 +8,6 @@
 //! unavailable.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -100,7 +99,7 @@ impl Updates {
 }
 
 fn outputs_shown(app: &tauri::AppHandle) -> bool {
-    app.try_state::<OutputRoutes>().is_some_and(|routes| routes.shown.load(Ordering::Acquire))
+    app.try_state::<OutputRoutes>().is_some_and(|routes| routes.any_shown())
 }
 
 fn updater(app: &tauri::AppHandle, manifest: &str) -> Result<tauri_plugin_updater::Updater, String> {

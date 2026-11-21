@@ -21,9 +21,10 @@ Roadmap phase 1. Built and checked on Linux; not yet tested on Windows. The [chu
 ## Test on the church PC
 
 - [ ] **Display scaling.** Run the laptop at 125% or 150%, ideally with the projector at a different scale. Output sizes and positions are physical pixels; check that each output lands on its display and fills it exactly.
-- [ ] **Projector hotplug.** Connect the projector after launch, then unplug and replug it. Windows can renumber displays (`DISPLAY1`/`DISPLAY2`); the saved display assignment must still find the projector.
+- [ ] **Projector hotplug.** Connect the projector after launch, then unplug and replug it. Windows can renumber displays (`DISPLAY1`/`DISPLAY2`); the saved display assignment must still find the projector. Assignments now also save the monitor's device path from the display configuration API, which survives renumbering (routes saved before this pick it up the next time a display is chosen).
 - [ ] **HDMI audio.** Connecting the projector often makes HDMI the default audio device. `media_engine` reopens the stream on a device change; check it while a video plays, during both plug and unplug.
-- [ ] **GPU.** The renderer requests DirectX 12 or Vulkan (`Backends::PRIMARY`, `render_engine/src/lib.rs`). Old integrated GPUs or drivers may offer neither and the outputs would not start. If that happens, add an OpenGL fallback.
+- [ ] **GPU.** The renderer requests DirectX 12 or Vulkan (`Backends::PRIMARY`, `render_engine/src/lib.rs`). Old integrated GPUs or drivers may offer neither and the outputs would not start. If that happens, add an OpenGL fallback. `WGPU_BACKEND=dx12` (or `vulkan`) limits the choice to one backend, for comparing them on the church PC; the log names the one in use.
+- [ ] **Display names.** Screens lists each display by its model name from the monitor's EDID and its connection ("BenQ GW2480 · HDMI", "Built-in display"), not `\\.\DISPLAY1`; identical models get their Windows number. The size menu shows the display's resolution and only window sizes that fit; the aspect menu shows the display's own shape ("Fill screen · 16:9"). Check the names match Windows Settings → Display.
 - [ ] **Fonts.** Windows ships different fonts from Linux. Check the font list in Output Settings, fonts saved on Linux (fallback behavior), and how lyrics wrap.
 - [ ] **Basics.** The app opens; a video plays with sound (proves the FFmpeg DLLs load); outputs go fullscreen on the right displays; closing the operator window exits the app.
 

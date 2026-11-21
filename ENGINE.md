@@ -4,7 +4,7 @@ How the desktop app puts lyrics, images, video and audio on the projection and c
 
 ## In one paragraph
 
-The operator works in a React control panel inside a Tauri window. The projection and confidence screens are plain OS windows with **no webview**: Rust draws them with wgpu. One engine thread decides what is on air. One media session decodes each video once for both screens and owns the only audio output. The operator UI never plays media; it shows still previews rendered by the same engine.
+The operator works in a React control panel inside a Tauri window. The projection and confidence screens are plain OS windows with **no webview**: Rust draws them with wgpu. One engine thread decides what is on air. One media session decodes each video once for both screens and owns the only audio output. The operator UI never plays media; it shows live monitors and still previews rendered by the same engine.
 
 ## Components
 
@@ -19,7 +19,7 @@ All crates are under [desktop/crates/](desktop/crates/).
 | `app` | Tauri integration: windows, operator commands, the bounded engine queue, the storage worker, settings files, wiring the crates together. | A second idea of what is on air. |
 | `persistence` | SQLite library and services (schema v2). | Runtime state. |
 | `network_server` | Remote control: the WebSocket (same commands and events as the UI) and the phone remote page on one port, pairing, the `palto.local` name, OSC. | Its own transport logic. |
-| React frontend | Editors, operator layout, transport buttons, preview stills, errors. | Playback, audio, frame timing. |
+| React frontend | Editors, operator layout, transport buttons, monitor placement, preview stills, errors. | Playback, audio, frame timing. |
 
 ```mermaid
 flowchart TB
@@ -42,6 +42,8 @@ flowchart TB
 
 - **One queue.** UI commands, WebSocket commands and media reports share one bounded queue ([engine_host.rs](desktop/crates/app/src/engine_host.rs), 1024 entries). The engine applies at most 64 inputs before publishing, so continuous input cannot delay a cue. Adjacent seeks, volume changes, reports and saves of one project coalesce. A full queue returns an error to the caller instead of blocking.
 - **Ports.** The engine talks to the world through three small traits: `Assets` (checks a background file before switching to it, so a missing file is reported and the previous background stays), `MediaBackend` (receives `MediaDirective`s) and `ProjectStore`. Tests use fakes for all three.
+- **Sections.** A `SessionItemKind::Section` item is a heading that groups the items after it, up to the next heading; its name is the item's title. It never goes on air: Next, Previous, Next/Previous item and a cue on a heading all land on the nearest item that can be cued (`is_cueable`), a service never opens on one, the next-item preparation looks past them, and the confidence teleprompter leaves them out.
+- **Autoplay.** `EngineCommand::SetAutoplay` (from `app-config.json`'s `media_autoplay`, on by default, Settings → System → Playback) decides whether a cued video or audio opens playing or paused on its first frame.
 - **Typed media transport.** `EngineCommand::Media { session_id, action }` covers play, pause, stop, seek, volume, mute, rate, loop and clip bounds. Every cue that plays media opens a new session; every seek starts a new generation. Commands for an old session and reports from an old session or generation are ignored, so a late reply can never bring back an old cue.
 - **State domains.** `project_changed`, `program_changed` and `playback_changed` each carry the complete state of their domain with their own revision; listeners replace what they had. `error` reports a refused command. Playback progress is published at a bounded rate; rendering and the audio clock never depend on it.
 - **Saving.** The engine accepts a save immediately; a storage worker writes saves in order and merges adjacent saves of one project. A load waits for queued saves. A failed save is reported, not rolled back.
@@ -97,7 +99,8 @@ A song's own background carries over to items without one; a foreground video or
 - **Painting** ([paint.rs](desktop/crates/render_engine/src/paint.rs)). One instanced pipeline for fills, images and glyph masks, with scissor clipping and rotation. Blending happens on sRGB values, as browsers do.
 - **Confidence** ([confidence.rs](desktop/crates/render_engine/src/confidence.rs)). HH:MM clock from local time, arrangement tape (current card outlined, past cards desaturated), sticky rotated part labels, active and past rows, smooth scrolling that centers the active row. Layouts are cached per scene and size and rebuilt on a worker; only the visible neighborhood is drawn.
 - **Redraw policy.** An output presents only when its scene, size, a transition or a visible video changes. Idle outputs check for pending media every 16 ms without redrawing.
-- **Previews** ([preview.rs](desktop/crates/render_engine/src/preview.rs)). A low-priority thread renders each scene once its transitions settle (or after 3 s), up to 1920 px wide, and scales it to a 640 px JPEG. The UI fetches the bytes with `get_output_preview` after an `output:preview` event; no image passes through JSON. Previews of video show the frame current when the scene settled and open no decoder.
+- **Previews** ([preview.rs](desktop/crates/render_engine/src/preview.rs)). A low-priority thread renders each scene once its transitions settle (or after 3 s), up to 1920 px wide, and scales it to a 640 px JPEG. The UI fetches the bytes with `get_output_preview` after an `output:preview` event; no image passes through JSON. Previews of video show the frame current when the scene settled and open no decoder. They serve the settings dialog's style samples, and stand in for the live monitors where those are unavailable or hidden.
+- **Live monitors** ([monitor.rs](desktop/crates/render_engine/src/monitor.rs), [monitor_window.rs](desktop/crates/app/src/monitor_window.rs)). The projection and confidence views in the operator's right column are native child windows over the webview (Windows: a `WS_CHILD` window above WebView2; Linux: an X11 child window, through XWayland like the outputs). Each has its own thread, renderer and painter, draws the output's scene from the shared media textures at the output's layout size into an offscreen texture, and scales it into its surface (up to 4×4 bilinear taps per pixel). At most 30 fps, presented only when something changes, nothing read back or encoded. The UI reports the placeholder's position in physical pixels (`set_output_monitor`) on resize, scroll and DOM changes, and hides the monitor while a dialog is open, while the placeholder is clipped and while the page is hidden, since HTML cannot draw over a native window. The monitor is display-only: it takes no clicks or focus. If a monitor cannot start, the UI keeps the still preview.
 
 ## Settings and data
 
@@ -125,7 +128,7 @@ Settled 2026-10-10 and revised 2026-10-11. Each says why.
 6. **Target hardware: Ryzen 3 2200G, 8 GB RAM, GTX 1050 Ti (4 GB).** Features are judged against this machine. CPU decode plus RGBA upload was the baseline (about 27% of one core for 1080p on a Ryzen 5 5500U). YUV upload with GPU conversion and selectable hardware decoding came in roadmap phase 7 (2026-10-24): on the 5500U a looping 1080p30 H.264 video with sound and the confidence output presenting measured 25% of one thread in software and 20% with VA-API ([docs/media-profile.md](docs/media-profile.md)). Software decoding stays the default and the fallback until the church PC has been profiled.
 7. **Audio uses the system default device** with automatic reconnect. Venue routing is done in the OS sound settings, which operators already know. Pitch follows rate because it is the simplest correct behavior.
 8. **Display policy as in the table above.** Logo is a picture override, so it pauses video but not walk-in music; Black and Clear keep transport running so the operator controls audio explicitly; a previous video never silently becomes a background.
-9. **Previews are still images from the real renderer.** No second layout engine to keep in step and no second decoder; low frequency keeps the operator light.
+9. **Monitors and previews come from the real renderer.** No second layout engine to keep in step and no second decoder. Live monitors (2026-11-21) present into native child windows over the operator UI rather than streaming frames to the webview, which would mean a GPU readback, an encode and an IPC copy for every frame; the cost is that HTML cannot overlap them. The operator UI stays a webview for development speed.
 10. **Minimal text styling.** Only what the native renderer draws is offered. Outline, shadow and glow returned in roadmap phase 5 (2026-10-24), all three through signed-distance-field glyphs in the existing single pass. The shadow was planned as a separate blurred pass; the distance field gives a soft shadow without offscreen targets or extra passes, at the cost of a slightly heavier look for large blurs. Older settings files' numeric `shadow`/`outline`/`glow` values (from the webview) are kept untouched but never switch effects on.
 11. **Keep the system light.** No unused ports, commands or settings in the code. Bounded queues everywhere, nothing redrawn without a change, no per-frame data through JSON.
 12. **Offline-first.** Everything on air runs from the local SQLite library; nothing on the live path waits on the network. Cloud sync (planned, see ARCHITECTURE.md) feeds the local library and is never required to run a service; while a service is live, the projection computer owns it.
@@ -167,7 +170,7 @@ Every 5 s the app logs active decoders, opened audio outputs, frames presented a
 | Test aid | What it does |
 |---|---|
 | `PALTO_DATA_DIR=<dir>` | Uses `<dir>` as the data folder (library, settings, logs) |
-| `PALTO_SHOW_OUTPUTS=1` | Shows the outputs at startup, as the Show button would |
+| `PALTO_SHOW_OUTPUTS=1` | Shows both outputs at startup, as their On switches would |
 | `MAGI_TEST_CAPTURE=1` | Adds a *Test pattern* capture method (a moving bar; the `test:pattern:lose` source closes after 2 s), to check capture routing and the lost-source fallback without a screen to share |
 | `bun tools/e2e/e2e.ts` | End-to-end WebSocket check against a scratch data folder (cue, navigation, display modes, transport, save, restart and crash recovery) |
 | `bun tools/e2e/soak.ts --video <file>` | 30-minute soak: looping video with confidence; fails if memory, decoders or audio outputs grow or frames stop |

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Tiny generated demo clips are part of the browser-only sample service.
+!demo/countdown.mp4
+!demo/worship-loop.mp4
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

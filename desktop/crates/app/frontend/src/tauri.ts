@@ -1,5 +1,6 @@
 import type { Media } from './models';
 import { invoke as nativeInvoke } from '@tauri-apps/api/core';
+import { DEMO_LOGO, DEMO_PROJECT_ID, demoMedia, demoProject, demoSongs } from './demoService';
 export type UnlistenFn = () => void;
 
 // Minimal event shape used by our UI.
@@ -23,9 +24,11 @@ type UiOnlyProgramState = {
 type UiOnlySessionItemKind =
   | { kind: 'text'; data: { steps: string[] } }
   | { kind: 'image'; data: { path: string } }
-  | { kind: 'video'; data: { path: string } }
+  | { kind: 'video'; data: { path: string; options?: Record<string, unknown> } }
   | { kind: 'audio'; data: { path: string; options?: Record<string, unknown> } }
-  | { kind: 'presentation'; data: { path: string; slides?: string[] } };
+  | { kind: 'presentation'; data: { path: string; slides?: string[] } }
+  | { kind: 'capture'; data: Record<string, unknown> }
+  | { kind: 'section'; data: Record<string, never> };
 
 type UiOnlySessionItem = {
   id: number;
@@ -52,7 +55,19 @@ type UiOnlyEngineSnapshot = {
 type UiOnlyEngineEvent =
   | { type: 'project_changed'; payload: { project: UiOnlyProjectModel | null; version: number } }
   | { type: 'program_changed'; payload: { program_state: UiOnlyProgramState; version: number } }
+  | { type: 'playback_changed'; payload: { playback: UiOnlyPlayback | null; revision: number } }
   | { type: 'error'; payload: { source: string; message: string; recoverable: boolean } };
+
+/** Browser-only mode: a simulated media session, so the transport can be laid out. */
+type UiOnlyPlayback = {
+  session_id: number; generation: number; item_id: number; path: string; kind: 'video' | 'audio';
+  paused: boolean; suspended: boolean; phase: 'playing' | 'paused' | 'ended';
+  position_ms: number; duration_ms: number | null; position_at_ms: number;
+  volume: number; muted: boolean; rate_percent: number; looping: boolean;
+  start_ms: number; end_ms: number | null; confidence: boolean; error: string | null;
+};
+/** Lengths of the demo clips; anything else plays as three minutes. */
+const UI_ONLY_DURATIONS: Record<string, number> = { '/demo/countdown.mp4': 10_000, '/demo/worship-loop.mp4': 8_000, '/demo/offering-music.mp3': 20_000 };
 
 type UiOnlyStore = {
   media?: Media[];
@@ -77,6 +92,36 @@ function defaultProgramState(): UiOnlyProgramState {
   };
 }
 
+/** The demo service with every item type, its media and songs in the library. */
+function demoStore(): UiOnlyStore {
+  const store: UiOnlyStore = {
+    version: 1,
+    active_project_id: DEMO_PROJECT_ID,
+    program_state: defaultProgramState(),
+    media: demoMedia,
+    songs: demoSongs,
+    projects: { [String(DEMO_PROJECT_ID)]: structuredClone(demoProject) as UiOnlyProjectModel },
+    project_updated_at: { [String(DEMO_PROJECT_ID)]: Date.now() },
+  };
+  saveUiOnlyStore(store);
+  return store;
+}
+
+/**
+ * Browser-only mode starts every page load from the demo: anything saved by
+ * an earlier visit (services, songs, output settings, column sizes) is
+ * dropped, then the demo service and the demo logo are written. Call before
+ * the UI first renders.
+ */
+export function startDemo(): void {
+  if (isTauri() || typeof window === 'undefined') return;
+  try {
+    window.localStorage.clear();
+    window.localStorage.setItem('magi.output.config', JSON.stringify({ logoPath: DEMO_LOGO }));
+  } catch { /* Storage blocked: the demo still loads, unsaved. */ }
+  demoStore();
+}
+
 function loadUiOnlyStore(): UiOnlyStore {
   if (typeof window === 'undefined') {
     return {
@@ -90,7 +135,7 @@ function loadUiOnlyStore(): UiOnlyStore {
 
   try {
     const raw = window.localStorage.getItem(UI_ONLY_STORAGE_KEY);
-    if (!raw) throw new Error('missing');
+    if (!raw) return demoStore();
     const parsed = JSON.parse(raw) as Partial<UiOnlyStore>;
     return {
       version: typeof parsed.version === 'number' ? parsed.version : 1,
@@ -123,9 +168,29 @@ function saveUiOnlyStore(store: UiOnlyStore): void {
 
 type UiOnlyListener = (evt: TauriEvent<UiOnlyEngineEvent>) => void;
 
+// Desktop-only events (output:shown and the like), raised by the fake commands.
+const uiOnlyEvents = new EventTarget();
+function emitUiOnly(event: string, payload: unknown): void {
+  uiOnlyEvents.dispatchEvent(new CustomEvent(event, { detail: payload }));
+}
+
+type UiOnlyPair = [number, number];
+type UiOnlyOutput = { monitor: number | null; shown: boolean; fullscreen: boolean; size: UiOnlyPair | null; aspect: UiOnlyPair | null };
+
+/** Demo displays for the Screens panel: the operator's laptop, a projector and a stage monitor. */
+const UI_ONLY_MONITORS = [
+  { key: '0|demo-laptop', name: 'Built-in display', connector: 'Built-in', width: 1920, height: 1080, aspect: '16:9', operator: true },
+  { key: '1|demo-projector', name: 'EPSON PJ', connector: 'HDMI', width: 1920, height: 1080, aspect: '16:9', operator: false },
+  { key: '2|demo-monitor', name: 'Dell U2419H', connector: 'DisplayPort', width: 1920, height: 1200, aspect: '16:10', operator: false },
+];
+
 class UiOnlyEngine {
   private store: UiOnlyStore;
   private listeners: Set<UiOnlyListener> = new Set();
+  private screens: Record<string, UiOnlyOutput> = {
+    projection: { monitor: 1, shown: false, fullscreen: true, size: null, aspect: null },
+    confidence: { monitor: 2, shown: false, fullscreen: true, size: null, aspect: null },
+  };
 
   constructor() {
     this.store = loadUiOnlyStore();
@@ -147,12 +212,60 @@ class UiOnlyEngine {
     return this.store.projects[String(this.store.active_project_id)] || null;
   }
 
-  private snapshot(): UiOnlyEngineSnapshot {
+  private snapshot(): UiOnlyEngineSnapshot & { playback: UiOnlyPlayback | null; playback_revision: number } {
     return structuredClone({
       program_state: this.store.program_state,
       version: this.store.version,
       project: this.activeProject(),
+      playback: this.playback,
+      playback_revision: this.playbackRevision,
     });
+  }
+
+  private playback: UiOnlyPlayback | null = null;
+  private playbackRevision = 0;
+  private autoplay = true;
+  private nextSession = 1;
+  private publishPlayback(): void {
+    this.playbackRevision++;
+    this.emit({ type: 'playback_changed', payload: { playback: structuredClone(this.playback), revision: this.playbackRevision } });
+  }
+  /** Where the clip is now, from its last position and the clock. */
+  private position(p: UiOnlyPlayback) {
+    return p.paused ? p.position_ms : p.position_ms + (Date.now() - p.position_at_ms) * p.rate_percent / 100;
+  }
+  /** Opens a session for a cued video or audio item, as the engine does. */
+  private syncPlayback(item: UiOnlySessionItem | null): void {
+    const media = item && (item.kind.kind === 'video' || item.kind.kind === 'audio') ? item : null;
+    if (this.playback && media && this.playback.item_id === media.id) return;
+    this.playback = null;
+    if (media && (media.kind.kind === 'video' || media.kind.kind === 'audio')) {
+      const options = (media.kind.data as { options?: Record<string, unknown> }).options ?? {};
+      const start = Number(options.start_ms ?? 0);
+      this.playback = {
+        session_id: this.nextSession++, generation: 0, item_id: media.id, path: media.kind.data.path, kind: media.kind.kind,
+        paused: !this.autoplay, suspended: false, phase: this.autoplay ? 'playing' : 'paused',
+        position_ms: start, duration_ms: UI_ONLY_DURATIONS[media.kind.data.path] ?? 180_000, position_at_ms: Date.now(),
+        volume: Number(options.volume ?? 100), muted: false, rate_percent: Number(options.rate_percent ?? 100), looping: Boolean(options.looping),
+        start_ms: start, end_ms: (options.end_ms as number | null) ?? null, confidence: Boolean(options.confidence), error: null,
+      };
+    }
+    this.publishPlayback();
+  }
+  private mediaAction(action: { type: string; payload?: Record<string, number | boolean> }): void {
+    const p = this.playback;
+    if (!p) return;
+    const now = Date.now();
+    switch (action.type) {
+      case 'play': p.position_ms = this.position(p); p.paused = false; p.phase = 'playing'; break;
+      case 'pause': p.position_ms = this.position(p); p.paused = true; p.phase = 'paused'; break;
+      case 'stop': p.position_ms = p.start_ms; p.paused = true; p.phase = 'paused'; break;
+      case 'seek': p.position_ms = Number(action.payload?.position_ms ?? 0); break;
+      case 'set_volume': p.volume = Number(action.payload?.volume ?? 100); break;
+      case 'set_muted': p.muted = Boolean(action.payload?.muted); break;
+    }
+    p.position_at_ms = now;
+    this.publishPlayback();
   }
 
   private emit(event: UiOnlyEngineEvent): void {
@@ -194,12 +307,19 @@ class UiOnlyEngine {
     const items = project.session.items || [];
     const activeId = this.store.program_state.active_item_id;
     const idx = activeId == null ? -1 : items.findIndex((it) => it.id === activeId);
-    const next = idx >= 0 && idx + 1 < items.length ? items[idx + 1] : null;
+    const next = idx >= 0 ? items.slice(idx + 1).find(it => it.kind.kind !== 'section') ?? null : null;
     this.store.program_state.next_item_id = next ? next.id : null;
   }
 
   private setActiveItem(itemId: number | null): void {
+    // Section headings never go on air: a cue on one lands on the item after it.
+    const listed = this.activeProject()?.session.items ?? [];
+    let index = itemId == null ? -1 : listed.findIndex(it => it.id === itemId);
+    while (index >= 0 && index < listed.length && listed[index].kind.kind === 'section') index++;
+    if (index >= listed.length) index = -1;
+    if (index >= 0) itemId = listed[index].id;
     this.store.program_state.active_item_id = itemId;
+    this.syncPlayback(index >= 0 ? listed[index] : null);
     this.recomputeNextItem();
 
     const project = this.activeProject();
@@ -218,6 +338,10 @@ class UiOnlyEngine {
       this.store.program_state.active_step_index = item?.kind.kind === 'presentation' ? 0 : null;
       this.store.program_state.active_text = '';
     }
+  }
+
+  private displays() {
+    return { monitors: UI_ONLY_MONITORS, shown: Object.values(this.screens).some(screen => screen.shown), outputs: structuredClone(this.screens) };
   }
 
   async invoke<T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -247,6 +371,13 @@ class UiOnlyEngine {
           saveUiOnlyStore(this.store);
           return song as T;
         }
+        case 'engine_command': {
+          const cmd = args?.command as { type: string; payload?: { action?: { type: string; payload?: Record<string, number | boolean> } } } | undefined;
+          if (cmd?.type === 'media' && cmd.payload?.action) this.mediaAction(cmd.payload.action);
+          return undefined as T;
+        }
+        case 'get_media_autoplay': return this.autoplay as T;
+        case 'set_media_autoplay': this.autoplay = Boolean(args?.enabled); return undefined as T;
         case 'set_display': {
           const display = args?.display as UiOnlyProgramState['display'];
           if (!display || !['logo', 'black', 'clear', 'live'].includes(display)) throw new Error('Invalid display mode');
@@ -267,6 +398,34 @@ class UiOnlyEngine {
           headers.sort((a, b) => b.updated_at_ms - a.updated_at_ms);
           return headers as T;
         }
+
+        case 'get_project': {
+          const project = this.store.projects[String(args?.projectId)];
+          if (!project) throw new Error('Service not found');
+          return structuredClone(project) as T;
+        }
+        case 'delete_project': {
+          const id = Number(args?.projectId);
+          if (this.store.active_project_id === id) throw new Error('This service is loaded. Load another service before deleting it.');
+          delete this.store.projects[String(id)]; delete this.store.project_updated_at[String(id)];
+          saveUiOnlyStore(this.store); return undefined as T;
+        }
+        case 'delete_song': {
+          if (this.store.songs) delete this.store.songs[String(args?.id)];
+          saveUiOnlyStore(this.store); return undefined as T;
+        }
+        case 'delete_media': {
+          this.store.media = (this.store.media || []).filter(m => m.id !== Number(args?.id));
+          saveUiOnlyStore(this.store); return undefined as T;
+        }
+        case 'rename_media': {
+          const title = String(args?.title ?? '').trim();
+          if (!title) throw new Error('Enter a title.');
+          this.store.media = (this.store.media || []).map(m => m.id === Number(args?.id) ? { ...m, title } : m);
+          saveUiOnlyStore(this.store); return undefined as T;
+        }
+        // Browser-only mode cannot read files from disk.
+        case 'import_media_files': return [] as T;
 
         case 'create_project': {
           const name = String(args?.name ?? 'Untitled');
@@ -385,14 +544,39 @@ class UiOnlyEngine {
                 this.store.program_state.active_text = steps[nextStep] || '';
               }
             } else if (activeIndex >= 0) {
-              const nextItemIndex = Math.max(0, Math.min(activeIndex + dir, items.length - 1));
-              this.setActiveItem(items[nextItemIndex].id);
+              // Neighbouring items skip section headings.
+              let target = activeIndex + dir;
+              while (target >= 0 && target < items.length && items[target].kind.kind === 'section') target += dir;
+              if (target >= 0 && target < items.length) this.setActiveItem(items[target].id);
             }
           }
 
           this.bumpVersion();
           this.persistAndBroadcast();
           return undefined as T;
+        }
+
+        case 'get_output_displays': return this.displays() as T;
+        case 'set_output_display': {
+          const output = String(args?.output);
+          if (!(output in this.screens)) throw new Error('Unknown output');
+          const monitor = Number(args?.monitor);
+          if (UI_ONLY_MONITORS[monitor]?.key !== args?.key) throw new Error('The connected displays changed. Choose the display again.');
+          this.screens[output] = {
+            monitor,
+            shown: this.screens[output].shown,
+            fullscreen: Boolean(args?.fullscreen),
+            size: (args?.size as UiOnlyPair | null) ?? null,
+            aspect: (args?.aspect as UiOnlyPair | null) ?? null,
+          };
+          return this.displays() as T;
+        }
+        case 'set_output_shown': {
+          const output = String(args?.output);
+          if (!(output in this.screens)) throw new Error('Unknown output');
+          this.screens[output] = { ...this.screens[output], shown: Boolean(args?.shown) };
+          emitUiOnly('output:shown', Object.values(this.screens).some(screen => screen.shown));
+          return this.displays() as T;
         }
 
         // Media playback needs the desktop engine; the browser-only mode has none.
@@ -450,10 +634,9 @@ export async function listen<T>(
 ): Promise<UnlistenFn> {
   if (!isTauri()) {
     if (event !== 'engine:event') {
-      console.debug('[ui-only] listen (ignored)', event);
-      return () => {
-        // no-op
-      };
+      const relay = (e: Event) => handler({ payload: (e as CustomEvent<T>).detail });
+      uiOnlyEvents.addEventListener(event, relay);
+      return () => uiOnlyEvents.removeEventListener(event, relay);
     }
 
     return uiOnlyEngine().listen(handler as unknown as UiOnlyListener);

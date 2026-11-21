@@ -1,11 +1,11 @@
-import { useState, type CSSProperties, type MutableRefObject } from 'react';
+import { useState, type CSSProperties, type DragEvent, type MutableRefObject } from 'react';
 import { Icon } from './Icons';
-import { PresentationCues } from './PresentationEditor';
-import ScheduleVideo from './ScheduleVideo';
-import { defaultVideoOptions, type ProjectModel, type SessionItem, type VideoOptions } from './models';
+import type { ProjectModel, SessionItem } from './models';
 import { arrangedParts, itemSong, partCode, partColor, slides } from './song';
 import type { ProgramState, ProjectHeader } from './useEngine';
-import { CaptureCue } from './CaptureEditor';
+import ServiceMenu from './ServiceMenu';
+import { ItemThumb } from './Thumbs';
+import { Background } from './SlidePreview';
 
 type Props = {
   project: ProjectModel | null;
@@ -17,56 +17,123 @@ type Props = {
   run: (work: () => Promise<unknown>) => Promise<void>;
   persist: (project: ProjectModel) => Promise<void>;
   onOpenSettings: () => void;
-  onLoadService: (projectId: number) => void;
-  onOpenService: (mode: 'new' | 'edit') => void;
+  /** Loads a service; false when the operator cancelled. */
+  onLoadService: (projectId: number) => Promise<boolean>;
+  /** Opens the service editor, on an item if given. */
+  onEditService: (itemId?: number) => void;
   onOpenLibrary: () => void;
-  onNewSong: () => void;
-  onEditSong: (item: SessionItem) => void;
-  onEditPresentation: (item: SessionItem) => void;
-  onEditCapture: (item: SessionItem) => void;
+  onServicesChanged: () => Promise<void>;
+  confirm: (message: string, action: string) => Promise<boolean>;
+  onError: (message: string) => void;
   onEditPart: (part: { itemId: number; partId: string; label: string; lyrics: string }) => void;
   onCue: (item: SessionItem, index?: number) => Promise<unknown>;
-  onVideoOptions: (id: number, options: VideoOptions) => void;
 };
+type Group = { section: SessionItem | null; items: SessionItem[] };
 
-/** The left column: service choice, library buttons and the service's items with their part cues. */
-export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onOpenService, onOpenLibrary, onNewSong, onEditSong, onEditPresentation, onEditCapture, onEditPart, onCue, onVideoOptions }: Props) {
+/** Items under the section heading before them; items before the first heading stand alone. */
+function groupItems(items: SessionItem[]): Group[] {
+  const groups: Group[] = [{ section: null, items: [] }];
+  for (const item of items) {
+    if (item.kind.kind === 'section') groups.push({ section: item, items: [] });
+    else groups[groups.length - 1].items.push(item);
+  }
+  return groups.filter(g => g.section || g.items.length);
+}
+
+/** The left column: the service selector, the service's items in their sections, and Settings and Library at the foot. */
+export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onEditService, onOpenLibrary, onServicesChanged, confirm, onError, onEditPart, onCue }: Props) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [dragged, setDragged] = useState<number | null>(null);
-  return <section className="session-pane"><div className="operator-settings-bar"><button aria-label="Open output settings" onClick={onOpenSettings}><Icon name="settings"/><span>Settings</span></button></div><div className="session-tools" aria-label="Service and library controls"><div className="service-select-row"><select aria-label="Session / service" value={project?.id || ''} onChange={e => {
-    // Capture the choice before awaiting: React restores a controlled select
-    // to its current value until the engine publishes the loaded service.
-    const projectId = Number(e.currentTarget.value);
-    if (!Number.isSafeInteger(projectId) || projectId <= 0) return;
-    onLoadService(projectId);
-  }}><option value="" disabled>Select a service</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="icon-button" aria-label="Edit current service" disabled={!project} onClick={() => onOpenService('edit')}><Icon name="edit"/></button></div><button onClick={() => onOpenService('new')}><Icon name="plus"/> Service</button><button onClick={onOpenLibrary}><Icon name="library"/> Library</button><button className="primary-action" onClick={onNewSong}><Icon name="plus"/> Song</button></div><div className="pane-scroll">
-    {!project?.session.items.length && <p className="empty-panel">{project ? 'Add songs from the library to begin.' : 'Create or select a service to begin.'}</p>}
-    {project?.session.items.map((item) => <article className={`session-song ${program?.active_item_id === item.id ? `is-current${pending ? ' is-pending' : ''}` : ''}`} key={item.id} title={program?.active_item_id === item.id && pending ? 'Selected; the projection shows it once its media has loaded' : undefined}>
-      <header draggable onDragStart={e => { setDragged(item.id); e.dataTransfer.setData('text/plain', String(item.id)); }} onDragEnd={() => setDragged(null)} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const current = projectRef.current; if (!current || dragged === null || dragged === item.id) return; const items = [...current.session.items]; const from = items.findIndex(i => i.id === dragged); const to = items.findIndex(i => i.id === item.id); if (from < 0 || to < 0) return; const [moved] = items.splice(from, 1); items.splice(to, 0, moved); void run(() => persist({ ...current, session: { items } })); setDragged(null); }}>
-        <button className={`song-collapse ${collapsed.has(item.id) ? 'is-collapsed' : ''}`} aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.title}`} aria-expanded={!collapsed.has(item.id)} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; })}>
-          <span className="drag-handle" title="Drag to reorder"><Icon name="grip"/></span><Icon name="chevron"/><span className="song-name">{item.title || item.kind.kind}</span>
-        </button>
-        {item.kind.kind === 'video' && <button className="confidence-header-toggle" role="switch" aria-checked={!!item.kind.data.options?.confidence} aria-label={`Show ${item.title || 'video'} on confidence screen`} title="Show video on confidence screen (silent)" onDragStart={e => { e.preventDefault(); e.stopPropagation(); }} onClick={() => { if (item.kind.kind === 'video') onVideoOptions(item.id, { ...defaultVideoOptions, ...item.kind.data.options, confidence: !item.kind.data.options?.confidence }); }}><span className="confidence-toggle-check" aria-hidden="true">{item.kind.data.options?.confidence ? '✓' : ''}</span><span>Confidence</span></button>}
-        {item.kind.kind === 'capture' && <button className="song-edit icon-button" aria-label={`Edit screen capture ${item.title}`} title="Edit what is captured and where it shows" onClick={() => onEditCapture(item)}><Icon name="edit"/></button>}
-        {(item.kind.kind === 'text' || item.kind.kind === 'presentation') && <button className="song-edit icon-button" aria-label={`Edit ${item.kind.kind === 'presentation' ? 'presentation' : 'song'} ${item.title}`} title={item.kind.kind === 'presentation' ? 'Edit presentation slides' : 'Edit song arrangement and background'} onClick={() => item.kind.kind === 'presentation' ? onEditPresentation(item) : onEditSong(item)}><Icon name="edit"/></button>}
-      </header>
-      {!collapsed.has(item.id) && item.kind.kind === 'text' && <div className="part-cues" aria-label={`${item.title} arrangement`}>{(() => {
-        let offset = 0;
-        return arrangedParts(itemSong(item)).map((part, occurrence) => {
-          const start = offset;
-          const length = slides(part).length;
-          offset += length;
-          const active = program?.active_item_id === item.id && program.active_step_index != null && program.active_step_index >= start && program.active_step_index < start + length;
-          return <div className={`part-cue ${active ? 'is-active' : ''}`} style={{ '--part-color': partColor(part) } as CSSProperties} key={`${part.id}-${occurrence}`}>
-            <button className="part-cue-select" aria-label={`Cue ${partCode(part)}, ${item.title}, occurrence ${occurrence + 1}`} aria-pressed={active} disabled={!length} onClick={() => void run(() => onCue(item, start))}>{partCode(part)}</button>
-            <button className="part-cue-edit icon-button" aria-label={`Edit ${partCode(part)}, ${item.title}, occurrence ${occurrence + 1}`} onClick={() => onEditPart({ itemId: item.id, partId: part.id, label: `${item.title} · ${part.type} ${part.number}`, lyrics: part.lyrics })}><Icon name="edit"/></button>
-          </div>;
-        });
-      })()}</div>}
-      {!collapsed.has(item.id) && item.kind.kind === 'presentation' && <PresentationCues item={item} active={program?.active_item_id === item.id} step={program?.active_step_index} onSelect={index => void run(() => onCue(item, index))}/> }
-      {!collapsed.has(item.id) && item.kind.kind === 'audio' && <button className="schedule-audio-cue" onClick={() => void run(() => onCue(item))}><Icon name="audio"/>Audio<Icon name="live"/></button>}
-      {!collapsed.has(item.id) && item.kind.kind === 'capture' && <CaptureCue item={item} active={program?.active_item_id === item.id} onSelect={() => void run(() => onCue(item))}/>}
-      {!collapsed.has(item.id) && item.kind.kind === 'video' && <ScheduleVideo title={item.title || 'Untitled video'} path={item.kind.data.path} active={program?.active_item_id === item.id} onSelect={() => void run(() => onCue(item))}/>}
-    </article>)}
-  </div></section>;
+  const [drop, setDrop] = useState<{ id: number; before: boolean } | null>(null);
+  const toggle = (id: number) => setCollapsed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const activeId = program?.active_item_id;
+
+  /** Moves the dragged item, or a section with everything it groups, before or after the target. */
+  function move(targetId: number, before: boolean) {
+    const current = projectRef.current;
+    if (!current || dragged === null || dragged === targetId) return;
+    const items = current.session.items;
+    const from = items.findIndex(i => i.id === dragged);
+    if (from < 0) return;
+    let end = from + 1;
+    if (items[from].kind.kind === 'section') while (end < items.length && items[end].kind.kind !== 'section') end++;
+    const block = items.slice(from, end);
+    if (block.some(i => i.id === targetId)) return;
+    const rest = [...items.slice(0, from), ...items.slice(end)];
+    let at = rest.findIndex(i => i.id === targetId);
+    if (at < 0) return;
+    if (!before) {
+      // After a section heading that is dropped onto means after its whole group.
+      at++;
+      if (rest[at - 1].kind.kind === 'section' && block[0].kind.kind === 'section') while (at < rest.length && rest[at].kind.kind !== 'section') at++;
+    }
+    void run(() => persist({ ...current, session: { items: [...rest.slice(0, at), ...block, ...rest.slice(at)] } }));
+  }
+  const dragProps = (id: number) => ({
+    draggable: true,
+    onDragStart: (e: DragEvent) => { setDragged(id); e.dataTransfer.setData('text/plain', String(id)); e.dataTransfer.effectAllowed = 'move'; },
+    onDragEnd: () => { setDragged(null); setDrop(null); },
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (dragged === null) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setDrop({ id, before: e.clientY < r.top + r.height / 2 }); },
+    onDrop: (e: DragEvent) => { e.preventDefault(); if (drop) move(drop.id, drop.before); setDragged(null); setDrop(null); },
+  });
+  const dropClass = (id: number) => drop?.id === id ? (drop.before ? ' drop-above' : ' drop-below') : '';
+
+  return <section className="session-pane">
+    <ServiceMenu project={project} projects={projects} persist={persist} onLoad={onLoadService} onEdit={() => onEditService()} onListChanged={onServicesChanged} confirm={confirm} onError={onError}/>
+    <div className="pane-scroll run-list">
+      {!project?.session.items.length && <p className="empty-panel">{project ? 'This service is empty. Add items with the pencil beside its name.' : 'Choose or create a service above.'}</p>}
+      {project && groupItems(project.session.items).map(group => {
+        const section = group.section;
+        const hidden = section ? collapsed.has(section.id) : false;
+        const holdsLive = group.items.some(i => i.id === activeId);
+        return <div className={`run-group ${section ? 'has-section' : ''}`} key={section?.id ?? 'loose'}>
+          {section && <header className={`run-section${dropClass(section.id)}${dragged === section.id ? ' is-dragging' : ''}`} {...dragProps(section.id)}>
+            <button className="run-section-toggle" aria-expanded={!hidden} onClick={() => toggle(section.id)}>
+              <Icon name="chevron"/><span>{section.title || 'Section'}</span><small className="tabular">{group.items.length}</small>
+              {hidden && holdsLive && <span className="lamp" title="An item in this section is on air"/>}
+            </button>
+            <button className="icon-button run-edit" aria-label={`Edit section ${section.title}`} title="Rename in the service editor" onClick={() => onEditService(section.id)}><Icon name="edit"/></button>
+          </header>}
+          {!hidden && <div className="run-items">{group.items.map(item => <RunItem key={item.id} item={item} active={item.id === activeId} pending={!!pending && item.id === activeId}
+            step={item.id === activeId ? program?.active_step_index : null} dragging={dragged === item.id} dropClass={dropClass(item.id)} dragProps={dragProps(item.id)}
+            onCue={index => void run(() => onCue(item, index))} onEdit={() => onEditService(item.id)} onEditPart={onEditPart}/>)}</div>}
+        </div>;
+      })}
+    </div>
+    <div className="session-foot"><button onClick={onOpenSettings} aria-label="Open settings"><Icon name="settings"/>Settings</button><button onClick={onOpenLibrary}><Icon name="library"/>Library</button></div>
+  </section>;
+}
+
+function RunItem({ item, active, pending, step, dragging, dropClass, dragProps, onCue, onEdit, onEditPart }: {
+  item: SessionItem; active: boolean; pending: boolean; step?: number | null; dragging: boolean; dropClass: string;
+  dragProps: ReturnType<() => Record<string, unknown>>; onCue: (index?: number) => void; onEdit: () => void; onEditPart: Props['onEditPart'];
+}) {
+  const kind = item.kind;
+  return <article className={`run-item${active ? ' is-current' : ''}${pending ? ' is-pending' : ''}${dragging ? ' is-dragging' : ''}${dropClass}`} title={pending ? 'Selected; the projection shows it once its media has loaded' : undefined} {...dragProps}>
+    <div className="run-item-head">
+      <button className="run-item-cue" aria-label={`Put ${item.title || kind.kind} on air`} onClick={() => onCue(0)}>
+        <ItemThumb item={item}/><strong>{item.title || kind.kind}</strong>
+      </button>
+      {active && <span className="lamp" aria-label="On air"/>}
+      <button className="icon-button run-edit" aria-label={`Edit ${item.title || 'item'}`} title="Edit in the service editor" onClick={onEdit}><Icon name="edit"/></button>
+    </div>
+    {kind.kind === 'text' && <div className="part-keys" aria-label={`${item.title} parts`}>{(() => {
+      let offset = 0;
+      return arrangedParts(itemSong(item)).map((part, occurrence) => {
+        const start = offset;
+        const length = slides(part).length;
+        offset += length;
+        const on = active && step != null && step >= start && step < start + length;
+        return <span className="part-key-wrap" key={`${part.id}-${occurrence}`}>
+          <button className={`part-key${on ? ' is-active' : ''}`} style={{ '--part-color': partColor(part) } as CSSProperties} aria-pressed={on} disabled={!length}
+            aria-label={`Cue ${partCode(part)}, ${item.title}, occurrence ${occurrence + 1}`} onClick={() => onCue(start)}
+            onContextMenu={e => { e.preventDefault(); onEditPart({ itemId: item.id, partId: part.id, label: `${item.title} · ${part.type} ${part.number}`, lyrics: part.lyrics }); }}
+            title={`${part.type} ${part.number} · right-click to edit the words`}>{partCode(part)}</button>
+        </span>;
+      });
+    })()}</div>}
+    {kind.kind === 'presentation' && <div className="slide-keys">{(kind.data.slides || [kind.data.path]).map((path, index) => <button key={index} className={`slide-key${active && step === index ? ' is-active' : ''}`} aria-pressed={active && step === index} aria-label={`Cue slide ${index + 1} of ${item.title}`} onClick={() => onCue(index)}>
+      <span className="thumb"><Background path={path} fit="contain"/></span><span className="slide-key-number tabular">{index + 1}</span>
+    </button>)}</div>}
+  </article>;
 }

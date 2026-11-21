@@ -48,7 +48,3 @@ export default function PresentationEditor({ images, item, onClose, onSave }: { 
     <footer><span>{paths.length} slides</span><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-action" disabled={busy || !paths.length || !title.trim()}>{busy ? 'Saving…' : 'Save presentation'}</button></footer>
   </form></div>;
 }
-export function PresentationCues({ item, active, step, onSelect }: { item: SessionItem; active: boolean; step?: number | null; onSelect: (index: number) => void }) {
-  const paths = item.kind.kind === 'presentation' ? item.kind.data.slides || [item.kind.data.path] : [];
-  return <div className="presentation-cues">{paths.map((path, index) => <button key={index} data-step-index={index} aria-label={`Cue ${item.title}, slide ${index + 1}`} aria-pressed={active && step === index} onClick={() => onSelect(index)}><Thumbnail path={path}/><span>{index + 1}</span></button>)}</div>;
-}

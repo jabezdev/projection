@@ -6,7 +6,9 @@ export type SessionItemKind =
   | { kind: 'text'; data: { steps: string[] } }
   | { kind: MediaKind; data: { path: string; options?: VideoOptions } }
   | { kind: 'presentation'; data: { path: string; slides?: string[] } }
-  | { kind: 'capture'; data: { source: CaptureSource; options?: CaptureOptions } };
+  | { kind: 'capture'; data: { source: CaptureSource; options?: CaptureOptions } }
+  /** A heading that groups the items after it; its name is the item's title. Never on air. */
+  | { kind: 'section'; data: Record<string, never> };
 export type CaptureKind = 'screen' | 'window';
 export type CaptureSource = { kind: CaptureKind; id: string; name: string };
 export type CaptureFit = 'fit' | 'fill';

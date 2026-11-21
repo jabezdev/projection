@@ -101,6 +101,16 @@ function VideoDecodingSettings({ onError }: { onError: (message: string) => void
 }
 
 /** Version, backups and logs: what the operator needs when something goes wrong. */
+/** Whether a cued video or audio starts playing at once or waits paused on its first frame. */
+function PlaybackSettings({ onError }: { onError: (message: string) => void }) {
+  const [autoplay, setAutoplay] = useState<boolean | null>(null);
+  useEffect(() => { void invoke<boolean>('get_media_autoplay').then(setAutoplay).catch(e => onError(String(e))); }, [onError]);
+  return <fieldset><legend>Playback</legend>
+    <label className="setting-check"><input type="checkbox" disabled={autoplay === null} checked={autoplay ?? true} onChange={e => { const enabled = e.target.checked; setAutoplay(enabled); void invoke('set_media_autoplay', { enabled }).catch(err => { setAutoplay(!enabled); onError(String(err)); }); }}/>Play video and audio as soon as they are cued</label>
+    <small>When off, a cued video shows its first frame and waits; press play in the bar under the lyrics, or Space.</small>
+  </fieldset>;
+}
+
 function SystemSettings({ onError }: { onError: (message: string) => void }) {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [status, setStatus] = useState('');
@@ -120,6 +130,7 @@ function SystemSettings({ onError }: { onError: (message: string) => void }) {
       <small>{status || `A backup holds the library, services and settings, plus a list of the media files they use (not the files themselves). One is also made automatically each week${info?.last_backup_ms ? `; the last was ${new Date(info.last_backup_ms).toLocaleString()}` : ''}.`}</small>
     </fieldset>
     <UpdateSettings onError={onError}/>
+    <PlaybackSettings onError={onError}/>
     <VideoDecodingSettings onError={onError}/>
     <CaptureMethodSettings onError={onError}/>
     <fieldset><legend>Troubleshooting</legend>

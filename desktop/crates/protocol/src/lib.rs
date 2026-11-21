@@ -86,6 +86,16 @@ pub enum SessionItemKind {
     Presentation { path: String, #[serde(default)] slides: Vec<String> },
     /// A screen or window of this computer, captured live.
     Capture { source: CaptureSource, #[serde(default)] options: CaptureOptions },
+    /// A heading that groups the items after it (its name is the item's
+    /// title). Never on air: navigation passes over it.
+    Section {},
+}
+
+impl SessionItemKind {
+    /// Whether the item can be cued (everything but section headings).
+    pub fn is_cueable(&self) -> bool {
+        !matches!(self, SessionItemKind::Section {})
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -378,6 +388,9 @@ pub enum EngineCommand {
     SetActiveText {
         text: String,
     },
+    /// Whether cued video and audio start playing at once (the default) or
+    /// wait paused on their first frame.
+    SetAutoplay { enabled: bool },
     SetDisplay {
         display: DisplayMode,
     },

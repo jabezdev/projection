@@ -278,6 +278,30 @@ impl Repository {
 }
 
 impl Repository {
+    /// Deletes a service. Returns whether it existed.
+    pub fn delete_project(&self, id: i64) -> Result<bool> {
+        Ok(self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id]).context("delete project")? > 0)
+    }
+
+    /// Deletes a library song. Services keep their own copies.
+    pub fn delete_song(&self, id: i64) -> Result<bool> {
+        Ok(self.conn.execute("DELETE FROM songs WHERE id = ?1", params![id]).context("delete song")? > 0)
+    }
+
+    /// Removes a media record; the file in the media folder is left alone,
+    /// since services may still point at it.
+    pub fn delete_media(&self, id: i64) -> Result<bool> {
+        Ok(self.conn.execute("DELETE FROM media WHERE id = ?1", params![id]).context("delete media")? > 0)
+    }
+
+    pub fn rename_media(&self, id: i64, title: &str) -> Result<()> {
+        let affected = self.conn.execute("UPDATE media SET title = ?2 WHERE id = ?1", params![id, title]).context("rename media")?;
+        if affected == 0 {
+            return Err(anyhow!("media {id} not found"));
+        }
+        Ok(())
+    }
+
     /// Points every library media record at `old` to `new`.
     pub fn relink_media(&self, old: &str, new: &str) -> Result<usize> {
         Ok(self.conn.execute("UPDATE media SET path = ?2 WHERE path = ?1", params![old, new]).context("relink media")?)
@@ -310,6 +334,22 @@ mod tests {
         assert_eq!(restored.list_projects().unwrap()[0].name, "Sunday");
         assert_eq!(restored.list_songs().unwrap().len(), 1);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn services_songs_and_media_can_be_deleted_and_media_renamed() {
+        let repo = Repository::new(":memory:").unwrap();
+        let project = repo.create_project("Sunday", 1).unwrap();
+        let song = repo.create_song("Song", "Lyrics").unwrap();
+        let media = repo.create_media("Clip".into(), MediaKind::Video, "/media/clip.mp4".into()).unwrap();
+        repo.rename_media(media.id, "Welcome clip").unwrap();
+        assert_eq!(repo.list_media().unwrap()[0].title, "Welcome clip");
+        assert!(repo.delete_project(project.id).unwrap());
+        assert!(repo.delete_song(song.id).unwrap());
+        assert!(repo.delete_media(media.id).unwrap());
+        assert!(!repo.delete_media(media.id).unwrap(), "already gone");
+        assert!(repo.list_projects().unwrap().is_empty() && repo.list_songs().unwrap().is_empty() && repo.list_media().unwrap().is_empty());
+        assert!(repo.rename_media(media.id, "x").is_err());
     }
 
     #[test]

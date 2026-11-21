@@ -29,6 +29,10 @@ pub struct SessionAudio {
     frames_since_flush: AtomicU64,
     epoch_seen: AtomicU64,
     pub underruns: AtomicU64,
+    /// Whether the session was ever routed to the device. Until then no
+    /// consumer can acknowledge a flush, so the producer clears the ring
+    /// itself; the lock keeps `attach` from installing it meanwhile.
+    attached: Mutex<bool>,
 }
 
 impl SessionAudio {
@@ -46,6 +50,7 @@ impl SessionAudio {
             frames_since_flush: AtomicU64::new(0),
             epoch_seen: AtomicU64::new(0),
             underruns: AtomicU64::new(0),
+            attached: Mutex::new(false),
         }
     }
 
@@ -59,7 +64,16 @@ impl SessionAudio {
 
     /// Producer: discards queued audio and anchors the clock at `position_us`.
     pub fn restart(&self, position_us: i64, rate: f64) {
-        let epoch = self.ring.flush(Duration::from_millis(250));
+        let epoch = {
+            let attached = self.attached.lock().expect("audio attached poisoned");
+            if *attached {
+                drop(attached);
+                self.ring.flush(Duration::from_millis(250))
+            } else {
+                // No consumer has seen this ring (a session prepared ahead).
+                self.ring.flush_unconsumed()
+            }
+        };
         self.drained.store(false, Ordering::Release);
         *self.anchor.lock().expect("audio anchor poisoned") = Anchor { epoch, position_us, rate };
     }
@@ -199,6 +213,7 @@ impl AudioOutput {
 
     /// Routes `audio` to the device, replacing any previous session.
     pub fn attach(&self, audio: Arc<SessionAudio>) {
+        *audio.attached.lock().expect("audio attached poisoned") = true;
         *self.slot.lock().expect("audio slot poisoned") = Some(audio);
     }
 
@@ -457,6 +472,7 @@ mod tests {
     #[test]
     fn a_restart_reanchors_the_clock_once_the_consumer_flushes() {
         let audio = Arc::new(SessionAudio::new(1_000, 1));
+        *audio.attached.lock().unwrap() = true;
         audio.set_running(true);
         audio.ring.push(&[0.1; 50]);
         let mut out = [0.0; 10];
@@ -476,5 +492,16 @@ mod tests {
         assert_eq!(audio.position(0), 60_000_000);
         consumer.join().unwrap();
         assert_eq!(audio.position(10_000_000), 60_000_000, "no samples after the flush, so no progress");
+    }
+
+    #[test]
+    fn a_session_never_routed_to_the_device_restarts_without_waiting() {
+        let audio = SessionAudio::new(1_000, 1);
+        audio.ring.push(&[0.1; 50]);
+        let started = std::time::Instant::now();
+        audio.restart(5_000_000, 1.0);
+        assert!(started.elapsed() < Duration::from_millis(100), "a prepared session must not wait for a consumer");
+        assert!(audio.ring.is_empty());
+        assert_eq!(audio.position(0), 5_000_000);
     }
 }

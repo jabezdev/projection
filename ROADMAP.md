@@ -23,7 +23,11 @@ Intended display setup (all at once, any resolution, aspect ratio or DPI):
 
 Check the 1050 Ti's ports and simultaneous display limit. Using the 2200G's integrated output as well would put displays on two GPUs, which the engine does not support yet.
 
-## Where things stand (2026-10-24)
+## Where things stand (2026-11-21)
+
+Release `v0.2.0` adds the redesigned operator workspace: service sections, a service editor with service-only song variations and Undo, a thumbnail library, song editing with a slide preview, a shared media transport, independent screen switches and native live monitors. It also improves display identification and routing, media autoplay control and prepared-audio startup. This is still a pre-1.0 release; the church-PC rehearsal and the remaining checks below are outstanding.
+
+## Previous release (2026-10-24)
 
 Release `v0.1.2` carries phases 1–2, most of 5–7, phase 8's local screen capture, PDF import, phase 10 without a native phone app, and phase 11's updater; the items below say what is still open in each. What it has not had yet is time on the church PC: hardware decoding, effects, screen capture on Windows, the firewall rule, MIDI/Stream Deck and the updater all wait for the next visit ([checklist](docs/church-pc-checklist.md)). Phases 3 and 4 (data model, cloud sync) wait on design.
 
@@ -165,6 +169,7 @@ Items:
 - [x] Upload YUV planes and convert in a shader (halves upload size and CPU conversion). *8-bit 4:2:0 up to 4K goes to the GPU as decoded and is scaled there; colors now follow the file's matrix (BT.709 for HD).*
 - [x] Detect available hardware decoders per platform; setting to choose one or turn it off; fall back to software on failure. *Settings → System → Video decoding; Software stays the default until checked on the church PC. QSV and AMF are reached through D3D11VA/VA-API.*
 - [x] Seamless background loops (prepare the loop point instead of seeking at the end). *The clip's first frames are kept and queued again at each wrap.*
+- [/] **Live monitors** of both outputs in the operator window: native child windows over the webview, drawn from the shared textures at up to 30 fps. *Built 2026-11-21; compile-checked for Windows and Linux, not yet run (the local Linux build needs the ffmpeg-next 9 upgrade first) or tried on the church PC.*
 - [/] Supported media profile: tested codecs, resolutions and bitrates, documented: [docs/media-profile.md](docs/media-profile.md). *Measured on the development laptop; the church PC table is still empty.*
 - [ ] Displays on two GPUs (1050 Ti plus the 2200G's output), only if the display setup needs it.
 

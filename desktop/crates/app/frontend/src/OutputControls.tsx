@@ -1,21 +1,46 @@
 import type { CSSProperties } from 'react';
 import { Icon } from './Icons';
-import { NativePreview } from './NativePreview';
-import OutputScreens from './OutputScreens';
+import { LiveMonitor } from './NativePreview';
+import { ScreenSwitch } from './OutputScreens';
+import { useScreens } from './useScreens';
 import { useOutputSizes } from './useOutputSizes';
 import type { DisplayMode } from './useEngine';
 
-const DISPLAY_MODES: DisplayMode[] = ['logo', 'black', 'clear', 'live'];
+type Override = Exclude<DisplayMode, 'live'>;
+/** Overrides of the projection; with none pressed, the projection is live. */
+const OVERRIDES: [Override, string, string][] = [
+  ['logo', 'Logo', 'Show the logo instead of the cue'],
+  ['black', 'Black', 'Black out the projection'],
+  ['clear', 'Clear', 'Hide the text, keep the background'],
+];
 
-/** The right column: output windows, display modes and the native preview stills. */
+/** The right column: each screen's bar (show switch and settings), its live monitor, and the projection overrides. */
 export default function OutputControls({ display, loading, onDisplay, onError }: { display: DisplayMode; loading: Record<string, boolean>; onDisplay: (display: DisplayMode) => void; onError: (message: string) => void }) {
   const outputSizes = useOutputSizes(true);
+  const screens = useScreens(onError);
   return <aside className="operator-controls" aria-label="Output controls and previews">
-    <OutputScreens onError={onError}/>
-    <div className="display-controls">{DISPLAY_MODES.map(value => <button key={value} aria-pressed={display === value} onClick={() => onDisplay(value)}><Icon name={value}/><span>{value.charAt(0).toUpperCase() + value.slice(1)}</span></button>)}</div>
-    <div className="preview-stack">
-      <section aria-label="Projection preview"><div className="preview-label">Projection{loading.projection && <span className="on-air-pending" role="status">Loading… previous picture still on air</span>}</div><div className="preview-viewport"><div className="output-preview-frame" style={{ '--output-aspect': outputSizes.projection } as CSSProperties}><NativePreview target="projection" label="Projection output"/></div></div></section>
-      <section aria-label="Confidence preview"><div className="preview-label">Confidence{loading.confidence && <span className="on-air-pending" role="status">Loading…</span>}</div><div className="preview-viewport"><div className="output-preview-frame confidence-preview-surface" style={{ '--output-aspect': outputSizes.confidence } as CSSProperties}><NativePreview target="confidence" label="Confidence output"/></div></div></section>
-    </div>
+    <section className="output-panel" aria-label="Projection">
+      <header className="output-bar">
+        <h2>Projection</h2>
+        {loading.projection && <span className="on-air-pending" role="status">Loading… previous picture still on air</span>}
+        <ScreenSwitch output="projection" name="Projection" screens={screens}/>
+      </header>
+      <div className="display-overrides" role="group" aria-label="Projection overrides">
+        {OVERRIDES.map(([value, label, hint]) => <button key={value} className={`display-override is-${value}`} aria-pressed={display === value}
+          title={display === value ? `${label} is on. Click to go back to live.` : hint}
+          onClick={() => onDisplay(display === value ? 'live' : value)}>
+          <Icon name={value}/><span>{label}</span>
+        </button>)}
+      </div>
+      <div className="preview-viewport"><div className="output-preview-frame" style={{ '--output-aspect': outputSizes.projection } as CSSProperties}><LiveMonitor target="projection" label="Projection output"/></div></div>
+    </section>
+    <section className="output-panel" aria-label="Confidence">
+      <header className="output-bar">
+        <h2>Confidence</h2>
+        {loading.confidence && <span className="on-air-pending" role="status">Loading…</span>}
+        <ScreenSwitch output="confidence" name="Confidence" screens={screens}/>
+      </header>
+      <div className="preview-viewport"><div className="output-preview-frame confidence-preview-surface" style={{ '--output-aspect': outputSizes.confidence } as CSSProperties}><LiveMonitor target="confidence" label="Confidence output"/></div></div>
+    </section>
   </aside>;
 }

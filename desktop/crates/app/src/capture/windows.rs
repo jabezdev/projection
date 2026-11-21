@@ -28,17 +28,34 @@ pub fn wgc_supported() -> bool {
     GraphicsCaptureApi::is_supported().unwrap_or(false)
 }
 
+/// Screens named as the display pickers name them: the model's own name,
+/// with Windows' number (not the enumeration order) to tell identical
+/// models apart.
 fn monitors() -> anyhow::Result<Vec<CaptureSource>> {
-    let mut sources = Vec::new();
+    use crate::display_names::{display_names, readable_name, system_number};
+    let names = display_names();
+    let mut found = Vec::new();
     for (index, monitor) in Monitor::enumerate().map_err(|e| anyhow::anyhow!("{e}"))?.into_iter().enumerate() {
         let device = monitor.device_name().map_err(|e| anyhow::anyhow!("{e}"))?;
-        let label = monitor.device_string().unwrap_or_default();
         let size = match (monitor.width(), monitor.height()) {
-            (Ok(w), Ok(h)) => format!(" ({w}×{h})"),
-            _ => String::new(),
+            (Ok(w), Ok(h)) => Some(format!("{w}×{h}")),
+            _ => None,
         };
-        sources.push(CaptureSource { kind: CaptureKind::Screen, id: format!("monitor:{device}"), name: format!("Display {} {label}{size}", index + 1).replace("  ", " ") });
+        let number = system_number(&device).unwrap_or(index as u32 + 1);
+        found.push((device.clone(), readable_name(Some(&device), names.get(&device)), number, size));
     }
+    let sources = found
+        .iter()
+        .map(|(device, name, number, size)| {
+            let mut details = Vec::new();
+            if found.iter().filter(|(_, other, ..)| other == name).count() > 1 {
+                details.push(format!("Display {number}"));
+            }
+            details.extend(size.clone());
+            let name = if details.is_empty() { name.clone() } else { format!("{name} ({})", details.join(", ")) };
+            CaptureSource { kind: CaptureKind::Screen, id: format!("monitor:{device}"), name }
+        })
+        .collect();
     Ok(sources)
 }
 

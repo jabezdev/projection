@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use render_engine::{OutputRole, OutputSpec, PreviewTarget, RenderEngine, Scene, Snapshot, TestPatternSource, VideoFrames};
+use render_engine::{MonitorSpec, OutputRole, OutputSpec, PreviewTarget, RenderEngine, Scene, Snapshot, TestPatternSource, VideoFrames};
 use tauri::{Emitter, Manager, Runtime, Window};
 
 /// Must run before Tauri initializes the windowing toolkit.
@@ -80,6 +80,20 @@ impl NativeOutputs {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {
                 engine.preview_style(scene);
+            }
+        }
+    }
+
+    /// Starts `spec.role`'s live monitor. Main thread only.
+    pub fn add_monitor(&self, spec: MonitorSpec) -> anyhow::Result<()> {
+        let guard = self.0.lock().map_err(|_| anyhow::anyhow!("native outputs poisoned"))?;
+        guard.as_ref().ok_or_else(|| anyhow::anyhow!("Native outputs have shut down"))?.add_monitor(spec)
+    }
+
+    pub fn set_monitor(&self, role: OutputRole, size: Option<(u32, u32)>) {
+        if let Ok(guard) = self.0.lock() {
+            if let Some(engine) = guard.as_ref() {
+                engine.set_monitor(role, size);
             }
         }
     }
@@ -203,6 +217,7 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
     // Previews only announce a new still; the UI fetches the bytes, so no
     // image travels through the event channel.
     app.manage(PreviewStore::default());
+    app.manage(crate::monitor_window::Monitors::default());
     let handle = app.handle().clone();
     engine.start_previews(Box::new(move |target, snapshot| {
         let (width, height) = (snapshot.width, snapshot.height);

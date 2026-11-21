@@ -86,6 +86,14 @@ impl SampleRing {
         }
     }
 
+    /// Producer: discards unread samples when no consumer has ever read this
+    /// ring, so there is nothing to wait for. Returns the new flush epoch.
+    pub fn flush_unconsumed(&self) -> u64 {
+        let ticket = self.flush_requested.fetch_add(1, Ordering::AcqRel) + 1;
+        self.service_flush();
+        ticket
+    }
+
     /// Producer: discards unread samples. Waits for the consumer to acknowledge
     /// so no stale sample can follow; if no consumer is running (no audio
     /// device), the producer clears the ring itself after `timeout`.

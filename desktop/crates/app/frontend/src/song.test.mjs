@@ -47,3 +47,10 @@ test('shared normalization fixtures match the Rust parser expectations', async (
     assert.deepEqual(arrangedParts(song).map(part => ({ part: part.id, code: partCode(part), color: partColor(part), slides: slides(part) })), fixture.occurrences, fixture.name);
   }
 });
+
+test('the caret picks the slide it is in', async () => {
+  const { slideAtCaret } = await import('./song.ts');
+  const lyrics = 'a\nb\n\nc\nd\n\ne';
+  assert.deepEqual([0, 2, 4, 5, 6, 9, 11, 12].map(caret => slideAtCaret(lyrics, caret)), [0, 0, 0, 1, 1, 1, 2, 2]);
+  assert.equal(slideAtCaret('\n\nonly\n\n', 7), 0);
+});

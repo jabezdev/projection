@@ -1,8 +1,7 @@
 import LyricStream from './LyricStream';
+import NowPlaying from './NowPlaying';
 import OutputSettings from './OutputSettings';
 import OutputControls from './OutputControls';
-import PresentationEditor from './PresentationEditor';
-import CaptureEditor from './CaptureEditor';
 import PartEditor, { type PartEdit } from './PartEditor';
 import SessionPane from './SessionPane';
 import { defaultOutputConfig, useOutputState } from './outputState';
@@ -10,19 +9,22 @@ import { invoke, listen } from './tauri';
 import type { UpdateState } from './UpdateSettings';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SongEditor from './SongEditor';
-import LibraryPanel from './LibraryPanel';
+import LibraryModal from './LibraryModal';
 import QuickSearch from './QuickSearch';
 import ControlsSettings from './ControlsSettings';
 import RemoteSettings from './RemoteSettings';
 import { useConfirm } from './ConfirmDialog';
 import { useInputBindings, useKeyboardInput } from './input';
 import { useOutputsLoading, useOutputsShown } from './useOutputs';
-import ServiceBuilder from './ServiceBuilder';
+import ServiceEditor from './ServiceEditor';
+import { OutputConfigContext } from './preview';
+import { forgetSong } from './useSongDocs';
 import { useColumns } from './useColumns';
 import { useEngine, type ProjectHeader } from './useEngine';
 import { Icon } from './Icons';
-import { newItemId, type Media, type SessionItem, type ProjectModel, type SongHeader, type SongModel, type VideoOptions } from './models';
-import { decodeSong, itemSong, songSteps, type SongDocument } from './song';
+import { newItemId, type Media, type SessionItem, type SongHeader, type SongModel } from './models';
+import { decodeSong, itemSong, librarySong, songSteps, type SongDocument } from './song';
+import { songItem } from './serviceItems';
 
 function App() {
   const [outputConfig, setOutputConfig] = useOutputState('config', defaultOutputConfig);
@@ -40,21 +42,15 @@ function App() {
     void listen<UpdateState>('update:state', event => { if (event.payload.state === 'ready') setUpdateReady(event.payload.version); }).then(u => { unlisten = u; });
     return () => unlisten?.();
   }, []);
-  const [presentationEditor, setPresentationEditor] = useState<SessionItem | 'new' | null>(null);
-  const [captureEditor, setCaptureEditor] = useState<SessionItem | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const [library, setLibrary] = useState<SongHeader[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [editor, setEditor] = useState<{ id?: number; libraryId?: number; title?: string; song?: SongDocument } | null>(null);
+  /** The library song being edited, or a new one (no id). */
+  const [editor, setEditor] = useState<{ libraryId?: number; title?: string; song?: SongDocument } | null>(null);
   const [partEditor, setPartEditor] = useState<PartEdit | null>(null);
-  const [serviceEditor, setServiceEditor] = useState<'new' | 'edit' | null>(null);
+  const [serviceEditor, setServiceEditor] = useState<{ itemId?: number } | null>(null);
   const [quickSearch, setQuickSearch] = useState(false);
   const display = program?.display || 'live';
-  const updateVideoOptions = useCallback((id: number, options: VideoOptions) => {
-    const current = projectRef.current;
-    if (!current) return;
-    void persist({ ...current, session: { items: current.session.items.map(item => item.id === id && (item.kind.kind === 'video' || item.kind.kind === 'audio') ? { ...item, kind: { ...item.kind, data: { ...item.kind.data, options } } } : item) } }).catch(console.error);
-  }, [persist, projectRef]);
   const scrollToCue = useCallback((id: number, index = 0) => {
     const stream = streamRef.current;
     const article = stream?.querySelector<HTMLElement>(`[data-item-id="${id}"]`);
@@ -78,7 +74,8 @@ function App() {
       if (item.id !== itemId) return item;
       const song = itemSong(item);
       song.parts = song.parts.map(part => part.id === partId ? { ...part, lyrics, slideTexts: undefined } : part);
-      return { ...item, song: JSON.stringify(song), kind: { kind: 'text' as const, data: { steps: songSteps(song) } } };
+      const edited = { ...song, editedInService: true };
+      return { ...item, song: JSON.stringify(edited), kind: { kind: 'text' as const, data: { steps: songSteps(edited) } } };
     });
     return persist({ ...current, session: { items } });
   }
@@ -87,7 +84,15 @@ function App() {
   const cueItem = useCallback((item: SessionItem, index = 0) => { void run(() => select(item, index)); }, [run, select]);
   async function refreshCatalog() { const [songs, assets] = await Promise.all([invoke<SongHeader[]>('list_songs'), invoke<Media[]>('list_media')]); setLibrary(songs); setMedia(assets); }
   async function openLibrary() { await refreshCatalog(); setLibraryOpen(true); }
-  async function openService(editor: 'new' | 'edit') { await refreshCatalog(); setServiceEditor(editor); }
+  async function openService(itemId?: number) { await refreshCatalog(); setServiceEditor({ itemId }); }
+  async function refreshServices() { setProjects(await invoke<ProjectHeader[]>('list_projects')); }
+  /** Loads a service, asking first while the audience can see the outputs. */
+  async function loadService(projectId: number) {
+    if (outputsShown && project && project.id !== projectId && !(await confirm('The outputs are shown. Load another service? Its first item goes on air.', 'Load service'))) return false;
+    await saveQueue.current; await invoke('load_project', { projectId });
+    return true;
+  }
+  async function editLibrarySong(id: number) { forgetSong(id); const saved = await invoke<SongModel>('get_song', { id }); setEditor({ libraryId: id, title: saved.title, song: decodeSong(saved.lyrics) }); }
   async function openQuickSearch() { await refreshCatalog(); setQuickSearch(true); }
   const openQuickSearchRef = useRef(openQuickSearch);
   useEffect(() => { openQuickSearchRef.current = openQuickSearch; });
@@ -98,70 +103,46 @@ function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [run]);
-  async function addMedia(item: Media) { const current = projectRef.current; if (!current) throw new Error('Select a service first.'); await persist({ ...current, session: { items: [...current.session.items, { id: newItemId(), title: item.title, kind: { kind: item.kind, data: { path: item.path } } }] } }); setLibraryOpen(false); }
+  async function addMedia(item: Media) { const current = projectRef.current; if (!current) throw new Error('Select a service first.'); await persist({ ...current, session: { items: [...current.session.items, { id: newItemId(), title: item.title, kind: { kind: item.kind, data: { path: item.path } } }] } }); }
   async function addSong(id: number) {
     const current = projectRef.current;
     if (!current) throw new Error('Create or select a service first.');
     const song = await invoke<SongModel>('get_song', { id });
-    const doc = decodeSong(song.lyrics);
-    await persist({ ...current, session: { items: [...current.session.items, { id: newItemId(), title: song.title, song: JSON.stringify(doc), background: doc.background, kind: { kind: 'text', data: { steps: songSteps(doc) } } }] } });
-    setLibraryOpen(false);
+    await persist({ ...current, session: { items: [...current.session.items, songItem(song)] } });
   }
-  return <div className="operator-shell">
+  return <OutputConfigContext.Provider value={outputConfig}><div className="operator-shell">
 
     {updateReady && <div role="status" className="ui-notice">PALTO {updateReady} is ready to install: Settings → System.<button aria-label="Dismiss update notice" onClick={() => setUpdateReady(null)}><Icon name="close"/></button></div>}
     {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close"/></button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
       <SessionPane project={project} pending={outputsLoading.projection} projectRef={projectRef} projects={projects} program={program} run={run} persist={persist}
         onOpenSettings={() => setSettingsOpen(true)}
-        onLoadService={projectId => void run(async () => {
-          // While the audience sees the outputs, loading a service changes what they see.
-          if (outputsShown && project && project.id !== projectId && !(await confirm('The outputs are shown. Load another service? Its first item goes on air.', 'Load service'))) return;
-          await saveQueue.current; await invoke('load_project', { projectId });
-        })}
-        onOpenService={mode => void run(() => openService(mode))} onOpenLibrary={() => void run(openLibrary)} onNewSong={() => setEditor({})}
-        onEditSong={item => setEditor({ id: item.id, title: item.title || '', song: itemSong(item) })} onEditPresentation={setPresentationEditor} onEditCapture={setCaptureEditor} onEditPart={setPartEditor}
-        onCue={selectFromSchedule} onVideoOptions={updateVideoOptions}/>
+        onLoadService={loadService} onEditService={itemId => void run(() => openService(itemId))} onOpenLibrary={() => void run(openLibrary)}
+        onServicesChanged={refreshServices} confirm={confirm} onError={setError} onEditPart={setPartEditor}
+        onCue={selectFromSchedule}/>
       {resizeDivider(0)}
       <section className="lyrics-pane" aria-label="Continuous lyrics"><div ref={streamRef} className="pane-scroll lyric-stream">
-        <LyricStream items={project?.session.items} activeId={program?.active_item_id} activeStep={program?.active_step_index} onSelect={cueItem} onVideoOptions={updateVideoOptions}/>
-
-      </div></section>
+        <LyricStream items={project?.session.items} activeId={program?.active_item_id} activeStep={program?.active_step_index} onSelect={cueItem}/>
+      </div><NowPlaying items={project?.session.items ?? []} nextItemId={program?.next_item_id}/></section>
       {resizeDivider(1)}
       <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
     {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }]}/>}
-    {captureEditor && <CaptureEditor item={captureEditor} onClose={() => setCaptureEditor(null)} onSave={async item => {
-      const current = projectRef.current;
-      if (!current) return;
-      await persist({ ...current, session: { items: current.session.items.map(old => old.id === item.id ? item : old) } });
-      setCaptureEditor(null);
-    }}/>}
-    {presentationEditor && <PresentationEditor images={media} item={presentationEditor === 'new' ? undefined : presentationEditor} onClose={() => setPresentationEditor(null)} onSave={async item => {
-      const current = projectRef.current; if (!current) throw new Error('Select a service first.');
-      await persist({ ...current, session: { items: presentationEditor === 'new' ? [...current.session.items, item] : current.session.items.map(old => old.id === item.id ? item : old) } });
-      setPresentationEditor(null);
-    }}/>}
     {partEditor && <PartEditor part={partEditor} onClose={() => setPartEditor(null)} onSave={part => run(async () => { await editPart(part.itemId, part.partId, part.lyrics); setPartEditor(null); })}/>}
-    {editor && <SongEditor backgrounds={media} title={editor.title} song={editor.song} onClose={() => setEditor(null)} onSave={async (title, song) => { if (editor.id != null) { const current = projectRef.current; if (!current) return; await persist({ ...current, session: { items: current.session.items.map(item => item.id === editor.id ? { ...item, title, song: JSON.stringify(song), background: song.background, kind: { kind: 'text', data: { steps: songSteps(song) } } } : item) } }); } else if (editor.libraryId != null) { await invoke('update_song', { song: { id: editor.libraryId, title, lyrics: JSON.stringify(song) } }); await openLibrary(); } else { await invoke('create_song', { title, lyrics: JSON.stringify(song) }); if (libraryOpen) await openLibrary(); } setEditor(null); }}/ >}
-    {serviceEditor && <ServiceBuilder name={serviceEditor === 'edit' ? project?.name : undefined} items={serviceEditor === 'edit' ? project?.session.items : undefined} currentItems={project?.session.items || []} songs={library} media={media} confirmRemove={outputsShown ? title => confirm(`The outputs are shown. Remove ${title} from the service?`, 'Remove') : undefined} onClose={() => setServiceEditor(null)} onSave={async (name, items) => {
-      await saveQueue.current;
-      if (serviceEditor === 'edit' && projectRef.current) {
-        const current = projectRef.current;
-        await persist({ ...current, name, session: { items } });
-        setProjects(old => old.map(p => p.id === current.id ? { ...p, name } : p));
-      } else {
-        const created = await invoke<ProjectModel>('create_project', { name });
-        await invoke('save_project', { project: { ...created, session: { items } } });
-        await invoke('load_project', { projectId: created.id });
-        setProjects(await invoke<ProjectHeader[]>('list_projects'));
-      }
-      setServiceEditor(null);
-    }}/ >}
+    {editor && <SongEditor backgrounds={media} title={editor.title} song={editor.song} heading={editor.libraryId != null ? 'Library song' : 'New library song'} onClose={() => setEditor(null)} onSave={async (title, song) => {
+      const lyrics = JSON.stringify(librarySong(song));
+      if (editor.libraryId != null) { await invoke('update_song', { song: { id: editor.libraryId, title, lyrics } }); forgetSong(editor.libraryId); }
+      else await invoke('create_song', { title, lyrics });
+      await refreshCatalog();
+      setEditor(null);
+    }}/>}
+    {serviceEditor && project && <ServiceEditor project={project} persist={persist} songs={library} media={media} initialItemId={serviceEditor.itemId} activeItemId={program?.active_item_id}
+      confirmRemove={outputsShown ? title => confirm(`The outputs are shown and ${title} is on air. Remove it from the service?`, 'Remove') : undefined}
+      onCatalogChanged={refreshCatalog} onRenamed={name => setProjects(old => old.map(p => p.id === project.id ? { ...p, name } : p))} onClose={() => setServiceEditor(null)}/>}
     {quickSearch && <QuickSearch songs={library} media={media} canAdd={!!project} onClose={() => setQuickSearch(false)} onAdd={result => result.kind === 'song' ? addSong(result.song.id) : addMedia(result.media)}/>}
-    {confirmDialog}
-    {libraryOpen && <LibraryPanel onCatalogChanged={refreshCatalog} onNewPresentation={() => { setLibraryOpen(false); setPresentationEditor('new'); }} songs={library} media={media} canAdd={!!project} onClose={() => setLibraryOpen(false)} onAddSong={addSong} onAddMedia={addMedia} onNewSong={() => { setLibraryOpen(false); setEditor({}); }} onEditSong={async id => { const saved = await invoke<SongModel>('get_song', { id }); setLibraryOpen(false); setEditor({ libraryId: id, title: saved.title, song: decodeSong(saved.lyrics) }); }} onImported={item => setMedia(old => [...old, item])}/ >}
+    {libraryOpen && <LibraryModal songs={library} media={media} confirm={confirm} onClose={() => setLibraryOpen(false)} onCatalogChanged={refreshCatalog} onNewSong={() => setEditor({})} onEditSong={id => void run(() => editLibrarySong(id))}/>}
 
-  </div>;
+    {confirmDialog}
+  </div></OutputConfigContext.Provider>;
 }
 export default App;

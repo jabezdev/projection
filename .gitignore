@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .env.local
+*.log
 
 # Large media: keep out of git (use LFS if these need to be shared)
 *.mp4

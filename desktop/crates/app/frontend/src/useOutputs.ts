@@ -5,7 +5,6 @@ import { invoke, isTauri, listen } from './tauri';
 export function useOutputsShown(): boolean {
   const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (!isTauri()) return;
     let disposed = false;
     let cleanup: (() => void) | undefined;
     void listen<boolean>('output:shown', ({ payload }) => { if (!disposed) setShown(payload); }).then(unlisten => { if (disposed) unlisten(); else cleanup = unlisten; });

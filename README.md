@@ -9,7 +9,8 @@ Software for a church worship team: a song library the team prepares during the 
 **Running a service**
 - Shows song lyrics, pictures, videos, music and slide presentations on the projector, one cue at a time.
 - Moves between slides with a soft fade, a cut or a slide, whichever you prefer.
-- One button each for **Black** (screen off), **Clear** (hide the words, keep the background), **Logo** (your church logo or a looping logo video) and **Live**.
+- One button each for **Black** (screen off), **Clear** (hide the words, keep the background) and **Logo** (your church logo or a looping logo video), above the projection's live view. Press a lit button again to go back to live.
+- Each screen (projection, confidence) has its own On/Off switch; the arrow beside it picks the display, window size and aspect ratio.
 - Gets the next picture or video ready ahead of time, so it appears straight away when you move on.
 - Shows which cue is waiting for its video to load, so you never wonder what the audience sees.
 
@@ -23,7 +24,11 @@ Software for a church worship team: a song library the team prepares during the 
 - Live previews in the control panel of exactly what each screen shows.
 
 **Songs, media and presentations**
-- A song library with verses, choruses and the order they are sung in; each service keeps its own arrangement.
+- A song library with verses, choruses and the order they are sung in. The song editor shows the lyrics on the left and, on the right, the slide under the cursor exactly as the projection will show it, with title, author, arrangement and background.
+- A service editor (the pencil beside the service name): every item with its picture on the left, the selected item's settings on the right. Hover between items and choose *insert here* to pick from a small library with thumbnails. Song changes made there stay in that service and are marked as edited; the library song is untouched until you choose its version again.
+- Services can be split into sections (for example Praise & Worship, Message, Response). Each section collapses in the left column, and Next and Previous pass over the headings.
+- Videos, images, slides and screen captures appear in the middle column as pictures you click to put on air. While a video or audio is on air, a bar at the bottom of the middle column has play/pause (or Space), a scrub bar with time remaining, volume, stop, Fade out and what plays next. Whether a cued video starts playing at once is a setting (Settings → System → Playback, on by default).
+- The Library (bottom of the left column) manages songs and media at the source: create songs, import files, rename, delete, see where each is used.
 - Quick search (Ctrl+K) to find any song or media file and add it to the service.
 - Import songs from OpenLyrics files, picture groups as slides, and **PDF files** (each page becomes a slide).
 - Videos: play, pause, seek, loop, trim the start and end, change the speed and volume. Smooth looping backgrounds.
@@ -81,7 +86,9 @@ bun install
 bun run dev
 ```
 
-Open http://localhost:5174. There is no engine in this mode: [src/tauri.ts](desktop/crates/app/frontend/src/tauri.ts) fakes it and keeps demo projects in local storage. Buttons work, but nothing is projected. The web app uses port 5175, so both can run at once.
+Open http://localhost:5174. There is no engine in this mode: [src/tauri.ts](desktop/crates/app/frontend/src/tauri.ts) fakes it. Buttons work, but nothing is projected. The web app uses port 5175, so both can run at once.
+
+Every page load opens **Demo · Every item type**, a service with one of each kind of cue: songs with image, video and shader backgrounds, an image, a video, audio, a scripture slideshow, sermon slides from a PDF, and window and screen captures, plus library songs and media and a church logo for the Logo key ([src/demoService.ts](desktop/crates/app/frontend/src/demoService.ts)). Its media lives in `desktop/crates/app/frontend/demo/` and is served at `/demo/` by the dev server only, so it never reaches a build. Changes last until the page is refreshed; a refresh starts again from the demo.
 
 ### Run the full desktop app
 
@@ -138,7 +145,7 @@ In the OS app-data folder, never in the repo:
 - Linux: `~/.local/share/com.magi.projection/`
 - Windows: `%APPDATA%\com.magi.projection\`
 
-`app.db` holds the library and services; `app-config.json` the remote port, LAN access, OSC and the video decoder (Settings → Remote and System); `remote-devices.json` paired phones and tablets; `capture-tokens.json` screens and windows the sharing dialog allowed (Wayland); `updates/` downloaded installers; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), Library → Missing searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+`app.db` holds the library and services; `app-config.json` the remote port, LAN access, OSC and the video decoder (Settings → Remote and System); `remote-devices.json` paired phones and tablets; `capture-tokens.json` screens and windows the sharing dialog allowed (Wayland); `updates/` downloaded installers; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), the Library's missing-files banner searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
 
 **Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PALTO and unzip `app.db` and the settings files into the data folder.
 
@@ -206,8 +213,8 @@ bun run tauri build --no-bundle
 GDK_BACKEND=x11 ../../target/release/app     # Linux
 ```
 
-1. **Songs and services.** Open Library, create a song, edit its parts/arrangement and save. Create a service, add the song, reorder items, rename it and save. Restart and reopen it. Library songs and service arrangements are separate copies; edit the service copy with its pencil button.
-2. **Images and Logo.** Import images from Library → Images. Give a scheduled song an image or video background. Add an image directly to the service and cue it. In Output Settings choose a logo image or video, press Logo (logo videos loop muted), then Live to return to lyrics.
+1. **Songs and services.** Open Library, create a song, edit its parts and arrangement and save. From the service name's list, create a service; in its editor insert the song, reorder items and rename the service. Restart and reopen it. Library songs and service copies are separate: an edit in the service editor marks the song as edited there and leaves the library song unchanged.
+2. **Images and Logo.** Import images in the Library (Import files…). Give a scheduled song an image or video background. Add an image directly to the service and cue it. In Output Settings choose a logo image or video, press Logo (logo videos loop muted), then Live to return to lyrics.
 3. **Presentations.** Create an image presentation, choose and reorder several images, save, and cue each thumbnail. Edit and reopen it to check the order persists. Import a PDF (*Import PDF…*): each page becomes a slide.
 4. **Displays and lyrics.** In Output Settings → Output displays, assign the projector and confidence displays and press Show fullscreen for each (Show windowed to inspect). Advance lyrics: old and new text fade together using the configured fade while the border and box fill stay; confidence scrolls the active slide into view. Try rapid navigation.
 5. **Video.** Import a video with sound, add it and cue it. Check play/pause, stop, seek, loop, volume, mute and speed. Backgrounds keep the outgoing picture until the new one is ready, then crossfade. Try the actual files you intend to use.
