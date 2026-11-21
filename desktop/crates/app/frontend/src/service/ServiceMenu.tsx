@@ -8,7 +8,6 @@ import { ItemThumb } from '../library/Thumbs';
 type Props = {
   project: ProjectModel | null;
   projects: ProjectHeader[];
-  /** Saves the loaded service (its rename goes through the engine). */
   persist: (project: ProjectModel) => Promise<void>;
   onLoad: (projectId: number) => Promise<boolean>;
   onEdit: () => void;
@@ -17,7 +16,6 @@ type Props = {
   onError: (message: string) => void;
 };
 
-/** The service selector: the loaded service's name, a list to switch or manage services, and the edit button. */
 export default function ServiceMenu({ project, projects, persist, onLoad, onEdit, onListChanged, confirm, onError }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -33,7 +31,6 @@ export default function ServiceMenu({ project, projects, persist, onLoad, onEdit
     document.addEventListener('keydown', escape, true);
     return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape, true); };
   });
-  // Each service's first item is its cover.
   useEffect(() => {
     if (!open) return;
     let disposed = false;

@@ -18,9 +18,7 @@ type Props = {
   persist: (project: ProjectModel) => Promise<void>;
   songs: SongHeader[];
   media: Media[];
-  /** The item to open on, such as the one whose edit button was pressed. */
   initialItemId?: number;
-  /** The item on air, which asks before it is removed while the screens are on. */
   activeItemId?: number | null;
   confirmRemove?: (title: string) => Promise<boolean>;
   onCatalogChanged: () => Promise<void>;
@@ -32,11 +30,6 @@ const SAVE_DELAY = 350;
 
 const mediaItem = (media: Media): SessionItem => ({ id: newItemId(), title: media.title, kind: { kind: media.kind, data: { path: media.path } } });
 
-/**
- * Edits the loaded service: its items on the left (pictures, order, insert,
- * remove), the selected item's settings on the right. Changes save as you go;
- * song changes stay in this service and are marked as edited.
- */
 export default function ServiceEditor({ project, persist, songs, media, initialItemId, activeItemId, confirmRemove, onCatalogChanged, onRenamed, onClose }: Props) {
   const [name, setName] = useState(project.name);
   const [items, setItems] = useState(project.session.items);
@@ -191,14 +184,12 @@ export default function ServiceEditor({ project, persist, songs, media, initialI
   </div>;
 }
 
-/** How many items a section at `index` groups: those up to the next section. */
 function sectionSize(items: SessionItem[], index: number) {
   let count = 0;
   for (let i = index + 1; i < items.length && items[i].kind.kind !== 'section'; i++) count++;
   return count;
 }
 
-/** The selected item's settings, by kind. `onChange` updates the item and saves it. */
 function ItemEditor({ item, songs, media, onChange, onEditSlides }: { item: SessionItem; songs: SongHeader[]; media: Media[]; onChange: (change: (item: SessionItem) => SessionItem, delay?: number) => void; onEditSlides: () => void }) {
   const kind = item.kind;
   const setTitle = (title: string) => onChange(i => ({ ...i, title }));
@@ -250,7 +241,6 @@ function ItemLayout({ preview, kindLabel, title, children }: { preview: ReactNod
   </div>;
 }
 
-/** A song in this service. Edits stay in the service and mark it as edited; the library song is untouched. */
 function SongItemEditor({ item, songs, media, onChange }: { item: SessionItem; songs: SongHeader[]; media: Media[]; onChange: (change: (item: SessionItem) => SessionItem, delay?: number) => void }) {
   const song = itemSong(item);
   const title = item.title || '';

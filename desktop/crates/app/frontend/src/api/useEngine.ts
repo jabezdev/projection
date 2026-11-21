@@ -17,18 +17,12 @@ export type ProgramState = {
 export type ProjectHeader = { id: number; name: string; updated_at_ms: number };
 type EngineSnapshot = { program_state: ProgramState; version: number; project: ProjectModel | null; playback?: PlaybackState | null };
 
-// Each state event carries the complete state of one domain; replace, don't merge.
 type EngineEvent =
   | { type: 'project_changed'; payload: { project: ProjectModel | null; version: number } }
   | { type: 'program_changed'; payload: { program_state: ProgramState; version: number } }
   | { type: 'playback_changed'; payload: { playback: PlaybackState | null; revision: number } }
   | { type: 'error'; payload: { source: string; message: string; recoverable: boolean } };
 
-/**
- * The operator's view of the engine: the loaded service, what is on air,
- * the service list and media library, and an ordered save queue. The UI
- * shows what the engine reports; local edits are saved through `persist`.
- */
 export function useEngine() {
   const [project, setProject] = useState<ProjectModel | null>(null);
   const [projects, setProjects] = useState<ProjectHeader[]>([]);

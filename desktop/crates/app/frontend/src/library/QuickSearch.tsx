@@ -3,7 +3,6 @@ import { Icon } from '../ui/Icons';
 import type { Media, SongHeader } from '../api/models';
 import { fileName, searchLibrary, type SearchResult } from './search';
 
-/** Ctrl+K: find a song or media file and add it to the service. */
 export default function QuickSearch({ songs, media, canAdd, onAdd, onClose }: { songs: SongHeader[]; media: Media[]; canAdd: boolean; onAdd: (result: SearchResult) => Promise<void>; onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);

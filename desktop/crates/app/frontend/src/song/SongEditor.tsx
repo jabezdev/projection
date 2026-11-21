@@ -5,7 +5,6 @@ import SongWorkspace from './SongWorkspace';
 
 type Props = { title?: string; song?: SongDocument; backgrounds?: Media[]; heading?: string; onClose: () => void; onSave: (title: string, song: SongDocument) => Promise<void> };
 
-/** Full-window song editor with Save and Cancel, used for library songs. */
 export default function SongEditor({ title = '', song, backgrounds = [], heading = 'Library song', onClose, onSave }: Props) {
   const dialog = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(title);

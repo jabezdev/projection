@@ -3,13 +3,11 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 export type Entry = Doc<"serviceItems">["sequence"][number];
 
-/** An entry with its label and lyrics filled in from the library. */
 export type ResolvedEntry = {
   key: string;
   sectionId: Id<"sections"> | null;
   label: string;
   lyrics: string;
-  /** Lyrics differ from the library for this service. */
   isVariation: boolean;
 };
 
@@ -31,11 +29,6 @@ export async function songSections(ctx: QueryCtx, songId: Id<"songs">): Promise<
     .collect();
 }
 
-/**
- * Before a library section (or a whole song) is deleted, copies its label and
- * lyrics into every service entry that uses it, so arrangements keep reading
- * the same instead of losing that part.
- */
 export async function detachSections(
   ctx: MutationCtx,
   songId: Id<"songs">,

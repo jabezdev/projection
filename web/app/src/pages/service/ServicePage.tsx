@@ -87,8 +87,6 @@ function ServiceHeader({ service }: { service: Service }) {
   );
 }
 
-// ── Lyrics (what singers read) ──────────────────────────────────────────
-
 function Lyrics({ service }: { service: Service }) {
   if (service.items.length === 0) return <p className="text-muted">No songs yet.</p>;
   return (
@@ -119,4 +117,3 @@ function Lyrics({ service }: { service: Service }) {
   );
 }
 
-// ── Arrange (song leader / operator) ────────────────────────────────────

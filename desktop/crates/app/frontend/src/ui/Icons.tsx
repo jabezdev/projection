@@ -1,6 +1,5 @@
 import { Ellipsis, Copy, Search, Upload, Trash2, ScreenShare, ChevronDown, Monitor, MonitorOff, RemoveFormatting, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
 
-// The operator UI's one icon set: Lucide (https://lucide.dev, ISC license).
 const icons = {
   settings: Settings,
   play: Play,
@@ -35,6 +34,5 @@ export type IconName = keyof typeof icons;
 
 export function Icon({ name, className = '' }: { name: IconName; className?: string }) {
   const Glyph = icons[name];
-  // Black is a filled square.
   return <Glyph className={`ui-icon ${className}`} strokeWidth={1.6} fill={name === 'black' ? 'currentColor' : 'none'} aria-hidden="true"/>;
 }

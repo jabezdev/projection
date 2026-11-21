@@ -3,7 +3,6 @@ import type { Media, SessionItem } from '../api/models';
 import { defaultOutputConfig, shaderPresets, type OutputConfig } from '../settings/outputState';
 import { itemSong, songSteps } from '../song/song';
 
-/** The projection's styling, so previews match what the audience sees. */
 export const OutputConfigContext = createContext<OutputConfig>(defaultOutputConfig);
 export const useOutputConfig = () => useContext(OutputConfigContext);
 
@@ -11,13 +10,11 @@ const VIDEO = /\.(mp4|m4v|mov|mkv|webm|avi)$/i;
 export const isVideoPath = (path: string) => VIDEO.test(path);
 export const isShader = (path: string) => path.startsWith('shader:');
 
-/** `#rrggbb` with a 0–100 opacity, as CSS. */
 export function withOpacity(color: string, percent: number) {
   const alpha = Math.round(Math.max(0, Math.min(100, percent)) * 2.55).toString(16).padStart(2, '0');
   return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color;
 }
 
-/** A shader preset drawn in its configured colours (the renderer animates the real one). */
 export function shaderStyle(name: string, config: OutputConfig): CSSProperties {
   const a = config.shaderColorA, b = config.shaderColorB;
   if (name === 'aurora') return { background: `radial-gradient(120% 90% at 20% 110%, ${b}88, transparent 60%), radial-gradient(90% 80% at 85% -10%, ${b}55, transparent 60%), ${a}` };
@@ -41,7 +38,6 @@ export function backgroundName(path: string, backgrounds: Media[]) {
   return { name: media?.title ?? path.split(/[\\/]/).pop() ?? path, kind: media ? (media.kind === 'video' ? 'Video' : 'Image') : 'File' };
 }
 
-/** What an item is, in a few words. */
 export function itemSummary(item: SessionItem) {
   const kind = item.kind;
   switch (kind.kind) {

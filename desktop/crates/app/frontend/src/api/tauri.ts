@@ -5,7 +5,6 @@ import type { UiOnlyListener } from '../demo/types';
 export { startDemo } from '../demo/store';
 export type UnlistenFn = () => void;
 
-// Minimal event shape used by our UI.
 export type TauriEvent<T> = {
   payload: T;
 };
@@ -13,7 +12,6 @@ export type TauriEvent<T> = {
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
   const w = window as unknown as Record<string, unknown>;
-  // Tauri injects globals; exact shape differs a bit between versions.
   return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
 }
 
@@ -28,7 +26,6 @@ export async function invoke<T = unknown>(
   return nativeInvoke<T>(command, args);
 }
 
-/** Sends `bytes` as the raw request body (desktop app only), with string headers. */
 export async function invokeBytes<T = unknown>(command: string, bytes: Uint8Array, headers: Record<string, string> = {}): Promise<T> {
   return nativeInvoke<T>(command, bytes, { headers });
 }

@@ -15,7 +15,6 @@ export default function PresentationEditor({ images, item, onClose, onSave }: { 
   async function browse() {
     try { const files = await invoke<string[]>('choose_presentation_images'); setPaths(current => [...current, ...files]); } catch (e) { setError(String(e)); }
   }
-  /** Renders each page of a PDF to a slide image and adds them in order. */
   async function importPdf(name: string, data: Uint8Array, save: (png: Blob, index: number) => Promise<string>) {
     setBusy(true); setError('');
     const stem = name.replace(/\.pdf$/i, '');

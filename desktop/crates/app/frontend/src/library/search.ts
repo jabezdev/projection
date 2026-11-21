@@ -4,7 +4,6 @@ export type SearchResult = { kind: 'song'; song: SongHeader } | { kind: 'media';
 
 export const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
-/** Every query word must appear in the title or file name; titles that start with the query rank first. */
 export function searchLibrary(query: string, songs: SongHeader[], media: Media[], limit = 30): SearchResult[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const all: { result: SearchResult; text: string; title: string }[] = [

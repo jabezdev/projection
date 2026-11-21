@@ -90,7 +90,6 @@ export const remove = mutation({
   },
 });
 
-/** The order the song is normally sung in. Sections may repeat. */
 export const setDefaultSequence = mutation({
   args: { songId: v.id("songs"), sequence: v.array(v.id("sections")) },
   handler: async (ctx, { songId, sequence }) => {
@@ -152,7 +151,6 @@ export const removeSection = mutation({
   },
 });
 
-/** Refreshes the search text and last-edited stamp after any change. */
 async function touch(ctx: MutationCtx, songId: Id<"songs">, userId: Id<"users">) {
   const song = await ctx.db.get(songId);
   if (!song) return;

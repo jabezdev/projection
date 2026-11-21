@@ -13,10 +13,8 @@ const load = (id: number) => {
   }
   return pending;
 };
-/** Drops a cached song after it was saved or deleted. */
 export const forgetSong = (id: number) => { cache.delete(id); };
 
-/** Library songs' documents, for thumbnails and lyric search. Loads in the background. */
 export function useSongDocs(songs: SongHeader[]) {
   const [docs, setDocs] = useState<Map<number, SongDocument>>(new Map());
   useEffect(() => {

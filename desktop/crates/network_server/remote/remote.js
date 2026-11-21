@@ -1,6 +1,3 @@
-// PALTO phone remote: pairs once with the code on the operator screen, then
-// drives the engine over the WebSocket with the same commands the operator
-// window uses. The token is kept in this browser.
 'use strict';
 
 const TOKEN = 'palto.token';
@@ -12,7 +9,7 @@ let retry = 0;
 
 const storage = {
   get() { try { return localStorage.getItem(TOKEN); } catch { return null; } },
-  set(value) { try { value ? localStorage.setItem(TOKEN, value) : localStorage.removeItem(TOKEN); } catch { /* private mode: pair again next time */ } },
+  set(value) { try { value ? localStorage.setItem(TOKEN, value) : localStorage.removeItem(TOKEN); } catch {  } },
 };
 
 function show(screen) {
@@ -26,7 +23,7 @@ async function check() {
   try {
     const response = await fetch(`/api/check?token=${encodeURIComponent(token)}`);
     if (response.status === 401) { storage.set(null); return show('pair'); }
-  } catch { /* offline: try the socket anyway */ }
+  } catch {  }
   show('remote');
   connect();
 }
@@ -54,7 +51,6 @@ function connect() {
   socket.addEventListener('close', () => {
     setStatus('Reconnecting…', false);
     socket = null;
-    // The token may have been removed on the operator screen.
     setTimeout(check, Math.min(10000, 500 * 2 ** retry++));
   });
 }
@@ -113,7 +109,6 @@ function render() {
 document.querySelectorAll('button[data-display]').forEach(button => button.addEventListener('click', () => send('set_display', { display: button.dataset.display })));
 $('prev').addEventListener('click', () => send('prev'));
 $('next-button').addEventListener('click', () => send('next'));
-// Volume keys are not available to web pages; arrow keys help on tablets with keyboards.
 document.addEventListener('keydown', event => {
   if ($('remote').hidden || event.target instanceof HTMLInputElement) return;
   if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'PageDown') { event.preventDefault(); send('next'); }

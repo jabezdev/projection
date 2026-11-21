@@ -9,11 +9,9 @@ type OutputDisplays = { monitors: Monitor[]; shown: boolean; outputs: Record<Out
 
 export type Screens = ReturnType<typeof useScreens>;
 
-/** The output windows' displays and settings, shared by both screen switches. */
 export function useScreens(onError: (message: string) => void) {
   const [state, setState] = useState<OutputDisplays | null>(null);
   const load = useCallback(() => { void invoke<OutputDisplays>('get_output_displays').then(setState).catch(e => onError(String(e))); }, [onError]);
-  // Displays can be connected while the app runs.
   useEffect(() => { load(); window.addEventListener('focus', load); return () => window.removeEventListener('focus', load); }, [load]);
   const change = (output: Output, patch: Partial<OutputDisplay>) => {
     if (!state) return;

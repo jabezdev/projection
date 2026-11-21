@@ -5,7 +5,6 @@ import { Icon } from '../ui/Icons';
 
 type Devices = { midi: string[]; stream_decks: string[] };
 
-/** The bindings editor: keys, MIDI and Stream Deck buttons for each action. */
 export default function ControlsSettings({ bindings }: { bindings: InputBindings | null }) {
   const [learning, setLearning] = useState<InputAction | null>(null);
   const [devices, setDevices] = useState<Devices>({ midi: [], stream_decks: [] });
@@ -29,7 +28,6 @@ export default function ControlsSettings({ bindings }: { bindings: InputBindings
     await save({ ...bindings, bindings: [...bindings.bindings.filter(b => !sameTrigger(b.trigger, trigger)), { trigger, action }] });
   };
 
-  // While learning: the next key here, or the next MIDI / Stream Deck press from Rust.
   useEffect(() => {
     if (!learning) return;
     let disposed = false;
@@ -42,7 +40,6 @@ export default function ControlsSettings({ bindings }: { bindings: InputBindings
       if (trigger) void bind(learning, trigger);
     };
     const onKey = (event: KeyboardEvent) => {
-      // Captured before the operator's own shortcuts and the dialog's Escape.
       event.preventDefault();
       event.stopPropagation();
       if (event.key === 'Escape' && !event.shiftKey) { finish(null); return; }
@@ -53,7 +50,6 @@ export default function ControlsSettings({ bindings }: { bindings: InputBindings
     void invoke('learn_input', { learning: true });
     void listen<InputTrigger>('input:learned', ({ payload }) => finish(payload)).then(unlisten => { if (disposed) unlisten(); else cleanup = unlisten; });
     return () => { disposed = true; window.removeEventListener('keydown', onKey, true); cleanup?.(); void invoke('learn_input', { learning: false }); };
-    // `bind` changes with the bindings; learning restarts only per action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [learning]);
 

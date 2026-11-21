@@ -4,9 +4,7 @@ import { invoke, isTauri, listen } from '../api/tauri';
 export type TransitionKind = 'fade' | 'cut' | 'slide';
 export type Easing = 'linear' | 'ease' | 'ease_in' | 'ease_out' | 'ease_in_out';
 export type TransitionDirection = 'left' | 'right' | 'up' | 'down';
-/** Output styling; Rust's `protocol::OutputConfig` is the source of truth. Flat fields style the projection, `confidence*` the confidence screen. */
 export type OutputConfig = {
-  /** Settings schema version, owned by Rust. */
   version?: number;
   font: string; size: number; weight: number; italic: boolean; caps: boolean;
   color: string; align: 'left' | 'center' | 'right'; vertical: 'top' | 'center' | 'bottom';
@@ -34,7 +32,6 @@ export const defaultOutputConfig: OutputConfig = {
   confidenceClock: true, confidenceTape: true, confidenceTransition: 250,
   logoPath: '',
 };
-/** Built-in animated backgrounds (`shader:<name>` paths); matches `protocol::SHADER_PRESETS`. */
 export const shaderPresets = [{ name: 'gradient', title: 'Gradient (animated)' }, { name: 'aurora', title: 'Aurora (animated)' }, { name: 'bokeh', title: 'Bokeh lights (animated)' }] as const;
 const prefix = 'magi.output.';
 export function useOutputState<T extends object>(domain: 'config', defaults: T): [T, (value: T) => Promise<void>] {
@@ -53,7 +50,7 @@ export function useOutputState<T extends object>(domain: 'config', defaults: T):
         if (!disposed) setValue({ ...defaults, ...saved });
       })().catch(console.error);
     }
-    const receive = (event: StorageEvent) => { if (event.key === prefix + domain && event.newValue) { try { setValue({ ...defaults, ...JSON.parse(event.newValue) }); } catch { /* Ignore malformed storage. */ } } };
+    const receive = (event: StorageEvent) => { if (event.key === prefix + domain && event.newValue) { try { setValue({ ...defaults, ...JSON.parse(event.newValue) }); } catch {  } } };
     window.addEventListener('storage', receive);
     return () => { disposed = true; cleanup?.(); window.removeEventListener('storage', receive); };
   }, [domain, defaults]);

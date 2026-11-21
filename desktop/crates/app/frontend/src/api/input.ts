@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke, isTauri, listen } from './tauri';
 
-/** Mirrors `protocol::InputAction`; Rust turns each into engine commands. */
 export type InputAction = 'next' | 'previous' | 'next_item' | 'previous_item' | 'live' | 'black' | 'clear' | 'logo' | 'play_pause' | 'stop';
 export type MidiMessage = 'note' | 'control' | 'program';
 export type InputTrigger =
@@ -17,7 +16,6 @@ export const actionLabels: Record<InputAction, string> = {
 };
 export const inputActions = Object.keys(actionLabels) as InputAction[];
 
-/** The key trigger for a keyboard event: single characters lowercase, the space bar as `Space`. */
 export function keyTrigger(event: KeyboardEvent): InputTrigger {
   const key = event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toLowerCase() : event.key;
   return { device: 'key', key, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
@@ -35,7 +33,6 @@ export function triggerLabel(trigger: InputTrigger): string {
 
 export const sameTrigger = (a: InputTrigger, b: InputTrigger) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Keys that only mean something in a text field, or while a dialog is open, never trigger actions. */
 function ignored(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null;
   if (event.defaultPrevented || event.isComposing || event.repeat) return true;
@@ -43,7 +40,6 @@ function ignored(event: KeyboardEvent) {
   return !!document.querySelector('[aria-modal="true"]');
 }
 
-/** The saved bindings, kept current. */
 export function useInputBindings(): InputBindings | null {
   const [bindings, setBindings] = useState<InputBindings | null>(null);
   useEffect(() => {
@@ -57,7 +53,6 @@ export function useInputBindings(): InputBindings | null {
   return bindings;
 }
 
-/** Sends the action bound to each key press made outside text fields and dialogs. */
 export function useKeyboardInput(bindings: InputBindings | null, onError: (message: string) => void) {
   useEffect(() => {
     if (!bindings) return;
@@ -66,7 +61,6 @@ export function useKeyboardInput(bindings: InputBindings | null, onError: (messa
       const trigger = keyTrigger(event);
       const binding = bindings.bindings.find(b => sameTrigger(b.trigger, trigger));
       if (!binding) return;
-      // Also keeps Space from pressing a focused button.
       event.preventDefault();
       void invoke('trigger_action', { action: binding.action }).catch(e => onError(String(e)));
     };

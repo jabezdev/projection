@@ -10,18 +10,11 @@ type Props = {
   onTitle: (title: string) => void;
   song: SongDocument;
   onSong: (song: SongDocument) => void;
-  /** Library images and videos offered as backgrounds. */
   backgrounds: Media[];
-  /** Shown above the preview, such as "Edited for this service". */
   notice?: ReactNode;
   autoFocusTitle?: boolean;
 };
 
-/**
- * Song editing in two columns: every part's lyrics on the left; on the right,
- * which never scrolls, the slide under the caret as the projection shows it,
- * then title, author, arrangement and background.
- */
 export default function SongWorkspace({ title, onTitle, song, onSong, backgrounds, notice, autoFocusTitle }: Props) {
   const [cursor, setCursor] = useState<{ partId: string; slide: number } | null>(null);
   const update = (patch: Partial<SongDocument>) => onSong({ ...song, ...patch });
@@ -32,7 +25,6 @@ export default function SongWorkspace({ title, onTitle, song, onSong, background
     onSong({ ...song, parts: [...song.parts, { id, type, number, lyrics: '' }], arrangement: [...song.arrangement, id] });
     requestAnimationFrame(() => document.getElementById(`lyrics-${id}`)?.focus());
   }
-  // The slide the preview shows: under the caret, else the first one sung.
   const cursorPart = cursor && song.parts.find(p => p.id === cursor.partId);
   const shownPart = cursorPart || arrangedParts(song)[0] || song.parts[0];
   const shownSlides = shownPart ? slides(shownPart) : [];
@@ -95,7 +87,6 @@ function LyricPart({ part, active, onLyrics, onColor, onCaret, onArrange, onDele
   </article>;
 }
 
-/** The order parts are sung in: drag to reorder, click to preview, ✕ to remove, + to add. */
 function Arrangement({ song, onChange, onPreview }: { song: SongDocument; onChange: (arrangement: string[]) => void; onPreview: (partId: string) => void }) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -125,7 +116,6 @@ function Arrangement({ song, onChange, onPreview }: { song: SongDocument; onChan
   </div>;
 }
 
-/** A medium button showing the background; it opens a picker of every background with thumbnails. */
 export function BackgroundButton({ value, backgrounds, onChange }: { value: string; backgrounds: Media[]; onChange: (path: string) => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);

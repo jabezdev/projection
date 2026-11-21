@@ -4,7 +4,6 @@ import type { QueryCtx } from "../_generated/server";
 
 export type Role = Doc<"users">["role"];
 
-/** Who may do what. Change a list here to change it everywhere. */
 const PERMISSIONS = {
   view: ["admin", "librarian", "leader", "operator", "singer"],
   editLibrary: ["admin", "librarian", "leader"],
@@ -19,7 +18,6 @@ export function can(role: Role, permission: Permission): boolean {
   return (PERMISSIONS[permission] as readonly Role[]).includes(role);
 }
 
-/** The signed-in user's row, or null before `users.ensure` has run. */
 export async function currentUser(ctx: QueryCtx): Promise<Doc<"users"> | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;

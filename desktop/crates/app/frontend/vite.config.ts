@@ -4,9 +4,6 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// pdf.js (PDF import) loads its standard fonts, character maps and image
-// decoders at run time; serve them from /pdfjs/ in dev and copy them into
-// the build.
 const PDFJS = join(import.meta.dirname, 'node_modules/pdfjs-dist');
 const PDFJS_FOLDERS = ['standard_fonts', 'cmaps', 'wasm'];
 function pdfjsAssets(): Plugin {
@@ -29,9 +26,6 @@ function pdfjsAssets(): Plugin {
   };
 }
 
-// Browser-only demo (`bun run dev` without Tauri): sample media for every
-// item type, served from demo/ at /demo/. Dev server only, so none of it
-// reaches a build or the installer.
 const DEMO = join(import.meta.dirname, 'demo');
 const DEMO_TYPES: Record<string, string> = { svg: 'image/svg+xml', mp4: 'video/mp4', mp3: 'audio/mpeg' };
 function demoMedia(): Plugin {
@@ -46,7 +40,6 @@ function demoMedia(): Plugin {
           const bytes = readFileSync(join(DEMO, `${match[1]}.${match[2]}`));
           res.setHeader('Content-Type', DEMO_TYPES[match[2]]);
           res.setHeader('Accept-Ranges', 'bytes');
-          // Video elements seek with range requests.
           const range = req.headers.range?.match(/bytes=(\d+)-(\d*)/);
           if (range) {
             const start = Number(range[1]), end = range[2] ? Number(range[2]) : bytes.length - 1;
@@ -62,15 +55,12 @@ function demoMedia(): Plugin {
   };
 }
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), pdfjsAssets(), demoMedia()],
   appType: 'spa',
-  // Tauri expects a fixed port, fail if it's already in use
   server: {
     port: 5174,
     strictPort: true,
   },
-  // Tries to prevent Vite from obscuring Rust errors
   clearScreen: false,
 })

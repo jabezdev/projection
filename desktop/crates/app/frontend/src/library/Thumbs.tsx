@@ -3,7 +3,6 @@ import type { MediaKind, SessionItem } from '../api/models';
 import { itemSong, songSteps } from '../song/song';
 import { Background, SlidePreview } from '../song/SlidePreview';
 
-/** A 16:9 picture of a library file. */
 export function MediaThumb({ kind, path, badge }: { kind: MediaKind; path: string; badge?: string }) {
   return <div className="thumb">
     {kind === 'audio' ? <span className="thumb-tile"><Icon name="audio"/></span> : <Background path={path} fit="cover"/>}
@@ -12,7 +11,6 @@ export function MediaThumb({ kind, path, badge }: { kind: MediaKind; path: strin
   </div>;
 }
 
-/** A service item as it will look: a song's first slide on its background, a video's frame, a slideshow's first slide. */
 export function ItemThumb({ item }: { item: SessionItem }) {
   const kind = item.kind;
   if (kind.kind === 'text') {

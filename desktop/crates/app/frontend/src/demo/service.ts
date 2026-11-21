@@ -1,6 +1,3 @@
-// Browser-only demo content: a service with one of every item type, so the
-// whole operator UI can be seen and restyled without the desktop app. The
-// media lives in frontend/demo/ and is served at /demo/ by the dev server only.
 import { defaultCaptureOptions, defaultVideoOptions, type CaptureSource, type Media, type ProjectModel, type SessionItem } from '../api/models';
 import type { SongDocument } from '../song/song';
 
@@ -27,7 +24,6 @@ const amazing = song([
   { id: 't1', type: 'Tag', number: 1, lyrics: 'Unending love, amazing grace' },
 ], ['i1', 'v1', 'p1', 'c1', 't1'], 'shader:aurora');
 
-/** One step per slide, in arrangement order, as the engine cues them. */
 const steps = (doc: SongDocument) => doc.arrangement.flatMap(id => {
   const part = doc.parts.find(p => p.id === id);
   return part ? part.lyrics.split(/\n[ \t]*\n/).map(s => s.trim()).filter(Boolean) : [];
@@ -79,10 +75,8 @@ export const demoSongs: Record<string, { id: number; title: string; lyrics: stri
     .map(([id, title, doc]) => [String(id), { id, title, lyrics: JSON.stringify(doc) }]),
 );
 
-/** The logo the Logo key shows in the demo. */
 export const DEMO_LOGO = '/demo/church-logo.svg';
 
-/** Browser-only mode: screens and windows to pick when capturing. */
 export const DEMO_SOURCES: CaptureSource[] = [
   { kind: 'screen', id: 'demo:screen-1', name: 'Display 1 (1920×1080)' },
   { kind: 'window', id: 'demo:window-1', name: 'Sermon notes — PowerPoint' },

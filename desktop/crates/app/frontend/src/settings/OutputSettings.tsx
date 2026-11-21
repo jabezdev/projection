@@ -9,11 +9,9 @@ type Tab = 'projection' | 'confidence' | 'backgrounds' | 'system';
 const TABS: [Tab, string][] = [['projection', 'Projection'], ['confidence', 'Confidence'], ['backgrounds', 'Logo & backgrounds'], ['system', 'System']];
 const FONTS = ['Arial', 'Verdana', 'Tahoma', 'Segoe UI', 'Georgia', 'Times New Roman', 'Trebuchet MS', 'Impact', 'sans-serif', 'serif', 'monospace'];
 
-/** Output settings, one section per screen, each with a live native preview. Changes save as they are made. */
 export default function OutputSettings({ config, onChange, onClose, extraTabs }: { config: OutputConfig; onChange: (config: OutputConfig) => Promise<void>; onClose: () => void; extraTabs?: { id: string; label: string; content: ReactNode }[] }) {
   const [error, setError] = useState('');
   const [tab, setTab] = useState<string>('projection');
-  // The native engine renders both samples in exactly the outputs' style.
   useEffect(() => { if (isTauri()) void invoke('preview_output_style', { config }).catch(e => setError(String(e))); }, [config]);
   const update = (patch: Partial<OutputConfig>) => { void onChange({ ...config, ...patch }).catch(e => setError(String(e))); };
   const range = (key: keyof OutputConfig, label: string, min: number, max: number, step = 1) => <label className="setting-range">{label}<output>{String(config[key])}</output><input aria-label={label} type="range" min={min} max={max} step={step} value={Number(config[key])} onChange={e => update({ [key]: Number(e.target.value) })}/></label>;
@@ -71,7 +69,6 @@ type VideoDecoding = { choice: string; available: { name: string; label: string 
 
 type CaptureMethods = { current: string | null; choice: string; methods: { name: string; label: string; system_picker: boolean }[] };
 
-/** The screen capture method: automatic (the first that works) or one chosen. */
 function CaptureMethodSettings({ onError }: { onError: (message: string) => void }) {
   const [methods, setMethods] = useState<CaptureMethods | null>(null);
   useEffect(() => { void invoke<CaptureMethods>('get_capture_methods').then(setMethods).catch(e => onError(String(e))); }, [onError]);
@@ -84,7 +81,6 @@ function CaptureMethodSettings({ onError }: { onError: (message: string) => void
   </fieldset>;
 }
 
-/** Software decoding, automatic hardware decoding, or one accelerator found on this computer. */
 function VideoDecodingSettings({ onError }: { onError: (message: string) => void }) {
   const [decoding, setDecoding] = useState<VideoDecoding | null>(null);
   useEffect(() => { void invoke<VideoDecoding>('get_video_decoding').then(setDecoding).catch(e => onError(String(e))); }, [onError]);
@@ -92,7 +88,6 @@ function VideoDecodingSettings({ onError }: { onError: (message: string) => void
     void invoke('set_video_decoder', { choice }).then(() => setDecoding(d => d && { ...d, choice })).catch(e => onError(String(e)));
   };
   const options: [string, string][] = [['software', 'Software (CPU)'], ...(decoding?.available.length ? [['auto', 'Automatic (hardware when possible)'] as [string, string]] : []), ...(decoding?.available.map(d => [d.name, d.label] as [string, string]) ?? [])];
-  // A saved accelerator that is missing now still shows, so the choice is visible.
   if (decoding && !options.some(([name]) => name === decoding.choice)) options.push([decoding.choice, `${decoding.choice} (not available here)`]);
   return <fieldset><legend>Video decoding</legend>
     <label>Decoder<select aria-label="Video decoder" disabled={!decoding} value={decoding?.choice ?? 'software'} onChange={e => choose(e.target.value)}>{options.map(([name, label]) => <option key={name} value={name}>{label}</option>)}</select></label>
@@ -100,8 +95,6 @@ function VideoDecodingSettings({ onError }: { onError: (message: string) => void
   </fieldset>;
 }
 
-/** Version, backups and logs: what the operator needs when something goes wrong. */
-/** Whether a cued video or audio starts playing at once or waits paused on its first frame. */
 function PlaybackSettings({ onError }: { onError: (message: string) => void }) {
   const [autoplay, setAutoplay] = useState<boolean | null>(null);
   useEffect(() => { void invoke<boolean>('get_media_autoplay').then(setAutoplay).catch(e => onError(String(e))); }, [onError]);

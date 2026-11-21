@@ -2,7 +2,6 @@ import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 type Request = { message: string; action: string; resolve: (ok: boolean) => void };
 
-/** `confirm(message, action)` resolves true when the operator confirms; render `dialog` once. */
 export function useConfirm(): [ReactNode, (message: string, action: string) => Promise<boolean>] {
   const [request, setRequest] = useState<Request | null>(null);
   const requestRef = useRef<Request | null>(null);

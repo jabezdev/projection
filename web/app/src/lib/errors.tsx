@@ -3,7 +3,6 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 const ErrorContext = createContext<(error: unknown) => void>(() => {});
 
-/** Shows the latest failed action in a dismissible banner. */
 export function ErrorProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<string | null>(null);
   const report = useCallback((error: unknown) => {
@@ -30,10 +29,6 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Wraps a mutation so a failure shows the banner instead of an unhandled
- * rejection. Returns undefined when it failed.
- */
 export function useSafe() {
   const report = useContext(ErrorContext);
   return useCallback(

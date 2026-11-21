@@ -1,8 +1,3 @@
-// PDF import: renders each page to a PNG at output resolution with pdf.js,
-// loaded only when a PDF is imported. Off the live path; the outputs show
-// the pages as ordinary presentation slides.
-
-/** Pages are rendered to fit this box (the projection's resolution). */
 const SLIDE = { width: 1920, height: 1080 };
 
 export type PdfPage = { index: number; count: number; png: Blob };
@@ -28,7 +23,6 @@ export async function* renderPdf(data: Uint8Array): AsyncGenerator<PdfPage> {
       canvas.height = Math.round(viewport.height);
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Cannot draw the PDF page');
-      // Transparent areas of a page are white on paper.
       context.fillStyle = '#fff';
       context.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvas, canvasContext: context, viewport }).promise;

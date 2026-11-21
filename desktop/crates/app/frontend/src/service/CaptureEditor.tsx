@@ -7,8 +7,6 @@ import { defaultCaptureOptions, newItemId, type CaptureFit, type CaptureKind, ty
 type Method = { name: string; label: string; system_picker: boolean };
 type Methods = { current: string | null; choice: string; methods: Method[] };
 
-
-/** Which screen or window to capture, and which screens show it. Loads the sources itself. */
 export function CaptureSettings({ source, options, onSource, onOptions }: { source: CaptureSource | null; options: CaptureOptions; onSource: (source: CaptureSource) => void; onOptions: (options: CaptureOptions) => void }) {
   const [method, setMethod] = useState<Method | null>(isTauri() ? null : { name: 'demo', label: 'Demo', system_picker: false });
   const [sources, setSources] = useState<CaptureSource[]>(isTauri() ? [] : DEMO_SOURCES);
@@ -57,7 +55,6 @@ export function CaptureSettings({ source, options, onSource, onOptions }: { sour
   </>;
 }
 
-/** A screen or window shown live, on the projection, the confidence screen or both. */
 export default function CaptureEditor({ item, onClose, onSave }: { item?: SessionItem; onClose: () => void; onSave: (item: SessionItem) => Promise<void> }) {
   const existing = item?.kind.kind === 'capture' ? item.kind.data : null;
   const [source, setSource] = useState<CaptureSource | null>(existing?.source ?? null);

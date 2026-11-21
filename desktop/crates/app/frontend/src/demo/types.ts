@@ -51,7 +51,6 @@ export type UiOnlyEngineEvent =
   | { type: 'playback_changed'; payload: { playback: UiOnlyPlayback | null; revision: number } }
   | { type: 'error'; payload: { source: string; message: string; recoverable: boolean } };
 
-/** Browser-only mode: a simulated media session, so the transport can be laid out. */
 export type UiOnlyPlayback = {
   session_id: number; generation: number; item_id: number; path: string; kind: 'video' | 'audio';
   paused: boolean; suspended: boolean; phase: 'playing' | 'paused' | 'ended';

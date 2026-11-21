@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { isTauri } from '../api/tauri';
 
-/** Two 5 px dividers between the three columns. */
 const DIVIDERS = 10;
 const MIN_COLUMN = 140;
-/** Session 30 %, lyrics 50 %, screens 20 %. */
 const DEFAULT: Fractions = [0.3, 0.2];
-/** The layout chosen while maximized or fullscreen; other sizes always start at the default. */
 const STORAGE_KEY = 'palto.operator-columns.maximized';
 
-/** Left and right column widths as fractions of the space; the middle takes the rest. */
 type Fractions = [number, number];
 
 function loadSaved(): Fractions | null {
@@ -20,10 +16,9 @@ function loadSaved(): Fractions | null {
 }
 
 function save(fractions: Fractions) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(fractions)); } catch { /* Not remembered; still applied. */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(fractions)); } catch {  }
 }
 
-/** Whether the operator window is maximized or fullscreen; `null` until known. */
 function useMaximized(): boolean | null {
   const [maximized, setMaximized] = useState<boolean | null>(null);
   useEffect(() => {
@@ -41,7 +36,6 @@ function useMaximized(): boolean | null {
         if (disposed) unlisten(); else cleanup = unlisten;
       }).catch(() => { if (!disposed) setMaximized(false); });
     } else {
-      // The browser cannot ask; a window filling the screen counts.
       const check = () => setMaximized(Boolean(document.fullscreenElement)
         || (window.outerWidth >= screen.availWidth - 2 && window.outerHeight >= screen.availHeight - 2));
       check();
@@ -53,7 +47,6 @@ function useMaximized(): boolean | null {
   return maximized;
 }
 
-/** Pixel widths of the left and right columns, each kept at least MIN_COLUMN where possible. */
 function widths(fractions: Fractions, available: number): [number, number] {
   const minimum = Math.min(MIN_COLUMN, available / 3);
   const right = Math.max(minimum, Math.min(fractions[1] * available, available - minimum * 2));
@@ -61,12 +54,6 @@ function widths(fractions: Fractions, available: number): [number, number] {
   return [left, right];
 }
 
-/**
- * The operator's three resizable columns, with keyboard-operable dividers.
- * They start at 30/50/20. While the window is maximized or fullscreen, the
- * operator's layout is remembered and restored whenever it is maximized
- * again; at other sizes columns can be resized but return to the default.
- */
 export function useColumns() {
   const maximized = useMaximized();
   const [fractions, setFractions] = useState<Fractions>(DEFAULT);
@@ -79,7 +66,6 @@ export function useColumns() {
   useEffect(() => { fractionsRef.current = fractions; }, [fractions]);
   useEffect(() => { maximizedRef.current = maximized; }, [maximized]);
 
-  // Snap to the remembered layout when maximized, to the default otherwise.
   const [snappedFor, setSnappedFor] = useState<boolean | null>(null);
   if (maximized !== snappedFor) {
     setSnappedFor(maximized);
@@ -99,7 +85,6 @@ export function useColumns() {
     return `${left}px 5px minmax(0, 1fr) 5px ${right}px`;
   };
 
-  /** Moves divider `index` by `delta` px, keeping the other outer column fixed. */
   function resized(value: Fractions, index: number, delta: number): Fractions {
     if (available <= 0) return value;
     const [left, right] = widths(value, available);
@@ -145,12 +130,10 @@ export function useColumns() {
       if (!drag) return;
       const next = resized(drag.fractions, index, event.clientX - drag.x);
       fractionsRef.current = next;
-      // Applied straight to the grid while dragging; React catches up on release.
       if (resizeFrame.current === null) resizeFrame.current = requestAnimationFrame(() => {
         resizeFrame.current = null;
         panesRef.current?.style.setProperty('--operator-columns', columns(fractionsRef.current));
       });
-      // Rebase at the clamped position so reversing direction responds immediately.
       resizeRef.current = { index, x: event.clientX, fractions: next };
     }}
     onPointerUp={finishResize} onLostPointerCapture={finishResize}

@@ -5,14 +5,9 @@ import type { Monitor, Output, OutputDisplay, Pair, Screens } from './useScreens
 const sizes: Pair[] = [[3840, 2160], [2560, 1440], [1920, 1080], [1600, 900], [1280, 720], [1024, 768], [800, 600]];
 const aspects: Pair[] = [[16, 9], [16, 10], [4, 3], [21, 9]];
 const aspectLabel = ([w, h]: Pair) => `${w}:${h}`;
-/** "BenQ GW2480 · HDMI", marked when the operator window is on it. */
 const monitorLabel = (monitor: Monitor) => [monitor.name, monitor.connector, monitor.operator ? 'operator screen' : null].filter(Boolean).join(' · ');
 const pair = (value: string): Pair | null => { const [w, h] = value.split(/[x:]/).map(Number); return w > 0 && h > 0 ? [w, h] : null; };
 
-/**
- * A pill: the left half shows or hides the screen, the chevron opens its
- * display, size and aspect settings.
- */
 export function ScreenSwitch({ output, name, screens }: { output: Output; name: string; screens: Screens }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -45,7 +40,6 @@ export function ScreenSwitch({ output, name, screens }: { output: Output; name: 
       onClick={() => { if (!open) screens.reload(); setOpen(!open); }}>
       <Icon name="chevron"/>
     </button>
-    {/* Live monitors hide while this is open: their native windows would cover it. */}
     {open && state && current && <div className="screen-popover" id={popoverId} role="dialog" aria-label={`${name} screen settings`} data-covers-monitors="">
       <ScreenSettings output={output} name={name} current={current} monitor={monitor} monitors={state.monitors} screens={screens}/>
     </div>}
@@ -53,10 +47,8 @@ export function ScreenSwitch({ output, name, screens }: { output: Output; name: 
 }
 
 function ScreenSettings({ output, name, current, monitor, monitors, screens }: { output: Output; name: string; current: OutputDisplay; monitor: Monitor | null; monitors: Monitor[]; screens: Screens }) {
-  // Windows larger than the display would hang off its edges.
   const fitting = sizes.filter(([w, h]) => !monitor || (w <= monitor.width && h <= monitor.height && !(w === monitor.width && h === monitor.height)));
   const sizeOptions = current.size && !fitting.some(size => size.join('x') === current.size?.join('x')) ? [...fitting, current.size] : fitting;
-  // The display's own shape is what "Fill screen" already gives.
   const aspectOptions = aspects.filter(aspect => aspectLabel(aspect) !== monitor?.aspect || aspectLabel(aspect) === (current.aspect && aspectLabel(current.aspect)));
   return <>
     <label>Display

@@ -1,16 +1,9 @@
-/**
- * Lyric text conventions shared by the web app and the projection app.
- *
- * Within a section, lines are lyrics and a blank line forces a slide break.
- */
-
 export type ParsedSection = { label: string; lyrics: string };
 
 const LABEL_WORDS =
   "verse|chorus|pre-?chorus|bridge|tag|intro|outro|ending|refrain|interlude|vamp|coda|instrumental";
 const LABEL_LINE = new RegExp(`^\\s*[\\[(]?\\s*((?:${LABEL_WORDS})(?:\\s*\\d+)?)\\s*[\\])]?\\s*:?\\s*$`, "i");
 
-/** "Verse 1", "[CHORUS]", "Pre-chorus:" → a normalized label; otherwise null. */
 export function parseLabelLine(line: string): string | null {
   const match = LABEL_LINE.exec(line);
   if (!match) return null;
@@ -20,13 +13,6 @@ export function parseLabelLine(line: string): string | null {
     .replace(/(^|[\s-])\w/g, (c) => c.toUpperCase());
 }
 
-/**
- * Splits pasted lyrics into sections.
- *
- * If the text has label lines ("Verse 1", "[Chorus]"), each label starts a
- * section and blank lines inside it stay as slide breaks. Otherwise every
- * blank-line-separated block becomes its own section ("Part 1", "Part 2", …).
- */
 export function parseLyrics(text: string): ParsedSection[] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const hasLabels = lines.some((line) => parseLabelLine(line) !== null);
@@ -56,10 +42,6 @@ export function parseLyrics(text: string): ParsedSection[] {
   return sections;
 }
 
-/**
- * Breaks a section's lyrics into slides: explicit blank-line breaks first,
- * then at most `maxLines` lines per slide.
- */
 export function toSlides(lyrics: string, maxLines = 2): string[] {
   return splitBlocks(lyrics).flatMap((block) => {
     const lines = block.split("\n");
@@ -71,7 +53,6 @@ export function toSlides(lyrics: string, maxLines = 2): string[] {
   });
 }
 
-/** Short tag for compact arrangement chips: "Verse 2" → "V2", "Chorus" → "C". */
 export function shortLabel(label: string): string {
   const [word, num] = label.trim().split(/\s+/);
   const lower = (word ?? "").toLowerCase();

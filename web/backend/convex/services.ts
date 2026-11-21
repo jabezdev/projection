@@ -1,12 +1,3 @@
-/**
- * Services and their arrangements.
- *
- * Several people may arrange the same service at once (song leader on their
- * phone, operator at the desk), so every edit is a small operation addressed
- * by entry key, never "replace the whole list". Convex runs mutations as
- * serialized transactions, so concurrent operations all apply instead of the
- * last save overwriting the others.
- */
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
@@ -22,7 +13,6 @@ export const list = query({
   },
 });
 
-/** A service with every item's arrangement resolved against the library. */
 export const get = query({
   args: { serviceId: v.id("services") },
   handler: async (ctx, { serviceId }) => {
@@ -50,7 +40,6 @@ export const get = query({
             key: item.key,
             notes: item.notes,
             entries: item.sequence.map((entry) => resolveEntry(entry, byId)),
-            /** For the "add a section" picker. */
             librarySections: librarySections.map(({ _id, label }) => ({ _id, label })),
           };
         }),
@@ -98,8 +87,6 @@ export const remove = mutation({
   },
 });
 
-// ── Items ────────────────────────────────────────────────────────────────
-
 export const addSong = mutation({
   args: { serviceId: v.id("services"), songId: v.id("songs") },
   handler: async (ctx, { serviceId, songId }) => {
@@ -142,7 +129,6 @@ export const removeItem = mutation({
   },
 });
 
-/** Swaps the item with its neighbour above (-1) or below (+1). */
 export const moveItem = mutation({
   args: { itemId: v.id("serviceItems"), direction: v.union(v.literal(-1), v.literal(1)) },
   handler: async (ctx, { itemId, direction }) => {
@@ -164,12 +150,6 @@ export const moveItem = mutation({
   },
 });
 
-// ── Arrangement (sequence of sections within an item) ───────────────────
-
-/**
- * Inserts a library section, or a service-only part when `sectionId` is
- * omitted. `index` past the end appends.
- */
 export const insertEntry = mutation({
   args: {
     itemId: v.id("serviceItems"),
@@ -199,7 +179,7 @@ export const moveEntry = mutation({
   handler: async (ctx, { itemId, entryKey, toIndex }) => {
     await editSequence(ctx, itemId, (_item, sequence) => {
       const from = sequence.findIndex((e) => e.key === entryKey);
-      if (from < 0) return; // someone else removed it meanwhile
+      if (from < 0) return;
       const [entry] = sequence.splice(from, 1);
       sequence.splice(clamp(toIndex, 0, sequence.length), 0, entry);
     });
@@ -216,10 +196,6 @@ export const removeEntry = mutation({
   },
 });
 
-/**
- * Sets this service's variation of an entry's lyrics/label.
- * `null` reverts to the library version (for library sections).
- */
 export const setEntryText = mutation({
   args: {
     itemId: v.id("serviceItems"),
@@ -231,7 +207,6 @@ export const setEntryText = mutation({
     await editSequence(ctx, itemId, (_item, sequence) => {
       const entry = sequence.find((e) => e.key === entryKey);
       if (!entry) return;
-      // Service-only parts have no library text to fall back to.
       const canRevert = entry.sectionId !== undefined;
       if (label !== undefined) entry.label = label ?? (canRevert ? undefined : "Part");
       if (lyrics !== undefined) entry.lyrics = lyrics ?? (canRevert ? undefined : "");
@@ -239,7 +214,6 @@ export const setEntryText = mutation({
   },
 });
 
-/** Makes this service's variation the library version for everyone. */
 export const promoteEntry = mutation({
   args: { itemId: v.id("serviceItems"), entryKey: v.string() },
   handler: async (ctx, { itemId, entryKey }) => {
@@ -254,7 +228,6 @@ export const promoteEntry = mutation({
   },
 });
 
-/** Throws away this service's arrangement and starts again from the song's default. */
 export const resetSequence = mutation({
   args: { itemId: v.id("serviceItems") },
   handler: async (ctx, { itemId }) => {

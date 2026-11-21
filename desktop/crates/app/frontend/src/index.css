@@ -1,21 +1,14 @@
 @import "tailwindcss";
 
-/*
- * PALTO operator: a console, not a web page.
- * Flush graphite surfaces separated by dark machined seams (never light
- * outlines), key-cap buttons that press, condensed labels, and two signal
- * colors only: tally red for what is on air, amber for interrupts and
- * warnings. Everything else stays neutral so the signals read at a glance.
- */
 :root {
-  --bg-0: #0b0c0d;   /* wells: previews, inputs */
-  --bg-1: #121314;   /* base, lyric stream */
-  --bg-2: #18191b;   /* panes */
-  --bg-3: #1f2022;   /* raised: headers, keys */
-  --bg-4: #27282b;   /* key hover */
-  --bg-5: #313236;   /* selected, pressed */
-  --seam: #070708;   /* hairlines between flush surfaces */
-  --sheen: #ffffff0b; /* top light on keys */
+  --bg-0: #0b0c0d;
+  --bg-1: #121314;
+  --bg-2: #18191b;
+  --bg-3: #1f2022;
+  --bg-4: #27282b;
+  --bg-5: #313236;
+  --seam: #070708;
+  --sheen: #ffffff0b;
   --fg-1: #ecebe6;
   --fg-2: #a6a59f;
   --fg-3: #74736e;
@@ -44,18 +37,15 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 ::-webkit-scrollbar-thumb { background: var(--bg-5); }
 ::-webkit-scrollbar-thumb:hover { background: #45464b; }
 ::-webkit-scrollbar-track { background: transparent; }
-/* Labels: condensed caps, the console's engraving. */
 .panel-heading, .output-bar h2, .preview-label, .screen-popover label, .surface-header small, .settings-fields legend, .capture-sources > small {
   font-family: var(--font-label); font-weight: 600; text-transform: uppercase; letter-spacing: .09em;
 }
-/* Numbers that change line up instead of jittering. */
 .line-code, .part-code-badge, .setting-range output, .pairing-code, .remote-url, kbd { font-variant-numeric: tabular-nums; }
 
 .ui-icon { width: 18px; height: 18px; flex-shrink: 0; }
 .icon-button { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; color: var(--fg-2); }
 .icon-button:hover { color: var(--fg-1); background: var(--bg-4); }
 .icon-button:active { background: var(--bg-5); box-shadow: var(--key-press); }
-/* The one light key per surface. */
 .primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 3px; background: var(--fg-1); color: #111; font-weight: 600; box-shadow: inset 0 -2px 0 #0002; }
 .primary-action:hover { background: #fff; }
 .primary-action:active { transform: translateY(1px); box-shadow: inset 0 2px 2px #0003; }
@@ -65,7 +55,6 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 .session-pane, .lyrics-pane, .operator-controls { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-2); animation: pane-in var(--slow) var(--ease) both; }
 .lyrics-pane { animation-delay: 50ms; }
 .operator-controls { animation-delay: 100ms; }
-/* Opacity only: a transform would move the native live monitors' anchors without telling them. */
 @keyframes pane-in { from { opacity: 0; } }
 .column-divider { position: relative; cursor: col-resize; touch-action: none; background: var(--seam); }
 .column-divider::after { content: ''; position: absolute; inset: 0 2px; background: transparent; transition: background-color var(--fast) var(--ease); }
@@ -94,7 +83,6 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 .empty-panel { padding: 28px 18px; color: var(--fg-3); text-align: center; font-size: 13px; }
 .ui-error { display: flex; justify-content: space-between; padding: 10px 16px; background: #3a1a14; color: #ffc4b6; box-shadow: inset 3px 0 var(--live); animation: drop-in var(--med) var(--ease); }
 
-/* Dialogs rise out of a dimmed console. */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: #000c; animation: fade-in var(--med) var(--ease); }
 .modal-backdrop > * { animation: rise-in var(--slow) var(--ease); }
 @keyframes fade-in { from { opacity: 0; } }
@@ -106,7 +94,6 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 .part-edit-modal > small { color: var(--fg-3); font-size: 12px; }
 .modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
 
-/* Full, flush song workspace. */
 .song-editor { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--seam); animation: fade-in var(--med) var(--ease); }
 
  .surface-header small { font-size: 11px; color: var(--fg-3); }
@@ -114,8 +101,6 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 .part-dot { width: 8px; height: 8px; background: var(--part-color); border-radius: 1px; flex-shrink: 0; }
 
 .part-code-badge { color: var(--part-color); font-family: var(--font-label); font-size: 14px; font-weight: 600; letter-spacing: .04em; }
-
-/* Library and service planning share one flush workspace. */
 
 .surface-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; flex-shrink: 0; background: var(--bg-3); box-shadow: 0 1px 0 var(--seam), inset 0 1px 0 var(--sheen); }
 .surface-header h2, .surface-header input { font-size: 22px; font-weight: 600; letter-spacing: -.01em; background: transparent; }
@@ -125,11 +110,8 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 @media (max-width: 950px) { .display-override { gap: 5px; font-size: 13px; }.panel-heading small { font-size: 10px; } }
 @media (max-width: 720px) { .modal-backdrop { padding: 12px; }.line-code { width: 49px; padding-inline: 7px; font-size: 11px; }.lyric-line { font-size: 13px; }.display-override { gap: 4px; font-size: 12px; }.display-override .ui-icon { width: 16px; height: 16px; } }
 
-/* Song headers use one large disclosure target and a flush edit square. */
-
 .confidence-preview-surface { aspect-ratio: 16/9; width: 100%; }
 
-/* Settings. */
 .output-settings { width: min(1100px, 100%); height: min(850px, 92dvh); display: flex; flex-direction: column; border-radius: 4px; background: var(--bg-2); box-shadow: 0 24px 60px #000c; overflow: hidden; }
 .settings-body { display: grid; grid-template-columns: minmax(0, 1fr) 40%; flex: 1; min-height: 0; gap: 1px; background: var(--seam); }
 .settings-fields { overflow: auto; padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 22px; background: var(--bg-2); }
@@ -169,7 +151,6 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 .operator-panes.is-resizing { user-select: none; cursor: col-resize; }
 .operator-panes.is-resizing .confidence-preview-surface { pointer-events: none; }
 .stream-song { content-visibility: auto; contain-intrinsic-size: auto 600px; }
-/* Operator surfaces remain selectable only while editing actual text. */
 .operator-shell { user-select: none; -webkit-user-select: none; }
 .operator-shell input:not([type=range]):not([type=checkbox]):not([type=radio]), .operator-shell textarea, .operator-shell [contenteditable=true] { user-select: text; -webkit-user-select: text; }
 .operator-controls { max-width: none; }
@@ -185,9 +166,6 @@ fieldset:disabled { opacity: .35; }
 .lyric-stream::before { height: calc(var(--stream-height, 100vh) * .25); }
 .lyric-stream::after { height: calc(var(--stream-height, 100vh) * .5); }
 
-/* Media decks. */
-
-/* Quick search: drops in where the eye already is. */
 .quick-search { align-self: start; margin-top: 10vh; width: min(560px, 100%); display: flex; flex-direction: column; max-height: 70vh; border-radius: 4px; background: var(--bg-3); box-shadow: 0 24px 60px #000c, inset 0 1px 0 var(--sheen); overflow: hidden; }
 .quick-search > input { padding: 16px 18px; border: 0; border-bottom: 1px solid var(--seam); background: transparent; font-size: 17px; }
 .quick-search ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
@@ -246,13 +224,11 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .capture-pick { display: flex; gap: 8px; flex-wrap: wrap; }
 .capture-chosen { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; color: var(--fg-1); }
 
-/* Right column: one panel per screen, each with its bar, overrides and live monitor. */
 .output-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--bg-2); }
 .output-panel + .output-panel { border-top: 1px solid var(--seam); }
 .output-bar { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 8px 6px 12px; flex-shrink: 0; background: var(--bg-3); box-shadow: 0 1px 0 var(--seam); }
 .output-bar h2 { margin: 0; font-size: 13px; color: var(--fg-2); }
 .output-bar .on-air-pending { margin-left: 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* Screen switch: one pill, two keys. A red tally lamp means the audience sees it. */
 .screen-switch { position: relative; display: inline-flex; flex-shrink: 0; gap: 1px; margin-left: auto; border-radius: 999px; background: var(--seam); box-shadow: 0 0 0 1px var(--seam); }
 .screen-switch > button { display: flex; align-items: center; gap: 7px; min-height: 28px; background: var(--bg-4); color: var(--fg-2); font-size: 13px; font-weight: 600; box-shadow: inset 0 1px 0 var(--sheen); }
 .screen-switch > button:hover:not(:disabled) { background: var(--bg-5); color: var(--fg-1); }
@@ -272,7 +248,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.97); } }
 .screen-popover label { display: grid; gap: 5px; font-size: 12px; color: var(--fg-3); }
 .screen-popover select { width: 100%; padding: 7px 8px; border-radius: 3px; background: var(--bg-0); color: var(--fg-1); font-family: var(--font); font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; }
-/* Overrides: hardware keys with an indicator lamp. None lit means live. */
 .display-overrides { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; flex-shrink: 0; background: var(--seam); border-bottom: 1px solid var(--seam); }
 .display-override { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 6px; background: var(--bg-3); color: var(--fg-2); font-size: 14px; font-weight: 600; box-shadow: inset 0 1px 0 var(--sheen); }
 .display-override::after { content: ''; position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #3b3c40; box-shadow: inset 0 1px 1px #0008; transition: background-color var(--med) var(--ease), box-shadow var(--med) var(--ease); }
@@ -291,7 +266,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
 
-/* ── Shared pieces for the library and service editing ───────────────── */
 .grow { flex: 1; }
 .eyebrow { font-family: var(--font-label); font-weight: 600; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-3); }
 .field-hint { color: var(--fg-3); font-size: 12px; }
@@ -302,7 +276,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 :where(.mini-foot, .library-modal-head, .item-layout, .service-popover-foot, .edited-notice, .editor-toast, .library-banner, .song-editor-bar, .item-capture) button:not([class]):hover:not(:disabled) { background: var(--bg-5); }
 :where(.mini-foot, .library-modal-head, .item-layout, .service-popover-foot, .edited-notice, .editor-toast, .library-banner, .song-editor-bar, .item-capture) button:not([class]) .ui-icon { width: 15px; height: 15px; }
 
-/* Pictures: everything is drawn at 16:9 as it will look. */
 .thumb { position: relative; display: block; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; overflow: hidden; border-radius: 2px; background: #000; box-shadow: 0 0 0 1px var(--seam); container-type: inline-size; }
 .thumb > .slide-preview { position: absolute; inset: 0; }
 .thumb-tile { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 2px; background: linear-gradient(160deg, #23262c, #121417); color: var(--fg-2); font-size: 11px; text-align: center; padding: 4px; }
@@ -315,7 +288,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .slide-area { position: absolute; display: flex; flex-direction: column; }
 .slide-area p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* ── Left column: service selector on top, Settings and Library at the foot ── */
 .session-pane { position: relative; }
 .service-menu { position: relative; flex-shrink: 0; z-index: 20; }
 .service-selector { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 1px; background: var(--seam); border-bottom: 1px solid var(--seam); }
@@ -353,7 +325,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .session-foot button:hover .ui-icon:first-child { transform: none; }
 .session-foot button:active { box-shadow: var(--key-press); }
 
-/* ── Service editor: items on the left, the selected item on the right ── */
 .service-editor { position: relative; width: min(1320px, 100%); height: min(860px, 94dvh); display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 4px; overflow: hidden; background: var(--seam); gap: 1px; box-shadow: 0 24px 60px #000c; }
 .service-editor-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; background: var(--bg-3); box-shadow: inset 0 1px 0 var(--sheen); }
 .service-editor-head input { width: min(460px, 50vw); padding: 3px 6px; margin-left: -6px; border-radius: 3px; background: transparent; font-size: 20px; font-weight: 600; }
@@ -417,7 +388,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .editor-toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 14px; border-radius: 4px; background: var(--bg-5); box-shadow: 0 12px 30px #000c; font-size: 14px; animation: rise-in var(--med) var(--ease); }
 .editor-toast button { padding: 3px 9px !important; font-weight: 700; }
 
-/* Mini library: opens beside an insertion point in the service editor. */
 .mini-library { position: absolute; left: 352px; z-index: 25; width: min(560px, calc(100% - 370px)); max-height: 480px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; border-radius: 4px; background: var(--bg-3); box-shadow: 0 20px 50px #000e, 0 0 0 1px var(--seam), inset 0 1px 0 var(--sheen); transform-origin: left top; animation: pop-in var(--med) var(--ease); }
 .mini-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 6px; }
 .mini-head input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 3px; background: var(--bg-0); font-size: 13px; }
@@ -436,7 +406,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .mini-empty { grid-column: 1 / -1; margin: 6px 2px; color: var(--fg-3); }
 .mini-foot { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--seam); }
 
-/* ── Library: every song and file, managed at the source ── */
 .library-modal { width: min(1200px, 100%); height: min(820px, 92dvh); display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); border-radius: 4px; overflow: hidden; background: var(--bg-2); box-shadow: 0 24px 60px #000c; }
 .library-modal-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 12px 12px 18px; background: var(--bg-3); box-shadow: 0 1px 0 var(--seam), inset 0 1px 0 var(--sheen); }
 .library-modal-head h2 { margin: 0 6px 0 0; font-size: 20px; font-weight: 600; }
@@ -467,7 +436,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .library-path { color: var(--fg-2); }
 .library-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* ── Song editing: lyrics left, a fixed preview and details panel right ── */
 .song-editor { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .song-editor-bar { display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 18px; background: var(--bg-3); box-shadow: 0 1px 0 var(--seam), inset 0 1px 0 var(--sheen); }
 .song-editor-name { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -532,17 +500,14 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .background-grid button[aria-pressed=true] .thumb { box-shadow: 0 0 0 2px var(--fg-1); }
 .background-grid button span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) { .service-editor-body { grid-template-columns: 260px minmax(0, 1fr); } .service-item { grid-template-columns: 14px 72px minmax(0, 1fr) auto; } .mini-library { left: 272px; width: calc(100% - 290px); } .song-workspace { grid-template-columns: minmax(0, 1fr) minmax(260px, 45%); } .item-layout-top { grid-template-columns: 1fr; } }
-/* Optional error and notice rows must not steal the body's height. */
 .song-editor, .service-editor, .library-modal { display: flex; flex-direction: column; }
 .song-editor > .song-workspace, .service-editor > .service-editor-body, .library-modal > .library-modal-body { flex: 1; min-height: 0; }
 .service-editor > *, .library-modal > *, .song-editor > * { flex-shrink: 0; }
 .service-editor > .service-editor-body, .library-modal > .library-modal-body, .song-editor > .song-workspace { flex-shrink: 1; }
 .service-editor { gap: 0; }
 .service-editor-head { border-bottom: 1px solid var(--seam); }
-/* The background picker opens upward across the panel's width, inside it. */
 .background-popover { left: 0; right: 0; width: auto; max-height: min(460px, 62vh); }
 
-/* ── Left column: the service's items as separate keys, grouped by section ── */
 .lamp { display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 2px #ff5a3633, 0 0 8px var(--live); }
 .run-list { padding: 8px 8px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); }
 .run-group { display: flex; flex-direction: column; gap: 4px; }
@@ -590,7 +555,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .slide-key.is-active .thumb { box-shadow: 0 0 0 2px var(--live); }
 .slide-key-number { position: absolute; left: 3px; bottom: 3px; padding: 0 4px; border-radius: 2px; background: #000b; color: #fff; font-size: 10px; font-weight: 600; }
 
-/* ── Middle column: sections as dividers, everything else as pictures to click ── */
 .stream-section { display: flex; align-items: center; gap: 12px; padding: 26px 16px 8px; color: var(--fg-3); font-family: var(--font-label); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
 .stream-section::before, .stream-section::after { content: ''; flex: 1; height: 1px; background: var(--bg-5); }
 .stream-section span { color: var(--fg-2); }
@@ -612,7 +576,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .note-chips span { padding: 2px 8px; border-radius: 2px; background: var(--bg-4); color: var(--fg-2); font-size: 12px; font-weight: 600; }
 .cue-problem { color: #ff8a70; font-weight: 600; }
 
-/* ── Now playing: the transport, fixed under the lyrics while media is on air ── */
 .lyrics-pane { position: relative; }
 .now-playing { flex-shrink: 0; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(260px, 2.2fr) auto; align-items: center; gap: 14px; padding: 10px 14px; background: var(--bg-3); box-shadow: 0 -1px 0 var(--seam), 0 -10px 24px #0007, inset 0 1px 0 var(--sheen); animation: rise-in var(--med) var(--ease); }
 .np-what { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -645,7 +608,6 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .np-error { grid-column: 1 / -1; margin: 0; color: #ff8a70; font-size: 12px; }
 @media (max-width: 1300px) { .now-playing { grid-template-columns: minmax(0, 1fr) auto; } .np-transport { grid-column: 1 / -1; grid-row: 2; } }
 
-/* ── Service editor: sections in the item list ── */
 .service-item.is-section { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 6px 6px 8px; margin-top: 4px; }
 .service-item.is-section.is-selected { box-shadow: inset 3px 0 var(--fg-1); }
 .service-section-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

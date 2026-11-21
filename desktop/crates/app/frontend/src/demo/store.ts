@@ -15,7 +15,6 @@ export function defaultProgramState(): UiOnlyProgramState {
   };
 }
 
-/** The demo service with every item type, its media and songs in the library. */
 export function demoStore(): UiOnlyStore {
   const store: UiOnlyStore = {
     version: 1,
@@ -30,18 +29,12 @@ export function demoStore(): UiOnlyStore {
   return store;
 }
 
-/**
- * Browser-only mode starts every page load from the demo: anything saved by
- * an earlier visit (services, songs, output settings, column sizes) is
- * dropped, then the demo service and the demo logo are written. Call before
- * the UI first renders.
- */
 export function startDemo(): void {
   if (isTauri() || typeof window === 'undefined') return;
   try {
     window.localStorage.clear();
     window.localStorage.setItem('magi.output.config', JSON.stringify({ logoPath: DEMO_LOGO }));
-  } catch { /* Storage blocked: the demo still loads, unsaved. */ }
+  } catch {  }
   demoStore();
 }
 
@@ -85,6 +78,5 @@ export function saveUiOnlyStore(store: UiOnlyStore): void {
   try {
     window.localStorage.setItem(UI_ONLY_STORAGE_KEY, JSON.stringify(store));
   } catch {
-    // ignore storage failures (private mode/quota)
   }
 }

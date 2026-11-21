@@ -7,14 +7,12 @@ import { useOutputSizes } from './useOutputSizes';
 import type { DisplayMode } from '../api/useEngine';
 
 type Override = Exclude<DisplayMode, 'live'>;
-/** Overrides of the projection; with none pressed, the projection is live. */
 const OVERRIDES: [Override, string, string][] = [
   ['logo', 'Logo', 'Show the logo instead of the cue'],
   ['black', 'Black', 'Black out the projection'],
   ['clear', 'Clear', 'Hide the text, keep the background'],
 ];
 
-/** The right column: each screen's bar (show switch and settings), its live monitor, and the projection overrides. */
 export default function OutputControls({ display, loading, onDisplay, onError }: { display: DisplayMode; loading: Record<string, boolean>; onDisplay: (display: DisplayMode) => void; onError: (message: string) => void }) {
   const outputSizes = useOutputSizes(true);
   const screens = useScreens(onError);

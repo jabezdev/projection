@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke, listen } from './tauri';
 
-// Mirrors protocol::PlaybackState: the engine-owned foreground media transport.
 export type PlaybackPhase = 'preparing' | 'ready' | 'playing' | 'paused' | 'ended' | 'failed';
 export type PlaybackState = {
   session_id: number; generation: number; item_id: number; path: string; kind: 'video' | 'audio';
@@ -25,18 +24,15 @@ type PlaybackEvent = { type: string; payload: { playback?: PlaybackState | null;
 
 export const running = (playback: PlaybackState) => !playback.paused && !playback.suspended;
 
-/** Addressed to one session, so a late click cannot control a newer cue. */
 export function sendMedia(sessionId: number, action: MediaAction) {
   return invoke('engine_command', { command: { type: 'media', payload: { session_id: sessionId, action } } });
 }
 
-/** The authoritative playback state, kept current from engine events. */
 export function usePlayback(): PlaybackState | null {
   const [state, setState] = useState<{ playback: PlaybackState | null; revision: number }>({ playback: null, revision: -1 });
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => void) | undefined;
-    // Revisions only grow; anything older than what we hold is stale.
     const accept = (playback: PlaybackState | null, revision: number) => setState(current => revision > current.revision ? { playback, revision } : current);
     void (async () => {
       const unlisten = await listen<PlaybackEvent>('engine:event', ({ payload }) => {

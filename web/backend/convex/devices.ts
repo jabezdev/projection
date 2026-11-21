@@ -1,11 +1,3 @@
-/**
- * Pairing projection computers.
- *
- * An operator signs in on the web, asks for a code, and types it into the
- * desktop app. The desktop trades the code for a long-lived device token and
- * from then on acts as that operator. Tokens are stored hashed; revoking the
- * device (or demoting the operator) cuts it off.
- */
 import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
@@ -13,7 +5,6 @@ import { can, requirePermission } from "./lib/auth";
 import { randomToken, sha256Hex } from "./lib/util";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
-// No 0/O, 1/I/L: the code is read off one screen and typed into another.
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 export const createPairingCode = mutation({
@@ -37,7 +28,6 @@ export const createPairingCode = mutation({
   },
 });
 
-/** Called by the desktop app (not signed in). Returns the device token once. */
 export const claimPairingCode = mutation({
   args: { code: v.string(), deviceName: v.string() },
   handler: async (ctx, { code, deviceName }) => {
@@ -87,10 +77,6 @@ export const revoke = mutation({
   },
 });
 
-/**
- * For desktop-facing functions: resolves a device token to its operator.
- * Use instead of `requirePermission` in functions the desktop calls.
- */
 export async function requireDevice(ctx: QueryCtx, token: string): Promise<Doc<"users">> {
   const tokenHash = await sha256Hex(token);
   const device = await ctx.db

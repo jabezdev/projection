@@ -84,7 +84,6 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         engine.store.media = (engine.store.media || []).map(m => m.id === Number(args?.id) ? { ...m, title } : m);
         saveUiOnlyStore(engine.store); return undefined as T;
       }
-      // Browser-only mode cannot read files from disk.
       case 'import_media_files': return [] as T;
 
       case 'create_project': {
@@ -204,7 +203,6 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
               engine.store.program_state.active_text = steps[nextStep] || '';
             }
           } else if (activeIndex >= 0) {
-            // Neighbouring items skip section headings.
             let target = activeIndex + dir;
             while (target >= 0 && target < items.length && items[target].kind.kind === 'section') target += dir;
             if (target >= 0 && target < items.length) engine.setActiveItem(items[target].id);
@@ -238,8 +236,6 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         emitUiOnly('output:shown', Object.values(engine.screens).some(screen => screen.shown));
         return engine.displays() as T;
       }
-
-      // Media playback needs the desktop engine; the browser-only mode has none.
 
       default: {
         console.debug('[ui-only] unhandled invoke', command, args);

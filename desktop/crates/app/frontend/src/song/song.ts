@@ -2,9 +2,7 @@ import type { SessionItem } from '../api/models';
 export type Part = { id: string; type: string; number: number; lyrics: string; slideTexts?: string[]; color?: string };
 export type SongDocument = {
   format: 'magi.song.v1'; slideSeparator?: 'blank-line'; parts: Part[]; arrangement: string[]; background: string; authorSinger?: string;
-  /** In a service: the library song this copy came from. */
   librarySongId?: number;
-  /** In a service: changed for this service only; the library song is untouched. */
   editedInService?: boolean;
 };
 export const emptySong = (): SongDocument => ({ format: 'magi.song.v1', slideSeparator: 'blank-line', parts: [], arrangement: [], background: '' });
@@ -17,14 +15,13 @@ export function decodeSong(lyrics: string): SongDocument {
   try {
     const value = JSON.parse(lyrics);
     if (value.format === 'magi.song.v1' && Array.isArray(value.parts) && Array.isArray(value.arrangement)) {
-      // Preserve slides saved by the former single-line editor when opening old songs.
       if (value.slideSeparator !== 'blank-line') {
         value.parts = value.parts.map((part: Part) => ({ ...part, lyrics: (part.slideTexts || part.lyrics.split('\n').map(line => line.trim()).filter(Boolean)).join('\n\n'), slideTexts: undefined }));
         value.slideSeparator = 'blank-line';
       }
       return value;
     }
-  } catch { /* Older library songs contain plain lyrics. */ }
+  } catch {  }
   const part = { id: 'legacy', type: 'Verse', number: 1, lyrics, slideTexts: splitSlides(lyrics) };
   return { ...emptySong(), parts: [part], arrangement: [part.id] };
 }
@@ -33,7 +30,6 @@ export function arrangedParts(song: SongDocument) {
 }
 export const songSteps = (song: SongDocument) => arrangedParts(song).flatMap(slides);
 
-// Destination is a gap between occurrences, including the gap after the last one.
 export function moveArrangement(arrangement: string[], from: number, destination: number) {
   if (from < 0 || from >= arrangement.length) return arrangement;
   const next = [...arrangement];
@@ -42,14 +38,12 @@ export function moveArrangement(arrangement: string[], from: number, destination
   return next;
 }
 
-/** The song document of a service item; services saved before songs had parts get one part. */
 export function itemSong(item: SessionItem): SongDocument {
   if (item.song) return decodeSong(item.song);
   const steps = item.kind.kind === 'text' ? item.kind.data.steps : [];
   return { format: 'magi.song.v1', slideSeparator: 'blank-line', background: item.background || '', parts: [{ id: 'legacy', type: 'Verse', number: 1, lyrics: steps.join('\n\n'), slideTexts: steps }], arrangement: ['legacy'] };
 }
 
-/** A library song's document, without the service-only markers. */
 export function librarySong(song: SongDocument): SongDocument {
   const copy = { ...song };
   delete copy.librarySongId;
@@ -57,14 +51,12 @@ export function librarySong(song: SongDocument): SongDocument {
   return copy;
 }
 
-/** The slide of a part that a caret position in its lyrics falls on. */
 export function slideAtCaret(lyrics: string, caret: number) {
   const separator = /\n[ \t]*\n(?:[ \t]*\n)*/g;
   let index = 0;
   for (let match = separator.exec(lyrics); match; match = separator.exec(lyrics)) {
     const end = match.index + match[0].length;
     if (end > caret) break;
-    // Blank lines before the first or after the last slide separate nothing.
     if (/\S/.test(lyrics.slice(0, match.index)) && /\S/.test(lyrics.slice(end))) index++;
   }
   return Math.max(0, Math.min(index, splitSlides(lyrics).length - 1));

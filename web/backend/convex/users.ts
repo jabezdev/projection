@@ -3,11 +3,6 @@ import { mutation, query } from "./_generated/server";
 import { can, currentUser, requirePermission } from "./lib/auth";
 import { role } from "./schema";
 
-/**
- * Creates the user row on first sign-in, refreshes name/email after that.
- * The first person to sign in becomes admin; everyone else starts as a singer
- * until an admin gives them a role.
- */
 export const ensure = mutation({
   args: {},
   handler: async (ctx) => {
@@ -34,7 +29,6 @@ export const ensure = mutation({
   },
 });
 
-/** The signed-in user plus what their role allows, for the UI to show/hide things. */
 export const me = query({
   args: {},
   handler: async (ctx) => {

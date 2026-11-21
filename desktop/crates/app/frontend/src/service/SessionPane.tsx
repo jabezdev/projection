@@ -9,7 +9,6 @@ import { Background } from '../song/SlidePreview';
 
 type Props = {
   project: ProjectModel | null;
-  /** The projection is still loading the current cue's media. */
   pending?: boolean;
   projectRef: MutableRefObject<ProjectModel | null>;
   projects: ProjectHeader[];
@@ -17,9 +16,7 @@ type Props = {
   run: (work: () => Promise<unknown>) => Promise<void>;
   persist: (project: ProjectModel) => Promise<void>;
   onOpenSettings: () => void;
-  /** Loads a service; false when the operator cancelled. */
   onLoadService: (projectId: number) => Promise<boolean>;
-  /** Opens the service editor, on an item if given. */
   onEditService: (itemId?: number) => void;
   onOpenLibrary: () => void;
   onServicesChanged: () => Promise<void>;
@@ -30,7 +27,6 @@ type Props = {
 };
 type Group = { section: SessionItem | null; items: SessionItem[] };
 
-/** Items under the section heading before them; items before the first heading stand alone. */
 function groupItems(items: SessionItem[]): Group[] {
   const groups: Group[] = [{ section: null, items: [] }];
   for (const item of items) {
@@ -40,7 +36,6 @@ function groupItems(items: SessionItem[]): Group[] {
   return groups.filter(g => g.section || g.items.length);
 }
 
-/** The left column: the service selector, the service's items in their sections, and Settings and Library at the foot. */
 export default function SessionPane({ project, pending, projectRef, projects, program, run, persist, onOpenSettings, onLoadService, onEditService, onOpenLibrary, onServicesChanged, confirm, onError, onEditPart, onCue }: Props) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [dragged, setDragged] = useState<number | null>(null);
@@ -48,7 +43,6 @@ export default function SessionPane({ project, pending, projectRef, projects, pr
   const toggle = (id: number) => setCollapsed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const activeId = program?.active_item_id;
 
-  /** Moves the dragged item, or a section with everything it groups, before or after the target. */
   function move(targetId: number, before: boolean) {
     const current = projectRef.current;
     if (!current || dragged === null || dragged === targetId) return;
@@ -63,7 +57,6 @@ export default function SessionPane({ project, pending, projectRef, projects, pr
     let at = rest.findIndex(i => i.id === targetId);
     if (at < 0) return;
     if (!before) {
-      // After a section heading that is dropped onto means after its whole group.
       at++;
       if (rest[at - 1].kind.kind === 'section' && block[0].kind.kind === 'section') while (at < rest.length && rest[at].kind.kind !== 'section') at++;
     }

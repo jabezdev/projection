@@ -8,16 +8,11 @@ const FADE_MS = 2000;
 const FADE_STEPS = 20;
 const clock = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-/** Where the clip is now: the last reported position moved on by the clock while it plays. */
 function positionOf(p: PlaybackState, now: number) {
   if (!running(p) || p.phase !== 'playing') return p.position_ms;
   return p.position_ms + Math.max(0, now - p.position_at_ms) * p.rate_percent / 100;
 }
 
-/**
- * The transport for whatever video or audio is on air, fixed at the foot of
- * the middle column so it stays in reach while the operator scrolls ahead.
- */
 export default function NowPlaying({ items, nextItemId }: { items: SessionItem[]; nextItemId?: number | null }) {
   const playback = usePlayback();
   return playback ? <MediaTransport key={playback.session_id} playback={playback} items={items} nextItemId={nextItemId}/> : null;
@@ -60,7 +55,6 @@ function MediaTransport({ playback, items, nextItemId }: { playback: PlaybackSta
       });
       if (step >= FADE_STEPS) {
         window.clearInterval(fade.current);
-        // Stopped, then back to its volume for the next play.
         void sendMedia(id, { type: 'stop' }).then(() => sendMedia(id, { type: 'set_volume', payload: { volume: from } }))
           .catch(e => setError(String(e))).finally(() => setFading(false));
       }

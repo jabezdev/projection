@@ -13,7 +13,6 @@ type Settings = { lan_enabled: boolean; port: number; osc_enabled: boolean; osc_
 const settingsOf = (s: RemoteStatus): Settings => ({ lan_enabled: s.lan_enabled, port: s.port, osc_enabled: s.osc.enabled, osc_port: s.osc.port, osc_allowed: s.osc.allowed });
 const ago = (ms: number) => ms < 60_000 ? `${Math.round(ms / 1000)} s ago` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min ago` : `${Math.round(ms / 3_600_000)} h ago`;
 
-/** LAN access, pairing phones and tablets, and OSC for Companion and similar controllers. */
 export default function RemoteSettings() {
   const [status, setStatus] = useState<RemoteStatus | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);

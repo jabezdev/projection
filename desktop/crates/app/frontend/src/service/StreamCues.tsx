@@ -8,7 +8,6 @@ import { MediaThumb } from '../library/Thumbs';
 type Cue = (index?: number) => void;
 const clock = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-/** One picture you click to put on air. */
 function CueTile({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: React.ReactNode }) {
   return <button className={`cue-tile ${active ? 'is-live' : ''}`} aria-label={label} aria-pressed={active} onClick={onClick}>
     {children}
@@ -21,7 +20,6 @@ export function ImageCue({ item, active, onCue }: { item: SessionItem; active: b
   return <div className="stream-cues single"><CueTile active={active} label={`Put ${item.title || 'image'} on air`} onClick={() => onCue()}><div className="thumb"><Background path={item.kind.data.path}/></div></CueTile></div>;
 }
 
-/** Every slide as a picture; the lit one is on air. Arrow keys step through them. */
 export function SlidesCue({ item, active, step, onCue }: { item: SessionItem; active: boolean; step?: number | null; onCue: Cue }) {
   if (item.kind.kind !== 'presentation') return null;
   const paths = item.kind.data.slides || [item.kind.data.path];
@@ -32,7 +30,6 @@ export function SlidesCue({ item, active, step, onCue }: { item: SessionItem; ac
   </div>)}</div>;
 }
 
-/** A video or audio clip: its picture, how it is set to play, and a click to put it on air. */
 export function MediaCue({ item, active, onCue }: { item: SessionItem; active: boolean; onCue: Cue }) {
   if (item.kind.kind !== 'video' && item.kind.kind !== 'audio') return null;
   const options = { ...defaultVideoOptions, ...item.kind.data.options };
@@ -58,7 +55,6 @@ export function MediaCue({ item, active, onCue }: { item: SessionItem; active: b
 
 type CaptureStatus = { id: string; name: string; error: string | null };
 
-/** A live screen or window: what it shows, where, and what went wrong while it is on air. */
 export function CaptureCueTile({ item, active, onCue }: { item: SessionItem; active: boolean; onCue: Cue }) {
   const [problem, setProblem] = useState<string | null>(null);
   const source = item.kind.kind === 'capture' ? item.kind.data.source : null;

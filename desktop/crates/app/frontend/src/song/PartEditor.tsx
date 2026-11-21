@@ -3,7 +3,6 @@ import { Icon } from '../ui/Icons';
 
 export type PartEdit = { itemId: number; partId: string; label: string; lyrics: string };
 
-/** Edits one part's lyrics in the service copy of a song. */
 export default function PartEditor({ part, onClose, onSave }: { part: PartEdit; onClose: () => void; onSave: (part: PartEdit) => Promise<void> }) {
   const [lyrics, setLyrics] = useState(part.lyrics);
   const [saving, setSaving] = useState(false);

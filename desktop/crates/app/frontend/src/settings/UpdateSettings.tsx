@@ -9,7 +9,6 @@ type UpdateStatus = UpdateState & { current_version: string; earlier: string[]; 
 
 const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(0)} MB`;
 
-/** Check, read the notes, install (never while outputs are shown), or reinstall an earlier version. */
 export default function UpdateSettings({ onError }: { onError: (message: string) => void }) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [earlier, setEarlier] = useState('');

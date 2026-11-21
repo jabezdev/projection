@@ -3,16 +3,13 @@ import { UI_ONLY_STORAGE_KEY, loadUiOnlyStore, saveUiOnlyStore } from './store';
 import { runDemoCommand } from './commands';
 import type { UnlistenFn } from '../api/tauri';
 
-/** Lengths of the demo clips; anything else plays as three minutes. */
 export const UI_ONLY_DURATIONS: Record<string, number> = { '/demo/countdown.mp4': 10_000, '/demo/worship-loop.mp4': 8_000, '/demo/offering-music.mp3': 20_000 };
 
-/** Demo displays for the Screens panel: the operator's laptop, a projector and a stage monitor. */
 export const UI_ONLY_MONITORS = [
   { key: '0|demo-laptop', name: 'Built-in display', connector: 'Built-in', width: 1920, height: 1080, aspect: '16:9', operator: true },
   { key: '1|demo-projector', name: 'EPSON PJ', connector: 'HDMI', width: 1920, height: 1080, aspect: '16:9', operator: false },
   { key: '2|demo-monitor', name: 'Dell U2419H', connector: 'DisplayPort', width: 1920, height: 1200, aspect: '16:10', operator: false },
 ];
-
 
 export class UiOnlyEngine {
   store: UiOnlyStore;
@@ -60,11 +57,9 @@ export class UiOnlyEngine {
     this.playbackRevision++;
     this.emit({ type: 'playback_changed', payload: { playback: structuredClone(this.playback), revision: this.playbackRevision } });
   }
-  /** Where the clip is now, from its last position and the clock. */
   position(p: UiOnlyPlayback) {
     return p.paused ? p.position_ms : p.position_ms + (Date.now() - p.position_at_ms) * p.rate_percent / 100;
   }
-  /** Opens a session for a cued video or audio item, as the engine does. */
   syncPlayback(item: UiOnlySessionItem | null): void {
     const media = item && (item.kind.kind === 'video' || item.kind.kind === 'audio') ? item : null;
     if (this.playback && media && this.playback.item_id === media.id) return;
@@ -103,7 +98,6 @@ export class UiOnlyEngine {
       try {
         listener({ payload: event });
       } catch {
-        // ignore listener errors
       }
     }
   }
@@ -123,7 +117,6 @@ export class UiOnlyEngine {
 
   listen(handler: UiOnlyListener): UnlistenFn {
     this.listeners.add(handler);
-    // Immediately sync so the UI can render reliably.
     for (const event of this.syncEvents()) handler({ payload: event });
     return () => this.listeners.delete(handler);
   }
@@ -142,7 +135,6 @@ export class UiOnlyEngine {
   }
 
   setActiveItem(itemId: number | null): void {
-    // Section headings never go on air: a cue on one lands on the item after it.
     const listed = this.activeProject()?.session.items ?? [];
     let index = itemId == null ? -1 : listed.findIndex(it => it.id === itemId);
     while (index >= 0 && index < listed.length && listed[index].kind.kind === 'section') index++;

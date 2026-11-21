@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke, isTauri, listen } from '../api/tauri';
 
-/** Whether the outputs are shown (the Screens switch), kept current. */
 export function useOutputsShown(): boolean {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -14,7 +13,6 @@ export function useOutputsShown(): boolean {
   return shown;
 }
 
-/** Outputs waiting for new media to load; the previous picture is still on air meanwhile. */
 export function useOutputsLoading(): Record<string, boolean> {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   useEffect(() => {

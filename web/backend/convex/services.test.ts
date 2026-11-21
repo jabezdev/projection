@@ -44,7 +44,7 @@ test("repeat, move and remove address entries by key", async () => {
   expect((await get()).entries.map((e) => e.label)).toEqual(["Chorus", "Chorus", "Verse 1"]);
 
   await admin.mutation(api.services.removeEntry, { itemId, entryKey: chorus.key });
-  await admin.mutation(api.services.removeEntry, { itemId, entryKey: chorus.key }); // already gone: no-op
+  await admin.mutation(api.services.removeEntry, { itemId, entryKey: chorus.key });
   expect((await get()).entries.map((e) => e.label)).toEqual(["Chorus", "Verse 1"]);
 });
 
@@ -58,11 +58,9 @@ test("a variation stays in the service until saved to the library", async () => 
   let song = await admin.query(api.songs.get, { songId });
   expect(song!.sections[0].lyrics).toBe("Amazing grace");
 
-  // Library fixes don't reach a service that has its own variation...
   await admin.mutation(api.songs.updateSection, { sectionId: song!.sections[0]._id, lyrics: "Amazing grace!" });
   expect((await get()).entries[0].lyrics).toBe("Amazing GRACE");
 
-  // ...until it's promoted (or reverted).
   await admin.mutation(api.services.promoteEntry, { itemId, entryKey: verse.key });
   entry = (await get()).entries[0];
   expect(entry).toMatchObject({ lyrics: "Amazing GRACE", isVariation: false });

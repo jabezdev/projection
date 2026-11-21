@@ -24,7 +24,6 @@ type Props = {
 };
 const key = (entry: Entry) => entry.kind === 'song' ? `s${entry.song.id}` : `m${entry.media.id}`;
 
-/** Every song and media file, managed at the source: create, import, rename, edit and delete. */
 export default function LibraryModal({ songs, media, onClose, onCatalogChanged, onNewSong, onEditSong, confirm }: Props) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -36,7 +35,6 @@ export default function LibraryModal({ songs, media, onClose, onCatalogChanged, 
   const [services, setServices] = useState<ProjectModel[]>([]);
   const docs = useSongDocs(songs);
   useEffect(() => { if (isTauri()) void invoke<MissingMedia[]>('list_missing_media').then(setMissing).catch(() => {}); }, []);
-  // Which services use what: read once, for the details panel.
   useEffect(() => {
     let disposed = false;
     void invoke<{ id: number }[]>('list_projects').then(list => Promise.all(list.map(p => invoke<ProjectModel>('get_project', { projectId: p.id }))))
@@ -152,7 +150,6 @@ function Details({ entry, usedIn, doc, busy, onEdit, onRename, onDelete }: { ent
   </aside>;
 }
 
-/** A playable preview of a library file. */
 function MediaPreview({ media }: { media: Media }) {
   const poster = useVideoPoster(media.kind === 'video' ? media.path : '');
   if (media.kind === 'audio') return <div className="library-audio"><Icon name="audio"/><audio controls src={mediaSource(media.path)} preload="none"/></div>;

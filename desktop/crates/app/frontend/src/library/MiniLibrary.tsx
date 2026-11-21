@@ -12,11 +12,6 @@ export type LibraryPick = { kind: 'song'; id: number } | { kind: 'media'; media:
 type Filter = 'all' | 'song' | 'video' | 'image' | 'audio' | 'capture';
 type Method = { name: string; system_picker: boolean };
 
-/**
- * A small library next to an insertion point in the service editor:
- * search, type filters and thumbnails. Picking one inserts it there. Only
- * files and slides can be brought in from here; songs are made in the Library.
- */
 export default function MiniLibrary({ top, where, songs, media, onPick, onImport, onSlides, onClose }: {
   top: number; where: string; songs: SongHeader[]; media: Media[];
   onPick: (pick: LibraryPick) => void; onImport: () => Promise<void>; onSlides: () => void; onClose: () => void;
@@ -61,7 +56,6 @@ export default function MiniLibrary({ top, where, songs, media, onPick, onImport
   </div>;
 }
 
-/** Screens and windows to capture, or a system picker where the system chooses. */
 function useCaptureSources(wanted: boolean) {
   const [state, setState] = useState<{ list: CaptureSource[]; picker: boolean }>({ list: isTauri() ? [] : DEMO_SOURCES, picker: false });
   useEffect(() => {

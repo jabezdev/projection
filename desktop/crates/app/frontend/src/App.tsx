@@ -45,7 +45,6 @@ function App() {
   const streamRef = useRef<HTMLDivElement>(null);
   const [library, setLibrary] = useState<SongHeader[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  /** The library song being edited, or a new one (no id). */
   const [editor, setEditor] = useState<{ libraryId?: number; title?: string; song?: SongDocument } | null>(null);
   const [partEditor, setPartEditor] = useState<PartEdit | null>(null);
   const [serviceEditor, setServiceEditor] = useState<{ itemId?: number } | null>(null);
@@ -86,7 +85,6 @@ function App() {
   async function openLibrary() { await refreshCatalog(); setLibraryOpen(true); }
   async function openService(itemId?: number) { await refreshCatalog(); setServiceEditor({ itemId }); }
   async function refreshServices() { setProjects(await invoke<ProjectHeader[]>('list_projects')); }
-  /** Loads a service, asking first while the audience can see the outputs. */
   async function loadService(projectId: number) {
     if (outputsShown && project && project.id !== projectId && !(await confirm('The outputs are shown. Load another service? Its first item goes on air.', 'Load service'))) return false;
     await saveQueue.current; await invoke('load_project', { projectId });
