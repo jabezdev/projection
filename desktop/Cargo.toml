@@ -18,7 +18,7 @@ tokio-tungstenite = "0.30"
 futures-util = "0.3"
 crossbeam = "0.8"
 # Only what playback and posters use, so packages ship fewer FFmpeg libraries.
-ffmpeg-next = { version = "8.1", default-features = false, features = ["codec", "format", "software-resampling", "software-scaling"] }
+ffmpeg-next = { version = "9.1", default-features = false, features = ["codec", "format", "software-resampling", "software-scaling"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 pollster = "1.0"
 anyhow = "1.0"

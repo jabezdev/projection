@@ -19,8 +19,8 @@ here=$(dirname "$(readlink -f "$0")")
 desktop=$(readlink -f "$here/..")
 tools=${PROJECTION_WIN_TOOLS:-$HOME/.local/share/projection-win}
 target=x86_64-pc-windows-msvc
-# Must match the ffmpeg-next major.minor in Cargo.toml.
-ffmpeg_build=ffmpeg-n8.1-latest-win64-lgpl-shared-8.1
+# Must match the FFmpeg major version ffmpeg-next in Cargo.toml binds to.
+ffmpeg_build=ffmpeg-n9.0-latest-win64-lgpl-shared-9.0
 nsis_version=3.12-1
 
 if [ "${1:-}" != "--no-bump" ]; then
