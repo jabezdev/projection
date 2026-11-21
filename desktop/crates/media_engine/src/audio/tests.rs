@@ -118,10 +118,12 @@ fn a_restart_reanchors_the_clock_once_the_consumer_flushes() {
             }
         })
     };
+    let started = std::time::Instant::now();
     audio.restart(60_000_000, 1.0);
-    assert!(audio.ring.is_empty());
+    assert!(started.elapsed() < Duration::from_millis(50), "a restart never waits for the output");
     assert_eq!(audio.position(0), 60_000_000);
     consumer.join().unwrap();
+    assert!(audio.ring.is_empty());
     assert_eq!(audio.position(10_000_000), 60_000_000, "no samples after the flush, so no progress");
 }
 
@@ -134,4 +136,37 @@ fn a_session_never_routed_to_the_device_restarts_without_waiting() {
     assert!(started.elapsed() < Duration::from_millis(100), "a prepared session must not wait for a consumer");
     assert!(audio.ring.is_empty());
     assert_eq!(audio.position(0), 5_000_000);
+}
+
+#[test]
+fn after_a_seek_the_output_waits_for_a_refill_instead_of_counting_underruns() {
+    let audio = SessionAudio::new(1_000, 1);
+    *audio.attached.lock().unwrap() = true;
+    audio.set_running(true);
+    audio.ring.push(&[0.1; 200]);
+    let mut out = [1.0; 10];
+    audio.render(&mut out, 0);
+    audio.restart(0, 1.0);
+    audio.ring.push(&[0.3; 20]);
+    audio.render(&mut out, 10_000);
+    assert_eq!(out, [0.0; 10], "silence while the new position refills");
+    assert_eq!(audio.underruns.load(Ordering::Relaxed), 0);
+    audio.ring.push(&[0.3; 40]);
+    audio.render(&mut out, 20_000);
+    assert_eq!(out, [0.3; 10]);
+    assert_eq!(audio.position(20_000), 0);
+    assert_eq!(audio.position(30_000), 10_000);
+}
+
+#[test]
+fn a_short_clip_plays_even_when_it_ends_before_the_refill_target() {
+    let audio = SessionAudio::new(1_000, 1);
+    audio.set_running(true);
+    audio.restart(0, 1.0);
+    audio.ring.push(&[0.2; 5]);
+    audio.drained.store(true, Ordering::Release);
+    let mut out = [0.0; 10];
+    audio.render(&mut out, 0);
+    assert_eq!(&out[..5], &[0.2; 5]);
+    assert_eq!(audio.underruns.load(Ordering::Relaxed), 0);
 }

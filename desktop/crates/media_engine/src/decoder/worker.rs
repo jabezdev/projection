@@ -138,7 +138,7 @@ impl Worker {
                 self.end_of_clip()?;
                 continue;
             }
-            if self.stash_bytes > STASH_LIMIT_BYTES {
+            if self.read_ahead_full() {
                 self.frames.wait_for_space(Duration::from_millis(20));
                 continue;
             }
@@ -149,6 +149,11 @@ impl Worker {
                 Err(e) => return Err(e).context("Reading media"),
             }
         }
+    }
+
+    fn read_ahead_full(&self) -> bool {
+        let audio_wants_data = self.audio.as_ref().is_some_and(|audio| audio.out.ring.len() < audio.out.ring.capacity() / 2);
+        self.stash_bytes > STASH_LIMIT_BYTES || (self.stash_bytes > IDLE_STASH_BYTES && !audio_wants_data)
     }
 
     pub(super) fn apply(&mut self, control: Control) -> anyhow::Result<Flow> {

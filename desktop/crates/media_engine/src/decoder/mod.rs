@@ -21,6 +21,7 @@ use packing::pack;
 use worker::open_video;
 
 const STASH_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+const IDLE_STASH_BYTES: usize = 4 * 1024 * 1024;
 
 pub const MAX_FRAME: (u32, u32) = (1920, 1080);
 

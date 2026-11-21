@@ -1,11 +1,11 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
 
 use crate::clock::{audio_position, Anchor, AudioTiming, AudioTimingCell};
 use crate::ring::SampleRing;
 
 pub(super) const RING_SECONDS: f64 = 1.0;
+const REFILL_SECONDS: f64 = 0.05;
 
 pub struct SessionAudio {
     pub ring: SampleRing,
@@ -18,6 +18,8 @@ pub struct SessionAudio {
     timing: AudioTimingCell,
     frames_since_flush: AtomicU64,
     epoch_seen: AtomicU64,
+    refilling: AtomicBool,
+    refill_samples: usize,
     pub underruns: AtomicU64,
     pub(super) attached: Mutex<bool>,
 }
@@ -25,8 +27,10 @@ pub struct SessionAudio {
 impl SessionAudio {
     pub fn new(device_rate: u32, channels: u16) -> Self {
         let capacity = (device_rate as f64 * channels as f64 * RING_SECONDS) as usize;
+        let ring = SampleRing::new(capacity);
+        let refill_samples = ((device_rate as f64 * channels as f64 * REFILL_SECONDS) as usize).min(ring.capacity() / 2);
         Self {
-            ring: SampleRing::new(capacity),
+            ring,
             channels,
             device_rate,
             running: AtomicBool::new(false),
@@ -36,6 +40,8 @@ impl SessionAudio {
             timing: AudioTimingCell::default(),
             frames_since_flush: AtomicU64::new(0),
             epoch_seen: AtomicU64::new(0),
+            refilling: AtomicBool::new(false),
+            refill_samples,
             underruns: AtomicU64::new(0),
             attached: Mutex::new(false),
         }
@@ -52,12 +58,7 @@ impl SessionAudio {
     pub fn restart(&self, position_us: i64, rate: f64) {
         let epoch = {
             let attached = self.attached.lock().expect("audio attached poisoned");
-            if *attached {
-                drop(attached);
-                self.ring.flush(Duration::from_millis(250))
-            } else {
-                self.ring.flush_unconsumed()
-            }
+            if *attached { self.ring.request_flush() } else { self.ring.flush_unconsumed() }
         };
         self.drained.store(false, Ordering::Release);
         *self.anchor.lock().expect("audio anchor poisoned") = Anchor { epoch, position_us, rate };
@@ -73,14 +74,20 @@ impl SessionAudio {
         let epoch = self.ring.epoch();
         if self.epoch_seen.swap(epoch, Ordering::AcqRel) != epoch {
             self.frames_since_flush.store(0, Ordering::Release);
+            self.refilling.store(true, Ordering::Release);
         }
-        let read = if self.running.load(Ordering::Acquire) { self.ring.pop(out) } else { 0 };
+        let drained = self.drained.load(Ordering::Acquire);
+        if self.refilling.load(Ordering::Acquire) && (drained || self.ring.len() >= self.refill_samples) {
+            self.refilling.store(false, Ordering::Release);
+        }
+        let refilling = self.refilling.load(Ordering::Acquire);
+        let read = if self.running.load(Ordering::Acquire) && !refilling { self.ring.pop(out) } else { 0 };
         let gain = f32::from_bits(self.gain.load(Ordering::Acquire));
         for sample in &mut out[..read] {
             *sample *= gain;
         }
         out[read..].fill(0.0);
-        if self.running.load(Ordering::Acquire) && read < out.len() && !self.drained.load(Ordering::Acquire) {
+        if self.running.load(Ordering::Acquire) && !refilling && read < out.len() && !drained {
             self.underruns.fetch_add(1, Ordering::Relaxed);
         }
         let frames = (read / self.channels.max(1) as usize) as u64;
