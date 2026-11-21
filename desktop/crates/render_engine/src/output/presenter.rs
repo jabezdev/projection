@@ -1,218 +1,34 @@
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crossbeam::channel::{bounded, Receiver, RecvTimeoutError, Sender, TrySendError};
+use crossbeam::channel::{Receiver, RecvTimeoutError};
 
-use crate::confidence::ConfidenceRenderer;
-use crate::main_scene::MainRenderer;
-use crate::media::MediaTextures;
-use crate::paint::{DrawList, Painter};
-use crate::scene::{Activity, Scene};
-use crate::text::Fonts;
+use crate::paint::Painter;
 use crate::Gpu;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OutputRole {
-    Projection,
-    Confidence,
-}
-
-impl OutputRole {
-    pub fn label(self) -> &'static str {
-        match self {
-            OutputRole::Projection => "projection",
-            OutputRole::Confidence => "confidence",
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum OutputEvent {
-    Shutdown,
-    /// A new size or scene is waiting in the worker's slots.
-    Wake,
-}
-
-/// Presentation telemetry, sampled by the app for logs and status.
-#[derive(Debug, Clone, Default)]
-pub struct OutputStats {
-    pub presented: u64,
-    pub max_interval_ms: f64,
-    pub surface_errors: u64,
-}
-
-/// What a scene renderer needs from the engine.
-#[derive(Clone)]
-pub(crate) struct Resources {
-    pub gpu: Arc<Gpu>,
-    pub fonts: Arc<Fonts>,
-    pub media: Arc<MediaTextures>,
-    /// Told when an output starts or stops waiting for new media.
-    pub status: Arc<std::sync::OnceLock<StatusSink>>,
-}
-
-/// Receives `(output, loading)` whenever a shown output starts or stops
-/// waiting for its new media (the previous picture stays up meanwhile).
-pub type StatusSink = Box<dyn Fn(OutputRole, bool) + Send + Sync>;
-
-/// Latest requested size and scene. Kept outside the event queue so a burst
-/// while the worker is blocked can never drop the newest value.
-#[derive(Default)]
-struct Pending {
-    size: Mutex<Option<(u32, u32)>>,
-    scene: Mutex<Option<Scene>>,
-    /// The window lost its contents (exposed, mapped) and needs a new frame.
-    redraw: std::sync::atomic::AtomicBool,
-    /// The window is on screen. Hidden outputs present nothing.
-    shown: std::sync::atomic::AtomicBool,
-    /// Content aspect ratio, letterboxed in the window; `None` fills it.
-    aspect: Mutex<Option<(u32, u32)>>,
-}
-
-pub(crate) struct OutputWorker {
-    events: Sender<OutputEvent>,
-    pending: Arc<Pending>,
-    stats: Arc<Mutex<OutputStats>>,
-    thread: Option<JoinHandle<()>>,
-    role: OutputRole,
-}
-
-impl OutputWorker {
-    pub fn spawn(
-        resources: Resources,
-        role: OutputRole,
-        surface: wgpu::Surface<'static>,
-        width: u32,
-        height: u32,
-        stall: Option<Duration>,
-    ) -> anyhow::Result<Self> {
-        // Bounded: a stalled worker never makes the UI thread block.
-        let (events, receiver) = bounded(64);
-        let stats = Arc::new(Mutex::new(OutputStats::default()));
-        let pending = Arc::new(Pending::default());
-        let presenter = Presenter::new(&resources.gpu, role, surface, width, height)?;
-        let thread = {
-            let (stats, pending) = (stats.clone(), pending.clone());
-            std::thread::Builder::new()
-                .name(format!("output-{}", role.label()))
-                .spawn(move || presenter.run(&resources, receiver, &pending, stats, stall))?
-        };
-        Ok(Self { events, pending, stats, thread: Some(thread), role })
-    }
-
-    pub fn resize(&self, width: u32, height: u32) {
-        *self.pending.size.lock().expect("output size poisoned") = Some((width, height));
-        self.wake();
-    }
-
-    pub fn set_scene(&self, scene: Scene) {
-        *self.pending.scene.lock().expect("output scene poisoned") = Some(scene);
-        self.wake();
-    }
-
-    pub fn redraw(&self) {
-        self.pending.redraw.store(true, std::sync::atomic::Ordering::Release);
-        self.wake();
-    }
-
-    pub fn set_shown(&self, shown: bool) {
-        self.pending.shown.store(shown, std::sync::atomic::Ordering::Release);
-        self.wake();
-    }
-
-    pub fn set_aspect(&self, aspect: Option<(u32, u32)>) {
-        *self.pending.aspect.lock().expect("output aspect poisoned") = aspect;
-        self.pending.redraw.store(true, std::sync::atomic::Ordering::Release);
-        self.wake();
-    }
-
-    fn wake(&self) {
-        match self.events.try_send(OutputEvent::Wake) {
-            // A full queue already holds a wake for the stored values.
-            Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
-        }
-    }
-
-    pub fn stats(&self) -> OutputStats {
-        self.stats.lock().map(|s| s.clone()).unwrap_or_default()
-    }
-
-    /// Asks the worker to exit. A worker blocked acquiring a frame from a
-    /// hidden surface notices after the acquire times out.
-    pub fn signal_stop(&self) {
-        // Shutdown must not be dropped by a full queue.
-        let _ = self.events.send_timeout(OutputEvent::Shutdown, Duration::from_secs(1));
-    }
-
-    pub fn join(mut self) {
-        if let Some(thread) = self.thread.take() {
-            if thread.join().is_err() {
-                log::error!("{} output thread panicked", self.role.label());
-            }
-        }
-    }
-}
-
-/// The scene an output draws: the projection shows the main scene, the
-/// confidence output the teleprompter.
-pub(crate) enum Renderer {
-    Main(MainRenderer),
-    Confidence(ConfidenceRenderer),
-}
-
-impl Renderer {
-    pub fn for_role(role: OutputRole) -> Self {
-        match role {
-            OutputRole::Projection => Renderer::Main(MainRenderer::default()),
-            OutputRole::Confidence => Renderer::Confidence(ConfidenceRenderer::default()),
-        }
-    }
-
-    pub fn set_scene(&mut self, scene: Scene, media: &MediaTextures, now: Instant) {
-        match (self, scene) {
-            (Renderer::Main(r), Scene::Main(s)) => r.set_scene(s, media, now),
-            (Renderer::Confidence(r), Scene::Confidence(s)) => r.set_scene(s, media, now),
-            _ => log::warn!("Scene does not match the output's role"),
-        }
-    }
-
-    pub fn activity(&self, now: Instant) -> Activity {
-        match self {
-            Renderer::Main(r) => r.activity(now),
-            Renderer::Confidence(r) => r.activity(now),
-        }
-    }
-
-    pub fn frame(&mut self, fonts: &Arc<Fonts>, size: (u32, u32), now: Instant) -> DrawList {
-        match self {
-            Renderer::Main(r) => r.frame(fonts, size, now),
-            Renderer::Confidence(r) => r.frame(fonts, size, now),
-        }
-    }
-}
+use super::*;
 
 /// Idle outputs check for pending media and clock changes this often.
-const IDLE_POLL: Duration = Duration::from_millis(16);
+pub(super) const IDLE_POLL: Duration = Duration::from_millis(16);
 
 /// Debug aid (`MAGI_OUTPUT_CAPTURE=<dir>`): saves each scene as presented,
 /// once its transitions settle, so the real output can be inspected even
 /// when its window is covered.
-struct DebugCapture {
-    dir: std::path::PathBuf,
-    since: Option<Instant>,
-    count: u32,
+pub(super) struct DebugCapture {
+    pub(super) dir: std::path::PathBuf,
+    pub(super) since: Option<Instant>,
+    pub(super) count: u32,
 }
 
 impl DebugCapture {
-    fn from_env() -> Option<Self> {
+    pub(super) fn from_env() -> Option<Self> {
         let dir = std::path::PathBuf::from(std::env::var_os("MAGI_OUTPUT_CAPTURE")?);
         std::fs::create_dir_all(&dir).ok()?;
         Some(Self { dir, since: None, count: 0 })
     }
 
     /// Saves once transitions end and media is shown (or after 5 s regardless).
-    fn after_frame(&mut self, role: OutputRole, settled: bool, save: impl FnOnce() -> (Vec<u8>, (u32, u32))) {
+    pub(super) fn after_frame(&mut self, role: OutputRole, settled: bool, save: impl FnOnce() -> (Vec<u8>, (u32, u32))) {
         let Some(since) = self.since else { return };
         if !settled && since.elapsed() < Duration::from_secs(5) {
             return;
@@ -228,39 +44,39 @@ impl DebugCapture {
     }
 }
 
-struct Presenter {
-    role: OutputRole,
-    surface: wgpu::Surface<'static>,
-    config: wgpu::SurfaceConfiguration,
+pub(super) struct Presenter {
+    pub(super) role: OutputRole,
+    pub(super) surface: wgpu::Surface<'static>,
+    pub(super) config: wgpu::SurfaceConfiguration,
     /// Format of the views drawn into: non-sRGB, so blending happens on
     /// sRGB-encoded values as in browsers.
-    view_format: wgpu::TextureFormat,
+    pub(super) view_format: wgpu::TextureFormat,
     /// True while the window has zero size (minimized or not yet mapped).
-    zero_size: bool,
+    pub(super) zero_size: bool,
     /// True while the window is shown; starts hidden.
-    shown: bool,
+    pub(super) shown: bool,
     /// True once the surface matches `config`. A failed configure is retried
     /// before the next frame.
-    configured: bool,
+    pub(super) configured: bool,
 }
 
 impl Presenter {
-    fn new(gpu: &Gpu, role: OutputRole, surface: wgpu::Surface<'static>, width: u32, height: u32) -> anyhow::Result<Self> {
+    pub(super) fn new(gpu: &Gpu, role: OutputRole, surface: wgpu::Surface<'static>, width: u32, height: u32) -> anyhow::Result<Self> {
         let (config, view_format) = surface_config(gpu, &surface, role.label(), width, height)?;
         // Configured once shown: an unmapped window may refuse a swapchain.
         Ok(Self { role, surface, config, view_format, zero_size: width == 0 || height == 0, shown: false, configured: false })
     }
 
-    fn hidden(&self) -> bool {
+    pub(super) fn hidden(&self) -> bool {
         self.zero_size || !self.shown
     }
 
-    fn configure(&mut self, gpu: &Gpu) -> bool {
+    pub(super) fn configure(&mut self, gpu: &Gpu) -> bool {
         self.configured = configure_surface(gpu, &self.surface, &self.config, self.role.label());
         self.configured
     }
 
-    fn run(
+    pub(super) fn run(
         mut self,
         resources: &Resources,
         events: Receiver<OutputEvent>,
@@ -444,90 +260,9 @@ impl Presenter {
         }
     }
 
-    fn record_error(&self, stats: &Mutex<OutputStats>) {
+    pub(super) fn record_error(&self, stats: &Mutex<OutputStats>) {
         if let Ok(mut s) = stats.lock() {
             s.surface_errors += 1;
         }
-    }
-}
-
-/// A non-sRGB, opaque, vsynced configuration for `surface`, and the format
-/// its views are drawn in (blending on sRGB-encoded values, as in browsers).
-pub(crate) fn surface_config(
-    gpu: &Gpu,
-    surface: &wgpu::Surface<'_>,
-    label: &str,
-    width: u32,
-    height: u32,
-) -> anyhow::Result<(wgpu::SurfaceConfiguration, wgpu::TextureFormat)> {
-    let caps = surface.get_capabilities(&gpu.adapter);
-    anyhow::ensure!(!caps.formats.is_empty(), "{label} surface has no supported formats");
-    let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
-    let view_format = format.remove_srgb_suffix();
-    let alpha_mode = if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
-        wgpu::CompositeAlphaMode::Opaque
-    } else {
-        caps.alpha_modes[0]
-    };
-    let config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format,
-        width: width.max(1),
-        height: height.max(1),
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode,
-        view_formats: if view_format != format { vec![view_format] } else { vec![] },
-        desired_maximum_frame_latency: 2,
-        color_space: wgpu::SurfaceColorSpace::Auto,
-    };
-    log::info!("{label} surface: {format:?} {width}x{height}");
-    Ok((config, view_format))
-}
-
-/// Applies `config`, retrying briefly: wgpu refuses a configure while another
-/// thread submits work (the frame pump, another output, the previews or a
-/// monitor), reporting it only as an error. Returns whether it applied.
-pub(crate) fn configure_surface(gpu: &Gpu, surface: &wgpu::Surface<'_>, config: &wgpu::SurfaceConfiguration, label: &str) -> bool {
-    const ATTEMPTS: u32 = 5;
-    for attempt in 1..=ATTEMPTS {
-        let scope = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
-        surface.configure(&gpu.device, config);
-        match pollster::block_on(scope.pop()) {
-            None => return true,
-            Some(error) if attempt == ATTEMPTS => {
-                log::warn!("{label} surface configure failed; retrying next frame: {error}");
-            }
-            Some(_) => std::thread::sleep(Duration::from_millis(2)),
-        }
-    }
-    false
-}
-
-/// A 60 Hz refresh, in milliseconds.
-const REFRESH_MS: f64 = 1000.0 / 60.0;
-
-/// Refreshes missed by an interval between back-to-back frames: none up to
-/// 1.5 refreshes (vsync jitter), else the whole refreshes skipped. Assumes a
-/// 60 Hz or faster display; on a slower one every frame counts, as it should.
-fn dropped_refreshes(interval_ms: f64) -> u64 {
-    if interval_ms <= REFRESH_MS * 1.5 {
-        return 0;
-    }
-    ((interval_ms / REFRESH_MS).round() as u64).saturating_sub(1).max(1)
-}
-
-#[cfg(test)]
-mod dropped_tests {
-    use super::dropped_refreshes;
-
-    #[test]
-    fn counts_whole_refreshes_missed_and_ignores_jitter() {
-        assert_eq!(dropped_refreshes(0.0), 0);
-        assert_eq!(dropped_refreshes(16.7), 0);
-        assert_eq!(dropped_refreshes(22.0), 0);
-        assert_eq!(dropped_refreshes(33.3), 1);
-        assert_eq!(dropped_refreshes(50.0), 2);
-        // A 75 Hz display's single miss still counts.
-        assert_eq!(dropped_refreshes(26.7), 1);
     }
 }
