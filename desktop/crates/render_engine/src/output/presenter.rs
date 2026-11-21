@@ -52,7 +52,6 @@ pub(super) struct Presenter {
 impl Presenter {
     pub(super) fn new(gpu: &Gpu, role: OutputRole, surface: wgpu::Surface<'static>, width: u32, height: u32) -> anyhow::Result<Self> {
         let (config, view_format) = surface_config(gpu, &surface, role.label(), width, height)?;
-        // Configured once shown: an unmapped window may refuse a swapchain.
         Ok(Self { role, surface, config, view_format, zero_size: width == 0 || height == 0, shown: false, configured: false })
     }
 
@@ -165,7 +164,6 @@ impl Presenter {
                 wgpu::CurrentSurfaceTexture::Success(texture) => (texture, false),
                 wgpu::CurrentSurfaceTexture::Suboptimal(texture) => (texture, true),
                 wgpu::CurrentSurfaceTexture::Timeout => continue,
-                // Returns at once, unlike a timeout; back off instead of spinning.
                 wgpu::CurrentSurfaceTexture::Occluded => {
                     std::thread::sleep(IDLE_POLL);
                     continue;
@@ -175,8 +173,6 @@ impl Presenter {
                     self.configured = false;
                     continue;
                 }
-                // Recovery would need a new surface; reconfiguring is the best
-                // available attempt, so retry it without spinning.
                 wgpu::CurrentSurfaceTexture::Lost => {
                     self.record_error(&stats);
                     self.configured = false;
@@ -212,8 +208,6 @@ impl Presenter {
             crate::profile::draw(role).record(submitted - drawing);
             gpu.queue.on_submitted_work_done(move || crate::profile::gpu(role).record(submitted.elapsed()));
             gpu.queue.present(texture);
-            // Reconfigure only after presenting: the acquired texture must be
-            // released first. The new swapchain starts empty, so draw again.
             if suboptimal {
                 self.configure(gpu);
                 dirty = true;

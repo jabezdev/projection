@@ -1,15 +1,3 @@
-// Soak test: plays a looping video with confidence on for 30 minutes and fails
-// if memory, decoders or audio outputs grow, or if frames stop arriving.
-//
-//   bun tools/e2e/soak.ts --video <file> [--minutes 30] [--app <exe>] [--port 28480]
-//                         [--max-growth-mb 64] [--manual-show] [--keep]
-//
-// Starts its own copy of the app on a scratch data folder, so the operator's
-// library is untouched, and shows both outputs on their saved (or default)
-// displays. With --manual-show, show them yourself (Screens → Show) when
-// asked: hidden outputs present nothing, so the frame checks need them.
-// A CSV of every sample is written to the current folder.
-
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { App, Remote, defaultAppPath, parseArgs, playback, residentBytes, scratchDir, videoOptions } from './harness';
@@ -20,13 +8,11 @@ const minutes = Number(args.minutes ?? 30);
 const port = Number(args.port ?? 28480);
 const maxGrowthMb = Number(args['max-growth-mb'] ?? 64);
 const SAMPLE_MS = 10_000;
-/** Ignore the first samples while decoders, caches and the GPU settle. */
 const WARMUP_MS = 60_000;
 
 type Media = { decoders: number; audioOutputs: number; reopened: number; presented: number; late: number; underruns: number };
 type Sample = { at: number; rss: number | null; media: Media | null; fps: Record<string, number> };
 
-/** The latest media telemetry and per-output frame rates in the log. */
 function readLog(path: string): Pick<Sample, 'media' | 'fps'> {
   let text = '';
   try { text = readFileSync(path, 'utf8'); } catch { return { media: null, fps: {} }; }

@@ -1,10 +1,3 @@
-// Remote access check: the phone remote page, pairing, tokens, refusing
-// unpaired devices and pages from other sites, the command rate limit, OSC
-// and the palto.local name. Runs against a scratch data folder with LAN
-// access on, using this computer's own network address as "another device".
-//
-//   bun tools/e2e/remote.ts [--app <exe>] [--port 28500]
-
 import { createHash } from 'node:crypto';
 import dgram from 'node:dgram';
 import { writeFileSync, readFileSync, rmSync } from 'node:fs';

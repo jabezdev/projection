@@ -27,7 +27,6 @@ pub fn display_names() -> HashMap<String, DisplayName> {
 pub fn refresh_rate(system_name: &str) -> Option<u32> {
     use windows_sys::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_CURRENT_SETTINGS};
     let name: Vec<u16> = system_name.encode_utf16().chain(std::iter::once(0)).collect();
-    // SAFETY: `mode` is a zeroed DEVMODEW with its size set, as the API requires.
     unsafe {
         let mut mode: DEVMODEW = std::mem::zeroed();
         mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;

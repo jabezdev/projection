@@ -33,10 +33,8 @@ pub(super) fn copy_planes(frame: &ffmpeg::frame::Video, count: usize) -> ([Plane
     let buffer = Arc::get_mut(&mut data).expect("new buffer is unique");
     for (i, plane) in planes.iter().enumerate().take(count) {
         let source = frame.data(i);
-        // SAFETY: the planes were laid out back to back within `total` bytes.
         unsafe { std::ptr::copy_nonoverlapping(source.as_ptr(), buffer.as_mut_ptr().add(plane.offset) as *mut u8, source.len()) };
     }
-    // SAFETY: every byte was written above.
     (planes, unsafe { data.assume_init() })
 }
 

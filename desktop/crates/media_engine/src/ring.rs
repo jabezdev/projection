@@ -11,9 +11,6 @@ pub struct SampleRing {
     flush_done: AtomicU64,
 }
 
-// SAFETY: each slot is written only by the producer while it is outside the
-// readable range and read only by the consumer while inside it; the atomics
-// order those accesses.
 unsafe impl Sync for SampleRing {}
 unsafe impl Send for SampleRing {}
 

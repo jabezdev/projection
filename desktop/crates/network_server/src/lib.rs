@@ -193,9 +193,6 @@ async fn handle(stream: TcpStream, peer: SocketAddr, shared: Arc<Shared>) -> any
 
 async fn connection(socket: tokio_tungstenite::WebSocketStream<TcpStream>, client: &Client, shared: &Shared) -> anyhow::Result<()> {
     let (mut sink, mut source) = socket.split();
-    // Subscribe before reading the snapshot so no change falls between them.
-    // Events that predate the snapshot carry older versions/revisions, which
-    // clients discard.
     let mut events = shared.events.subscribe();
     let sync = || (shared.snapshot)().sync_events().to_vec();
     for event in sync() {

@@ -39,12 +39,8 @@ pub(super) fn place_output(app: &tauri::AppHandle, output: &str) -> Result<(), S
         window.set_size(tauri::PhysicalSize::new(width, height)).map_err(|e| e.to_string())?;
     }
     window.set_position(*target.position()).map_err(|e| e.to_string())?;
-    // Requested before mapping, fullscreen is the window's initial state;
-    // requested after, some window managers miss it.
     window.set_fullscreen(route.fullscreen).map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
-    // Windows can restore the taskbar button of a window shown after being
-    // hidden; outputs never have one, so the app is one taskbar entry.
     window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
     outputs.set_shown(role, true);
     log_placement(output, target, &names, route.fullscreen);

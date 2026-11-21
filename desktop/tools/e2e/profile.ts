@@ -1,16 +1,3 @@
-// Profiling run: plays a video (looping, confidence on) and reports how long
-// each stage takes per frame (decode, copy from the GPU decoder, convert,
-// upload, draw per output, GPU completion per output), the frame rate of
-// each output, CPU use and memory. Run it on the church PC with the videos
-// you plan to use, once per decoder setting.
-//
-//   bun tools/e2e/profile.ts --video <file> [--seconds 60] [--decoder software|auto|<name>]
-//                            [--compare] [--no-confidence] [--app <exe>] [--port 28490] [--manual-show]
-//
-// --compare runs software and auto decoding one after the other. Each run
-// starts its own copy of the app on a scratch data folder, so the library is
-// untouched, and writes a Markdown report to the current folder.
-
 import { cpus, totalmem } from 'node:os';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -24,21 +11,18 @@ const port = Number(args.port ?? 28490);
 const confidence = args['no-confidence'] !== true;
 const decoders = args.compare ? ['software', 'auto'] : [typeof args.decoder === 'string' ? args.decoder : 'software'];
 const appPath = typeof args.app === 'string' ? args.app : defaultAppPath();
-/** Windows before this are ignored while caches and the GPU warm up. */
 const WARMUP_MS = 10_000;
 
 type Stage = { count: number; meanMs: number; maxMs: number };
 const STAGES = ['decode', 'transfer', 'convert', 'upload', 'projection draw', 'projection gpu', 'confidence draw', 'confidence gpu'] as const;
 type Window = Record<(typeof STAGES)[number], Stage>;
 
-/** Every profile window in `text`. */
 function profileWindows(text: string): Window[] {
   const windows: Window[] = [];
   const stage = /(\d+) × ([\d.]+) ms \(max ([\d.]+)\)/;
   for (const line of text.split('\n')) {
     if (!line.includes('profile: ')) continue;
     const body = line.slice(line.indexOf('profile: ') + 9);
-    // "decode A; transfer B; convert C; upload D; projection draw E gpu F; confidence draw G gpu H"
     const parts = body.split(/; | gpu /).map(p => p.match(stage));
     if (parts.length !== STAGES.length || parts.some(p => !p)) continue;
     windows.push(Object.fromEntries(STAGES.map((name, i) => [name, { count: +parts[i]![1], meanMs: +parts[i]![2], maxMs: +parts[i]![3] }])) as Window);
@@ -46,7 +30,6 @@ function profileWindows(text: string): Window[] {
   return windows;
 }
 
-/** Refreshes each output missed between back-to-back frames (older logs have none). */
 function droppedFrames(text: string, role: string): number {
   return [...text.matchAll(new RegExp(`\\b${role}: [\\d.]+ fps while active, worst interval [\\d.]+ ms, dropped (\\d+)`, 'g'))].reduce((n, m) => n + Number(m[1]), 0);
 }
@@ -91,7 +74,6 @@ for (const decoder of decoders) {
     console.log();
     remote.close();
     const log = readFileSync(app.logPath, 'utf8');
-    // Only what was logged while measuring.
     const recent = readFileSync(app.logPath).subarray(logStart).toString('utf8');
     const windows = profileWindows(recent);
     const adapter = log.match(/Native output adapter: (.+)/)?.[1] ?? 'unknown';

@@ -52,7 +52,6 @@ impl AudioOutput {
         let thread = {
             let slot = slot.clone();
             let failed = failed.clone();
-            // cpal streams are not Send; this thread owns the stream until stopped.
             std::thread::Builder::new().name("audio-output".into()).spawn(move || {
                 let (stream, format) = match build(slot.clone(), failed.clone(), None) {
                     Ok(opened) => opened,

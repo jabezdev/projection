@@ -38,7 +38,6 @@ fn run(app: tauri::AppHandle) {
                     .ports()
                     .into_iter()
                     .filter_map(|port| scanner.port_name(&port).ok().map(|name| (name, port)))
-                    // Our own client's ports would echo back; ALSA's loopback is no controller.
                     .filter(|(name, _)| !name.starts_with(CLIENT) && !name.starts_with("Midi Through"))
                     .collect();
                 let before = connections.len();

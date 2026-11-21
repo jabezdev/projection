@@ -1,25 +1,9 @@
 #!/usr/bin/env bash
-# Cross-builds the Windows installer (NSIS setup.exe) on Linux.
-#
-#   tools/build-windows.sh            # bumps the build number first
-#   tools/build-windows.sh --no-bump  # rebuilds the current version
-#
-# Updates: the installer is signed for the in-app updater with the key in
-# TAURI_SIGNING_PRIVATE_KEY (CI secret) or ~/.tauri/palto-updater.key, and
-# latest.json is written next to it for the GitHub release. Release notes
-# shown before installing come from RELEASE_NOTES (text) if set. Without a
-# key the installer still builds, but cannot be offered as an update.
-#
-# The first run fetches its toolchain into ~/.local/share/projection-win and
-# rustup into ~/.cargo, all without sudo; the system Rust stays the default.
-# Needs curl, bsdtar, clang, lld and llvm (llvm-rc) on the system. The MSI
-# needs WiX, which only runs on Windows, so only the NSIS installer is built.
 set -euo pipefail
 here=$(dirname "$(readlink -f "$0")")
 desktop=$(readlink -f "$here/..")
 tools=${PROJECTION_WIN_TOOLS:-$HOME/.local/share/projection-win}
 target=x86_64-pc-windows-msvc
-# Must match the FFmpeg major version ffmpeg-next in Cargo.toml binds to.
 ffmpeg_build=ffmpeg-n9.0-latest-win64-lgpl-shared-9.0
 nsis_version=3.12-1
 
@@ -45,7 +29,6 @@ if [ ! -d "$FFMPEG_DIR" ]; then
     rm "$tools/ffmpeg.zip"
 fi
 
-# Debian's NSIS build, unpacked rather than installed (NSIS is AUR-only on Arch).
 nsis="$tools/nsis-$nsis_version"
 if [ ! -x "$nsis/usr/bin/makensis" ]; then
     echo "Fetching NSIS $nsis_version"
@@ -59,7 +42,6 @@ if [ ! -x "$nsis/usr/bin/makensis" ]; then
     done
     rm -rf "$work"
 fi
-# The bundler overrides NSISDIR, so a wrapper pins it to the unpacked data.
 mkdir -p "$tools/bin"
 cat >"$tools/bin/makensis" <<EOF
 #!/bin/sh
@@ -68,7 +50,6 @@ EOF
 chmod +x "$tools/bin/makensis"
 export PATH="$tools/bin:$PATH"
 
-# The installer places these next to PALTO.exe (tauri.windows.conf.json).
 dlls="$desktop/crates/app/windows/ffmpeg"
 rm -rf "$dlls"
 mkdir -p "$dlls"

@@ -57,8 +57,6 @@ pub fn choice() -> DecoderChoice {
 
 struct Device(*mut ffi::AVBufferRef);
 
-// SAFETY: FFmpeg device contexts are reference counted and safe to share between
-// decoders on different threads.
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 

@@ -1,13 +1,3 @@
-// End-to-end check over the WebSocket: cueing and navigation, display modes,
-// media transport, saving, and loading after a restart (which also exercises
-// crash recovery, since the app is killed rather than closed).
-//
-//   bun tools/e2e/e2e.ts [--app <exe>] [--port 28481] [--video <file>] [--keep]
-//
-// Runs its own copy of the app on a scratch data folder. A test video is
-// generated with the `ffmpeg` command when it is installed and no --video is
-// given; without either, the media transport checks are skipped.
-
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { App, Remote, defaultAppPath, parseArgs, playback, program, project, scratchDir, videoOptions, type Json } from './harness';
@@ -26,7 +16,6 @@ function expect(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-/** A 2×2 PNG, so an image cue has a real file to check. */
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGM4oaEBRAwQCgAhLgRhHuBtwgAAAABJRU5ErkJggg==';
 
 async function testVideo(): Promise<string | null> {
@@ -113,7 +102,6 @@ await step('save a service', async () => {
 });
 
 await step('restart: saved changes load and the last cue is restored', async () => {
-  // Let the storage worker write the save, then kill the app (no clean exit).
   await Bun.sleep(1_000);
   remote.close();
   await app.stop();

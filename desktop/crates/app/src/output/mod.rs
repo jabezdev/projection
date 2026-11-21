@@ -12,9 +12,6 @@ use render_engine::{MonitorSpec, OutputRole, OutputSpec, PreviewTarget, RenderEn
 use tauri::{Emitter, Manager, Runtime, Window};
 
 pub fn prepare_platform() {
-    // GTK commits its own buffers to a native Wayland window's surface, which
-    // collides with GPU presentation (Wayland protocol error 71). Present
-    // through XWayland until outputs get their own Wayland subsurface.
     #[cfg(target_os = "linux")]
     if std::env::var("GDK_BACKEND").as_deref() != Ok("x11") {
         log::warn!("Native outputs require XWayland on Linux; setting GDK_BACKEND=x11");
@@ -179,8 +176,6 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
 
     let mut specs = Vec::new();
     for window in windows {
-        // A GTK window gets its native handle only once realized, which
-        // showing would otherwise do.
         #[cfg(target_os = "linux")]
         gtk::prelude::WidgetExt::realize(&window.gtk_window()?);
         let role = role_for_label(window.label()).expect("native output label");

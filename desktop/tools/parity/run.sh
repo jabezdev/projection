@@ -1,32 +1,9 @@
 #!/usr/bin/env bash
-# Compares native output captures with frozen references.
-#
-#   tools/parity/run.sh [out-dir]
-#
-# The lyric and teleprompter references (proj-default*, proj-styled,
-# conf-default*) are the React output components rendered in headless
-# Chromium on 2026-10-11, the last build that had them. Black, Logo and video
-# had no webview reference worth keeping, and text effects (shadow, outline,
-# glow) came after the webview; their references are native captures from
-# 2026-10-24, so they catch regressions. Each scenario is
-# rendered natively offscreen (`cargo run -p render_engine --example capture
-# <scene>`) and compared: prints the share of pixels whose gray level differs
-# by more than 25%, writes a red/cyan overlay, and fails if any exceeds its
-# tolerance. A deliberate rendering change shows up here; replace the
-# reference with the reviewed native capture when it is intended.
-#
-# Needs ImageMagick. Captures use system fonts, so run on a machine with the
-# fonts the references were made with.
 set -euo pipefail
 here=$(dirname "$(readlink -f "$0")")
 desktop=$(readlink -f "$here/../..")
 out=$(readlink -f "${1:-$here/out}")
 
-# name scene width height tolerance(%)
-# Tolerances sit just above the baseline measured on 2026-10-10 (0.27, 0.48,
-# 1.01, 0.80, 2.67). The small confidence scene differs most: Chromium rounds
-# its scroll position and row metrics to whole pixels, which moves every row
-# about 1 px against the native layout.
 scenarios=(
   "proj-default proj-default 1920 1080 1"
   "proj-default-43 proj-default 1440 1080 1"
@@ -52,7 +29,6 @@ for scenario in "${scenarios[@]}"; do
   reference=$here/reference/$name.png native=$out/native/$name.png
   percent=$(magick \( "$reference" -colorspace gray \) \( "$native" -colorspace gray \) \
     -compose difference -composite -threshold 25% -format '%[fx:mean*100]' info:)
-  # Reference in red, native in green and blue: matches are gray, mismatches red or cyan.
   magick \( "$reference" -colorspace gray \) \( "$native" -colorspace gray \) \( "$native" -colorspace gray \) \
     -combine "$out/compare/$name.png"
   verdict=ok

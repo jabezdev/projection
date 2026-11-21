@@ -10,8 +10,6 @@ pub(super) fn matching_route(route: &OutputRoute, candidates: &[OutputRoute]) ->
     if route.device.is_some() {
         let matches: Vec<_> = candidates.iter().enumerate().filter(|(_, m)| m.device == route.device).map(|(i, _)| i).collect();
         if matches.len() == 1 { return Some(matches[0]); }
-        // Windows can reuse a disconnected display's old number. Once
-        // device identities are available, a name match is not enough.
         if candidates.iter().any(|m| m.device.is_some()) { return None; }
     }
     candidates.iter().position(|m| m.name == route.name && m.x == route.x && m.y == route.y)

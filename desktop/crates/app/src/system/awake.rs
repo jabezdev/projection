@@ -42,7 +42,6 @@ mod platform {
     impl Inhibitor {
         pub fn set(&mut self, awake: bool) {
             let flags = if awake { ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED } else { ES_CONTINUOUS };
-            // SAFETY: plain Win32 call with valid flags; affects only this thread.
             if unsafe { SetThreadExecutionState(flags) } == 0 {
                 log::warn!("SetThreadExecutionState failed; the display may still sleep");
             }

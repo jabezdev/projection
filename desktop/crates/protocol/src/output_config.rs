@@ -240,7 +240,6 @@ mod tests {
         let (written, saved) = (written.as_object().unwrap(), saved.as_object().unwrap());
         assert!(saved.keys().all(|key| written.contains_key(key)));
         for (key, value) in saved {
-            // JSON numbers compare by value: `0.9` must not become `0.8999999761`.
             match value.as_f64() {
                 Some(number) => assert_eq!(written[key].as_f64(), Some(number), "{key}"),
                 None => assert_eq!(&written[key], value, "{key}"),

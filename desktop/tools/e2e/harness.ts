@@ -1,9 +1,3 @@
-// Shared helpers for the end-to-end and soak scripts: start PALTO against a
-// scratch data folder, seed services into its database, and drive the engine
-// over the same WebSocket protocol remote clients use.
-//
-// Needs Bun (https://bun.sh); no packages. The app must already be built.
-
 import { Database } from 'bun:sqlite';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +8,6 @@ export type EngineEvent = { type: string; payload: Json };
 
 const desktop = resolve(import.meta.dir, '../..');
 
-/** The newest local build of the app: release first, then debug. */
 export function defaultAppPath(): string {
   const exe = process.platform === 'win32' ? 'app.exe' : 'app';
   for (const profile of ['release', 'debug']) {
@@ -24,7 +17,6 @@ export function defaultAppPath(): string {
   throw new Error('No built app found. Build it first (cargo build -p app), or pass --app <path>.');
 }
 
-/** Minimal `--name value` / `--flag` parsing. */
 export function parseArgs(argv = process.argv.slice(2)): Record<string, string | true> {
   const args: Record<string, string | true> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -44,7 +36,6 @@ export function scratchDir(prefix: string): string {
 export class App {
   private constructor(readonly dataDir: string, readonly port: number, readonly process: ReturnType<typeof Bun.spawn>) {}
 
-  /** Starts the app with `dataDir` as its data folder and the WebSocket on `port`. */
   static async start(appPath: string, dataDir: string, port: number, env: Record<string, string> = {}): Promise<App> {
     mkdirSync(dataDir, { recursive: true });
     const config = join(dataDir, 'app-config.json');
@@ -78,7 +69,6 @@ export class App {
     throw new Error(`The app's WebSocket did not open on port ${this.port}`);
   }
 
-  /** Adds a service to the app's library and returns its id. */
   seedService(name: string, items: Json[]): number {
     const db = new Database(join(this.dataDir, 'app.db'));
     try {
@@ -97,7 +87,6 @@ export class App {
   }
 }
 
-/** A WebSocket remote: sends engine commands, records every event. */
 export class Remote {
   readonly events: EngineEvent[] = [];
   private waiters: { test: (e: EngineEvent) => boolean; done: (e: EngineEvent) => void }[] = [];
@@ -123,7 +112,6 @@ export class Remote {
     this.socket.send(JSON.stringify(payload === undefined ? { type } : { type, payload }));
   }
 
-  /** Waits for the first event from now on that passes `test`. */
   next(test: (event: EngineEvent) => boolean, what: string, timeoutMs = 10_000): Promise<EngineEvent> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${what}`)), timeoutMs);
@@ -131,7 +119,6 @@ export class Remote {
     });
   }
 
-  /** Sends a command, then waits for an event that passes `test`. */
   async command(type: string, payload: Json | undefined, test: (event: EngineEvent) => boolean, what: string, timeoutMs?: number) {
     const waiting = this.next(test, what, timeoutMs);
     this.send(type, payload);
@@ -147,7 +134,6 @@ export const project = (event: EngineEvent) => event.type === 'project_changed' 
 
 export const videoOptions = (overrides: Json = {}) => ({ confidence: false, looping: false, start_ms: 0, end_ms: null, volume: 100, rate_percent: 100, ...overrides });
 
-/** Resident memory of `pid` in bytes, or null when it cannot be read. */
 export async function residentBytes(pid: number): Promise<number | null> {
   try {
     if (process.platform === 'linux') {
@@ -165,11 +151,9 @@ export async function residentBytes(pid: number): Promise<number | null> {
   }
 }
 
-/** CPU time `pid` has used so far (all threads), in seconds, or null. */
 export async function cpuSeconds(pid: number): Promise<number | null> {
   try {
     if (process.platform === 'linux') {
-      // Fields after the parenthesized name: utime and stime are 14th and 15th overall.
       const fields = readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' ');
       return (Number(fields[11]) + Number(fields[12])) / 100;
     }

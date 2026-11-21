@@ -129,7 +129,6 @@ impl Drop for WgcRunning {
 }
 
 fn settings<T: windows_capture::settings::TryIntoCaptureItemWithType>(item: T, slot: FrameSlot) -> Settings<FrameSlot, T> {
-    // Older Windows 10 builds refuse these options rather than ignore them.
     let supported = |check: Result<bool, windows_capture::graphics_capture_api::Error>| check.unwrap_or(false);
     Settings::new(
         item,
@@ -254,7 +253,6 @@ mod duplication {
         staging: Option<(ID3D11Texture2D, (u32, u32))>,
     }
 
-    // SAFETY: the thread that opens a duplication is the only one that uses it.
     unsafe impl Send for Duplication {}
 
     impl Duplication {

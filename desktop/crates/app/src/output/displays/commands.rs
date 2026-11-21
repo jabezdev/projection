@@ -101,7 +101,6 @@ pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Opt
     let role = crate::output::role_for_label(&target).ok_or_else(|| format!("Unknown output {target}"))?;
     let (sent, received) = tokio::sync::oneshot::channel();
     let handle = app.clone();
-    // Child windows belong to the operator window's thread.
     app.run_on_main_thread(move || {
         let shown = handle.try_state::<monitor_window::Monitors>().is_some_and(|monitors| monitors.place(&handle, role, rect));
         let _ = sent.send(shown);

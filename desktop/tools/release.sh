@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Publishes the Windows installer that build-windows.sh made as a GitHub
-# release, so installed copies of PALTO offer it as an update.
-#
-#   tools/release.sh
-#
-# Run it after build-windows.sh, once the bumped version is committed and
-# pushed: it tags that commit as v<version> and uploads the installer, its
-# updater signature and latest.json (whose notes are the release notes).
-# Needs the GitHub CLI (gh), logged in.
 set -euo pipefail
 desktop=$(readlink -f "$(dirname "$(readlink -f "$0")")/..")
 bundle="$desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis"

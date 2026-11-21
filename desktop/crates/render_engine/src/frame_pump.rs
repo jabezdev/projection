@@ -38,8 +38,6 @@ impl FramePump {
                     shaders.retain(&videos.iter().filter_map(|(key, _)| match key { VideoKey::Shader(spec) => Some(spec), _ => None }).collect::<Vec<_>>());
                     let _ = gpu.device.poll(wgpu::PollType::Poll);
                     if uploaded {
-                        // Writes are applied on the next submit; without one, an
-                        // idle output would never see the frame.
                         gpu.queue.submit(None);
                     }
                     std::thread::sleep(PUMP_INTERVAL);

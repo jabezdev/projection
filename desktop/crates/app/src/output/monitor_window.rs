@@ -13,22 +13,17 @@ pub struct ChildTarget {
     display: RawDisplayHandle,
 }
 
-// SAFETY: the handles are plain identifiers (an HWND or an X11 window id and
-// display pointer) that wgpu may use from its presentation thread, as it does
-// for the output windows.
 unsafe impl Send for ChildTarget {}
 unsafe impl Sync for ChildTarget {}
 
 impl HasWindowHandle for ChildTarget {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        // SAFETY: the window stays alive for as long as its surface (see above).
         Ok(unsafe { WindowHandle::borrow_raw(self.window) })
     }
 }
 
 impl HasDisplayHandle for ChildTarget {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        // SAFETY: the display is the operator window's, open for the app's life.
         Ok(unsafe { DisplayHandle::borrow_raw(self.display) })
     }
 }
@@ -117,8 +112,6 @@ mod platform {
         shown: Option<Rect>,
     }
 
-    // SAFETY: the window is only touched on the main thread; the struct lives in
-    // Tauri state, which requires Send.
     unsafe impl Send for ChildWindow {}
 
     const CLASS: &[u16] = &[b'P' as u16, b'A' as u16, b'L' as u16, b'T' as u16, b'O' as u16, b'M' as u16, b'o' as u16, b'n' as u16, 0];
@@ -173,8 +166,6 @@ mod platform {
             unsafe {
                 match rect {
                     Some(r) => {
-                        // No copied bits: the old frame would be blitted to the new
-                        // spot until the monitor presents at the new size.
                         SetWindowPos(self.hwnd, HWND_TOP, r.x, r.y, r.width as i32, r.height as i32, SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
                     }
                     None => {

@@ -25,7 +25,6 @@ pub async fn video_thumbnail(app: tauri::AppHandle, path: String) -> Result<Stri
         std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
         let poster = cache.join(format!("{:x}.jpg", hash.finish()));
         if !poster.exists() {
-            // Decoded in-process: packaged builds ship FFmpeg libraries, not its CLI.
             let frame = media_engine::poster(&file.to_string_lossy(), 640).map_err(|e| format!("Thumbnail: {e:#}"))?;
             let temporary = cache.join(format!("{}.jpg", uuid::Uuid::new_v4()));
             image::save_buffer_with_format(&temporary, &frame.rgb, frame.width, frame.height, image::ColorType::Rgb8, image::ImageFormat::Jpeg).map_err(|e| e.to_string())?;
