@@ -40,6 +40,10 @@ pub fn osc_listen(config: &AppConfig) -> OscListen {
 }
 
 impl RemoteState {
+    pub fn stop_advertising(&self) {
+        self.advertiser.set(None);
+    }
+
     /// Applies saved settings to the servers and the name advertisement.
     pub fn apply(&self, config: &AppConfig) {
         self.listen.send_replace(listen(config));

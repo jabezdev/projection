@@ -1,12 +1,9 @@
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-use core_engine::{EngineCommand, EngineSnapshot};
-use protocol::{ProjectHeader, ProjectModel, SongHeader, SongModel};
 
-use crate::{now_ms, AppState};
+use crate::AppState;
 
-use super::*;
 
 /// Problems found while starting, shown to the operator once the UI loads.
 pub struct StartupWarnings(pub Vec<String>);

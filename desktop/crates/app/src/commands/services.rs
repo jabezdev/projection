@@ -1,12 +1,9 @@
-use tauri::Manager;
-use tauri_plugin_dialog::DialogExt;
 
-use core_engine::{EngineCommand, EngineSnapshot};
-use protocol::{ProjectHeader, ProjectModel, SongHeader, SongModel};
+use core_engine::EngineCommand;
+use protocol::{ProjectHeader, ProjectModel};
 
 use crate::{now_ms, AppState};
 
-use super::*;
 
 #[tauri::command]
 pub fn list_projects(state: tauri::State<AppState>) -> Result<Vec<ProjectHeader>, String> {
