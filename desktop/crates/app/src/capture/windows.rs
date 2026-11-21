@@ -32,7 +32,7 @@ pub fn wgc_supported() -> bool {
 /// with Windows' number (not the enumeration order) to tell identical
 /// models apart.
 fn monitors() -> anyhow::Result<Vec<CaptureSource>> {
-    use crate::display_names::{display_names, readable_name, system_number};
+    use crate::output::display_names::{display_names, readable_name, system_number};
     let names = display_names();
     let mut found = Vec::new();
     for (index, monitor) in Monitor::enumerate().map_err(|e| anyhow::anyhow!("{e}"))?.into_iter().enumerate() {

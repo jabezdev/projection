@@ -10,9 +10,11 @@ use tauri::{Emitter, Manager};
 
 use std::collections::HashMap;
 
-use crate::display_names::{aspect_label, display_names, readable_name, system_number, DisplayName};
-use crate::native_output::{self, NativeOutputs};
-use crate::{native_scene, settings};
+use crate::output::display_names::{aspect_label, display_names, readable_name, system_number, DisplayName};
+use crate::output::NativeOutputs;
+use crate::settings;
+use super::{display_names, monitor_window, scene};
+use crate::system::awake;
 
 /// Where and how an output window appears. Saved routes from before the
 /// size and aspect choices load with the defaults; an `enabled` field from
@@ -119,7 +121,7 @@ pub fn content_size(window: &tauri::Window, size: tauri::PhysicalSize<u32>) -> s
 /// keeps the displays awake while any output is shown.
 fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
     let placed = place_output(app, output);
-    if let Some(awake) = app.try_state::<crate::awake::KeepAwake>() {
+    if let Some(awake) = app.try_state::<awake::KeepAwake>() {
         let shown = OUTPUTS.iter().any(|(label, _)| app.get_window(label).is_some_and(|w| w.is_visible().unwrap_or(false)));
         awake.set(shown);
     }
@@ -127,7 +129,7 @@ fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
 }
 fn place_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
     let window = app.get_window(output).ok_or("Output window unavailable")?;
-    let role = native_output::role_for_label(output).ok_or("Unknown output")?;
+    let role = crate::output::role_for_label(output).ok_or("Unknown output")?;
     let routes = app.state::<OutputRoutes>();
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     let names = display_names();
@@ -167,7 +169,7 @@ fn log_placement(output: &str, target: &tauri::Monitor, names: &Names, fullscree
     let system = target.name().map(String::as_str);
     let name = readable_name(system, system.and_then(|n| names.get(n)));
     let size = target.size();
-    let hz = system.and_then(crate::display_names::refresh_rate);
+    let hz = system.and_then(display_names::refresh_rate);
     let rate = hz.map(|hz| format!(", {hz} Hz")).unwrap_or_default();
     let mode = if fullscreen { "fullscreen" } else { "windowed" };
     log::info!("{output} output on {name} ({}×{}{rate}, {mode})", size.width, size.height);
@@ -273,7 +275,7 @@ pub fn set_output_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes
 /// The latest native preview still of an output ("projection", "confidence")
 /// or of the style sample ("style"), as JPEG bytes.
 #[tauri::command]
-pub fn get_output_preview(previews: tauri::State<native_output::PreviewStore>, target: String) -> Result<tauri::ipc::Response, String> {
+pub fn get_output_preview(previews: tauri::State<crate::output::PreviewStore>, target: String) -> Result<tauri::ipc::Response, String> {
     previews.jpeg(&target).map(tauri::ipc::Response::new).ok_or_else(|| format!("No {target} preview yet"))
 }
 
@@ -282,13 +284,13 @@ pub fn get_output_preview(previews: tauri::State<native_output::PreviewStore>, t
 /// Resolves false when live monitors are unavailable; the UI then keeps its
 /// still previews.
 #[tauri::command]
-pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Option<crate::monitor_window::Rect>) -> Result<bool, String> {
-    let role = native_output::role_for_label(&target).ok_or_else(|| format!("Unknown output {target}"))?;
+pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Option<monitor_window::Rect>) -> Result<bool, String> {
+    let role = crate::output::role_for_label(&target).ok_or_else(|| format!("Unknown output {target}"))?;
     let (sent, received) = tokio::sync::oneshot::channel();
     let handle = app.clone();
     // Child windows belong to the operator window's thread.
     app.run_on_main_thread(move || {
-        let shown = handle.try_state::<crate::monitor_window::Monitors>().is_some_and(|monitors| monitors.place(&handle, role, rect));
+        let shown = handle.try_state::<monitor_window::Monitors>().is_some_and(|monitors| monitors.place(&handle, role, rect));
         let _ = sent.send(shown);
     })
     .map_err(|e| e.to_string())?;
@@ -299,8 +301,8 @@ pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Opt
 #[tauri::command]
 pub fn preview_output_style(outputs: tauri::State<NativeOutputs>, config: protocol::OutputConfig) -> Result<(), String> {
     config.validate()?;
-    outputs.preview_style(render_engine::Scene::Main(native_scene::style_sample_scene(&config)));
-    outputs.preview_style(render_engine::Scene::Confidence(native_scene::confidence_sample_scene(&config)));
+    outputs.preview_style(render_engine::Scene::Main(scene::style_sample_scene(&config)));
+    outputs.preview_style(render_engine::Scene::Confidence(scene::confidence_sample_scene(&config)));
     Ok(())
 }
 

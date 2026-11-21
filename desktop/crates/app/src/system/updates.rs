@@ -15,7 +15,7 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
-use crate::displays::OutputRoutes;
+use crate::output::displays::OutputRoutes;
 
 /// Where releases announce themselves; each release also carries its own
 /// manifest, used to fetch the running version's installer for rollback.

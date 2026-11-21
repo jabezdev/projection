@@ -1,28 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod awake;
-mod backup;
 mod capture;
 mod commands;
-mod display_names;
-mod displays;
 mod engine_host;
 mod input;
 mod library;
-mod logging;
-mod midi;
-mod monitor_window;
-mod native_media;
-mod native_output;
-mod native_scene;
-mod recovery;
+mod output;
 mod remote;
 mod settings;
 mod shutdown;
 mod startup;
-mod storage;
-mod streamdeck;
-mod updates;
+mod system;
 
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
@@ -47,7 +35,7 @@ impl Db {
     }
 }
 
-impl storage::ProjectWriter for Db {
+impl library::storage::ProjectWriter for Db {
     fn load(&self, project_id: i64) -> anyhow::Result<ProjectModel> {
         self.lock()?.get_project(project_id)
     }
@@ -57,7 +45,7 @@ impl storage::ProjectWriter for Db {
     }
 }
 
-type Storage = storage::StorageWorker<Db>;
+type Storage = library::storage::StorageWorker<Db>;
 
 pub(crate) struct AppState {
     engine: EngineHandle,
@@ -72,9 +60,9 @@ impl AppState {
 }
 
 fn main() {
-    logging::init();
+    system::logging::init();
     log::info!("Starting PALTO {}", env!("CARGO_PKG_VERSION"));
-    native_output::prepare_platform();
+    output::prepare_platform();
     let channels = startup::Channels::new();
 
     tauri::Builder::default()

@@ -3,9 +3,12 @@ use std::time::Duration;
 
 use tauri::Manager;
 
-use crate::native_media::NativeMedia;
-use crate::native_output::NativeOutputs;
-use crate::{awake, capture, monitor_window, recovery, remote, Storage};
+use crate::output::media::NativeMedia;
+use crate::output::NativeOutputs;
+use crate::{capture, remote, Storage};
+use crate::output::monitor_window;
+use crate::system::awake;
+use crate::system::recovery;
 
 const PENDING_SAVES_TIMEOUT: Duration = Duration::from_secs(5);
 

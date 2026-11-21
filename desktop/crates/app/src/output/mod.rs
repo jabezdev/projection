@@ -1,6 +1,12 @@
 //! Output windows: projection and confidence are plain OS windows with no
 //! webview, presented by `render_engine` from one shared GPU device.
 
+pub mod display_names;
+pub mod displays;
+pub mod media;
+pub mod monitor_window;
+pub mod scene;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -217,7 +223,7 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
     // Previews only announce a new still; the UI fetches the bytes, so no
     // image travels through the event channel.
     app.manage(PreviewStore::default());
-    app.manage(crate::monitor_window::Monitors::default());
+    app.manage(monitor_window::Monitors::default());
     let handle = app.handle().clone();
     engine.start_previews(Box::new(move |target, snapshot| {
         let (width, height) = (snapshot.width, snapshot.height);

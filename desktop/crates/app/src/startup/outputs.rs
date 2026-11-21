@@ -6,10 +6,10 @@ use tokio::sync::broadcast::error::RecvError;
 
 use super::Channels;
 use crate::capture::Captures;
-use crate::displays::{content_size, show_outputs_if_requested, OutputRoutes, OUTPUTS, WINDOWED_SIZE};
-use crate::native_media::NativeMedia;
-use crate::native_output::{self, NativeOutputs};
-use crate::native_scene::SceneFeed;
+use crate::output::displays::{content_size, show_outputs_if_requested, OUTPUTS, WINDOWED_SIZE};
+use crate::output::media::NativeMedia;
+use crate::output::NativeOutputs;
+use crate::output::scene::SceneFeed;
 use crate::settings::{AppConfig, OutputState};
 
 /// Opens the projection and confidence windows (hidden until the operator
@@ -17,13 +17,13 @@ use crate::settings::{AppConfig, OutputState};
 /// both outputs in step with the engine.
 pub(super) fn start(app: &tauri::App, channels: &Channels, config: &Arc<RwLock<AppConfig>>, dir: &Path) -> anyhow::Result<Arc<NativeMedia>> {
     let projection_size = config.read().expect("config lock poisoned").projection_size.unwrap_or(WINDOWED_SIZE);
-    let projection = native_output::build_output_window(app, OUTPUTS[0].0, OUTPUTS[0].1, projection_size)?;
-    let confidence = native_output::build_output_window(app, OUTPUTS[1].0, OUTPUTS[1].1, WINDOWED_SIZE)?;
+    let projection = crate::output::build_output_window(app, OUTPUTS[0].0, OUTPUTS[0].1, projection_size)?;
+    let confidence = crate::output::build_output_window(app, OUTPUTS[1].0, OUTPUTS[1].1, WINDOWED_SIZE)?;
     let windows = [&projection, &confidence];
     #[cfg(target_os = "linux")]
     for window in windows {
         let (handle, label) = (app.handle().clone(), window.label().to_string());
-        native_output::refullscreen_on_map(window, move || handle.state::<OutputRoutes>().wants_fullscreen(&label))?;
+        crate::output::refullscreen_on_map(window, move || handle.state::<crate::output::displays::OutputRoutes>().wants_fullscreen(&label))?;
     }
     for window in windows {
         report_resizes_to_operator(app.handle().clone(), window);
@@ -33,7 +33,7 @@ pub(super) fn start(app: &tauri::App, channels: &Channels, config: &Arc<RwLock<A
     app.manage(media.clone());
     let captures = Arc::new(Captures::new(&config.read().expect("config lock poisoned").capture_method, dir));
     app.manage(captures.clone());
-    native_output::start(app, windows, media.frames(captures.clone()))?;
+    crate::output::start(app, windows, media.frames(captures.clone()))?;
 
     let feed = start_scene_feed(app, channels, &media, captures)?;
     app.manage(feed);

@@ -7,7 +7,7 @@ use tauri::Manager;
 use tokio::sync::broadcast::error::RecvError;
 
 use super::Channels;
-use crate::recovery::{restore_commands, Previous, Recovery};
+use crate::system::recovery::{restore_commands, Previous, Recovery};
 use crate::Db;
 
 /// After a crash, queues the commands that reopen the last service at its last

@@ -7,8 +7,8 @@ use std::sync::Mutex;
 use log::error;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{Emitter, Manager};
+use crate::output::scene;
 
-use crate::native_scene;
 
 /// Writes through a sibling temporary file and renames it into place, so a
 /// crash mid-write leaves the previous file intact.
@@ -220,7 +220,7 @@ pub fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle,
     write_atomic(&state.path, &value).map_err(|e| format!("Saving output settings: {e}"))?;
     *guard = value.clone();
     drop(guard);
-    if let Some(feed) = app.try_state::<native_scene::SceneFeed>() {
+    if let Some(feed) = app.try_state::<scene::SceneFeed>() {
         feed.refresh();
     }
     let event = serde_json::json!({ "domain": domain, "value": value });

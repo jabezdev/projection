@@ -3,6 +3,8 @@
 //! Media that went missing can be relinked by searching a folder for files
 //! with the same names.
 
+pub mod storage;
+
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 use std::path::{Path, PathBuf};

@@ -5,6 +5,7 @@ use core_engine::EngineCommand;
 use protocol::ProjectModel;
 
 use crate::{now_ms, AppState};
+use crate::system::backup;
 
 
 #[derive(serde::Serialize)]
@@ -15,7 +16,7 @@ pub struct MissingMedia { path: String, title: Option<String>, services: Vec<Str
 pub fn list_missing_media(state: tauri::State<AppState>, output: tauri::State<crate::settings::OutputState>) -> Result<Vec<MissingMedia>, String> {
     let logo = output.config.lock().map(|c| c.logo_path.clone()).unwrap_or_default();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let media = crate::backup::media_list(&db, &logo).map_err(|e| e.to_string())?;
+    let media = backup::media_list(&db, &logo).map_err(|e| e.to_string())?;
     Ok(media.into_iter().filter(|m| !m.exists).map(|m| MissingMedia { path: m.path, title: m.title, services: m.services }).collect())
 }
 

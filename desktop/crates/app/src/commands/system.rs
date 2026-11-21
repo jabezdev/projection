@@ -3,6 +3,8 @@ use tauri_plugin_dialog::DialogExt;
 
 
 use crate::AppState;
+use crate::system::backup;
+use crate::system::logging;
 
 
 /// Problems found while starting, shown to the operator once the UI loads.
@@ -16,7 +18,7 @@ pub fn get_startup_warnings(warnings: tauri::State<StartupWarnings>) -> Vec<Stri
 /// Opens the log folder in the system file manager.
 #[tauri::command]
 pub fn open_logs_folder() -> Result<(), String> {
-    let dir = crate::logging::logs_dir();
+    let dir = logging::logs_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     reveal(&dir)
 }
@@ -35,7 +37,7 @@ pub struct AppInfo { version: &'static str, data_dir: String, last_backup_ms: Op
 
 #[tauri::command]
 pub fn get_app_info(data: tauri::State<DataDir>) -> AppInfo {
-    let last = crate::backup::last_automatic(&data.0).and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok());
+    let last = backup::last_automatic(&data.0).and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok());
     AppInfo { version: env!("CARGO_PKG_VERSION"), data_dir: data.0.to_string_lossy().into_owned(), last_backup_ms: last.map(|d| d.as_millis() as i64) }
 }
 
@@ -43,7 +45,7 @@ pub fn get_app_info(data: tauri::State<DataDir>) -> AppInfo {
 #[tauri::command]
 pub async fn export_backup(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Export backup").add_filter("Zip archive", &["zip"]).set_file_name(crate::backup::export_name()).save_file(move |file| { let _ = sender.send(file); });
+    app.dialog().file().set_title("Export backup").add_filter("Zip archive", &["zip"]).set_file_name(backup::export_name()).save_file(move |file| { let _ = sender.send(file); });
     let Some(file) = receiver.await.map_err(|e| e.to_string())? else { return Ok(None) };
     let dest = file.into_path().map_err(|e| e.to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -51,7 +53,7 @@ pub async fn export_backup(app: tauri::AppHandle) -> Result<Option<String>, Stri
         let logo = app.state::<crate::settings::OutputState>().config.lock().map(|c| c.logo_path.clone()).unwrap_or_default();
         let db = app.state::<AppState>().db.clone();
         let db = db.lock().map_err(|e| e.to_string())?;
-        crate::backup::write(&db, &data_dir, &logo, &dest).map_err(|e| format!("Backup failed: {e:#}"))?;
+        backup::write(&db, &data_dir, &logo, &dest).map_err(|e| format!("Backup failed: {e:#}"))?;
         log::info!("Exported a backup to {}", dest.display());
         Ok(Some(dest.to_string_lossy().into_owned()))
     }).await.map_err(|e| e.to_string())?
@@ -59,7 +61,7 @@ pub async fn export_backup(app: tauri::AppHandle) -> Result<Option<String>, Stri
 
 #[tauri::command]
 pub fn open_backups_folder(data: tauri::State<DataDir>) -> Result<(), String> {
-    let dir = data.0.join(crate::backup::FOLDER);
+    let dir = data.0.join(backup::FOLDER);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     reveal(&dir)
 }

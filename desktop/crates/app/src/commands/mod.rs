@@ -6,6 +6,8 @@
 
 
 mod media;
+use crate::output::displays;
+use crate::system::updates;
 mod missing_media;
 mod pdf;
 mod services;
@@ -23,13 +25,13 @@ pub use transport::*;
 
 pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
-        crate::displays::get_output_sizes,
-        crate::displays::get_output_preview,
-        crate::displays::set_output_monitor,
-        crate::displays::preview_output_style,
-        crate::displays::get_output_displays,
-        crate::displays::set_output_display,
-        crate::displays::set_output_shown,
+        displays::get_output_sizes,
+        displays::get_output_preview,
+        displays::set_output_monitor,
+        displays::preview_output_style,
+        displays::get_output_displays,
+        displays::set_output_display,
+        displays::set_output_shown,
         get_startup_warnings,
         open_logs_folder,
         get_app_info,
@@ -42,10 +44,10 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
         crate::capture::list_capture_sources,
         crate::capture::pick_capture_source,
         crate::capture::get_capture_status,
-        crate::updates::get_update_status,
-        crate::updates::check_for_update,
-        crate::updates::install_update,
-        crate::updates::reinstall_version,
+        updates::get_update_status,
+        updates::check_for_update,
+        updates::install_update,
+        updates::reinstall_version,
         crate::remote::get_remote_status,
         crate::remote::set_remote_settings,
         crate::remote::start_pairing,

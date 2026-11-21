@@ -56,7 +56,7 @@ use std::sync::Mutex;
 use render_engine::{MonitorSpec, OutputRole};
 use tauri::Manager;
 
-use crate::native_output::NativeOutputs;
+use crate::output::NativeOutputs;
 
 /// The monitor windows, created on first use. Main thread only.
 #[derive(Default)]

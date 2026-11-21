@@ -5,6 +5,9 @@
 //! While the bindings editor is learning, the next MIDI or Stream Deck
 //! trigger is reported to the UI (`input:learned`) instead of acting.
 
+pub mod midi;
+pub mod streamdeck;
+
 use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};

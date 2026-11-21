@@ -5,7 +5,7 @@ use core_engine::EngineCommand;
 use media_engine::hwaccel::{self, DecoderChoice};
 use tauri::Manager;
 
-use crate::displays::OutputRoutes;
+use crate::output::displays::OutputRoutes;
 use crate::engine_host::EngineHandle;
 use crate::input::InputState;
 use crate::now_ms;

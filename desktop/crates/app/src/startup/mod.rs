@@ -19,9 +19,13 @@ use tokio::sync::{broadcast, watch};
 
 use crate::commands::{ChosenPdf, DataDir, StartupWarnings};
 use crate::engine_host::{EngineHandle, EngineLoop};
-use crate::native_media::{NativeMedia, NativeMediaBackend};
+use crate::output::media::{NativeMedia, NativeMediaBackend};
 use crate::settings::{data_dir, DB_FILENAME};
-use crate::{awake, midi, streamdeck, updates, AppState, Db, Storage};
+use crate::{AppState, Db, Storage};
+use crate::input::midi;
+use crate::input::streamdeck;
+use crate::system::awake;
+use crate::system::updates;
 
 const EVENT_BACKLOG: usize = 1024;
 
