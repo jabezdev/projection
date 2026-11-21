@@ -124,7 +124,7 @@ fn generated() -> String {
          // Rust-serialized samples checked against the UI's types at build time.\n\
          import type { MediaAction, MediaDirective, PlaybackReport, PlaybackState } from './playback';\n\
          import type { SessionItem } from './models';\n\
-         import type { OutputConfig } from './outputState';\n\
+         import type { OutputConfig } from '../settings/outputState';\n\
          import type { InputBindings } from './input';\n\n",
     );
     for sample in samples {
@@ -135,7 +135,7 @@ fn generated() -> String {
 
 #[test]
 fn typescript_fixtures_match_the_wire_format() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../app/frontend/src/protocol.fixtures.ts");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../app/frontend/src/api/protocol.fixtures.ts");
     let expected = generated();
     if std::env::var_os("UPDATE_PROTOCOL_FIXTURES").is_some() {
         std::fs::write(&path, &expected).expect("write fixtures");

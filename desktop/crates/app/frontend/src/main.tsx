@@ -9,7 +9,7 @@ import '@fontsource/barlow-condensed/latin-500.css'
 import '@fontsource/barlow-condensed/latin-600.css'
 import './index.css'
 import App from './App.tsx'
-import { startDemo } from './tauri'
+import { startDemo } from './api/tauri'
 
 // Browser-only mode: every load starts from the demo service.
 startDemo()
