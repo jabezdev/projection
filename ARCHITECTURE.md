@@ -1,120 +1,101 @@
 # Architecture
 
-Two apps share one repository: a **projection app** the operator runs at the venue, and a **song library web app** the team uses during the week. The system is **offline-first**: the projection app runs a whole service from its own local library, and syncs with the cloud when a connection is available (planned). The internet is never on the live path.
+Two apps in one repository: **PALTO** (`desktop/`), run by the operator at the venue, and the **song library** (`web/`), used by the team during the week. The system is offline-first: PALTO runs a whole service from its local library and will sync with the cloud when it can. The network is never on the live path.
 
-## Principles
+## PALTO
 
-- **The engine is the single source of truth for what is on air.** The control panel, remote devices and the output screens send requests to the engine and display the state it reports. Nothing else decides what is on screen.
-- **Local first, cloud second.** Songs, services and media are stored on the projection computer. Cloud sync fills and updates that local copy; a dropped connection never stops a service.
-- **Each side owns what it is best at.**
-
-| Data | Owned by | Why |
-|---|---|---|
-| What is on screen right now | The desktop engine | Next/Prev must never wait on the internet |
-| The local library and services the operator runs | Desktop SQLite | The service must run with no connection |
-| The shared song library, service plans, team roles | Convex (cloud) | Several people edit during the week and it must sync instantly |
-| Media files | The projection computer, synced to Convex storage (planned, up to 100 MB per file) | Played locally; the cloud copy is for sharing and backup |
-
-## The projection app (`desktop/`)
-
-Tauri desktop app: a React control panel plus native GPU output windows. How the outputs, media and engine work, and why, is in [ENGINE.md](ENGINE.md).
+The operator works in a React control panel inside a Tauri window. The projection and confidence screens are plain OS windows with **no webview**, drawn by Rust with wgpu. One engine thread decides what is on air; one media session decodes each video once for both screens and owns the only audio output.
 
 ```mermaid
 flowchart LR
-    UI["Control panel<br/>(React)"] -- command --> App
-    Remote["Remote device<br/>(WebSocket)"] -- command --> App
-    App["app<br/>(windows, queue, storage)"] --> Engine["core_engine<br/>(decides)"]
-    Engine --> Media["media_engine<br/>(decode, audio)"]
-    Engine --> Render["render_engine<br/>(draws)"]
-    Render --> Screens[(Projection + confidence)]
-    App <--> DB[(SQLite)]
-    Engine -- events --> App -- events --> UI & Remote
-    App <-. sync when online .-> Cloud[(Convex)]
+    UI[React control panel] --> APP
+    WS[Phone remote, OSC, WebSocket] --> APP
+    APP[app: windows, queue, storage] --> CORE[core_engine: what is on air]
+    CORE -->|directives| MEDIA[media_engine: decode, clock, audio]
+    MEDIA -->|reports| CORE
+    CORE -->|snapshots| FEED[scene feed]
+    FEED --> RENDER[render_engine]
+    MEDIA -->|frames due now| RENDER
+    RENDER --> OUT[projection + confidence windows, live monitors]
+    APP <--> DB[(SQLite + settings JSON)]
 ```
 
-| Piece | Folder | What it does |
-|---|---|---|
-| Control panel | `desktop/crates/app/frontend` | React UI: library, service builder, song editor, cue list, media cards, output settings. Sends commands, re-renders from engine events. |
-| app | `desktop/crates/app` | Opens the windows, turns UI calls into commands, runs the engine queue and the storage worker, keeps settings files. |
-| protocol | `desktop/crates/protocol` | Every command, event and data shape, spoken as JSON by the UI and remote devices. TypeScript types are checked against it at build time. |
-| core_engine | `desktop/crates/core_engine` | The state machine. One command at a time; no windows, GPU or decoders, so it is fully unit-tested. |
-| media_engine | `desktop/crates/media_engine` | Video/audio decoding, playback clocks, the single audio output, thumbnails. |
-| render_engine | `desktop/crates/render_engine` | Draws the projection and confidence screens and the operator preview stills. |
-| persistence | `desktop/crates/persistence` | SQLite: songs, media records, services (each service stored as one JSON document). |
-| network_server | `desktop/crates/network_server` | Remote control: WebSocket and the phone remote page on one port, this computer only unless LAN access is on; other devices pair with a code. Also OSC (Companion and similar). Keyboard, MIDI and Stream Deck input go through the app's input layer instead. |
+| Crate (`desktop/crates/`) | Owns |
+|---|---|
+| `protocol` | Every command, event and data shape, as JSON. The UI's TypeScript types are checked against it at build time. |
+| `core_engine` | The state machine: selection, cues, display modes, media sessions. No GPU, audio or FFmpeg, so it is fully unit-tested. |
+| `media_engine` | Decode workers (software or hardware), frame queues, clocks, the audio output, posters. |
+| `render_engine` | One GPU device, a presentation thread per output, scenes, text, painting, previews, live monitors. |
+| `app` | Tauri: `startup/`, IPC `commands/`, `output/` (windows, displays, scene feed), `input/`, `capture/`, `library/`, `system/` (logs, backups, recovery, updates). |
+| `persistence` | SQLite library and services. |
+| `network_server` | WebSocket and phone remote on one port, pairing, `palto.local`, OSC. |
 
-### One click, end to end
+### How it behaves
 
-1. The operator clicks a lyric line → the UI sends `Cue { item_id, index }`.
-2. The app puts it on the engine queue.
-3. The engine moves the selection, opens or closes media sessions as needed, and publishes `program_changed` (and `playback_changed` if media changed).
-4. The scene feed rebuilds the projection and confidence scenes; each output crossfades to its new scene on its own thread.
-5. The UI and remote devices replace their state with the new snapshot; the preview stills refresh once the transition settles.
+- **One queue.** UI, remote and media reports share one bounded queue. The engine applies at most 64 inputs per publish, merges adjacent seeks, volume changes and saves, and refuses rather than blocks when full.
+- **Whole-domain events.** `project_changed`, `program_changed` and `playback_changed` carry complete state with a revision; clients replace, never merge. After falling behind they resync from the snapshot.
+- **Sessions and generations.** Every media cue opens a new session and every seek a new generation, so late commands and reports are ignored.
+- **Media.** 8-bit 4:2:0 video up to 4K is uploaded as YUV planes and converted on the GPU; other formats are converted by swscale first. Hardware decoding is selectable and falls back to software mid-stream. Loops replay their prepared first frames at the wrap. The audio callback reads a lock-free ring and never blocks; a lost device is retried every 500 ms. The clock follows the audio heard, else a monotonic clock.
+- **Prepared cues.** Stills, video first frames and audio for the cues either side are loaded paused, and a cue for the same file adopts them.
+- **Scenes.** Pure functions turn engine state and output settings into a main and a confidence scene. Text uses cosmic-text with kerning restored around spaces; shadow, outline and glow come from distance-field glyphs in the same pass. Shader backgrounds render at 960×540 and at most 30 fps, and freeze if they cannot keep up.
+- **Outputs** present with vsync on their own threads and redraw only on change. Live monitors are native child windows over the webview, drawn from the same textures at up to 30 fps.
+- **Settings.** Unknown fields survive a round trip; an unreadable file is set aside and reported. Media is copied into `media/` on import.
 
-## The song library (`web/`)
+| Display mode | Projection | Confidence | Media |
+|---|---|---|---|
+| Live | Current cue | Teleprompter, or the video if its Confidence option is on | Continues |
+| Clear | Background only | Teleprompter | Continues |
+| Black | Black | Teleprompter | Continues |
+| Logo | Logo image or looping logo video | Teleprompter | Video pauses and resumes; standalone audio plays on |
 
-A phone-friendly PWA backed by [Convex](https://convex.dev) (database that pushes changes to every open screen) with [Clerk](https://clerk.com) sign-in.
+### Decisions
 
-| When | Who | Where |
-|---|---|---|
-| Mon–Tue | Lyric team | Library: paste lyrics, fix typos, set the usual order |
-| Wed–Fri | Song leader | Services: plan the service, arrange sections, change lyrics for that service only |
-| Sat–Sun | Singers | Services (lyrics view): read the arrangement |
-| Sat–Sun | Operator | Projection app, running from its local copy |
+1. **Native outputs only, no webview fallback.** Two HTML players drifted, doubled the audio and lagged. If native windows fail somewhere, the alternative is a separate output process, not a webview.
+2. **One decoder and one audio output per session**, shared by both screens, which removes drift and double audio by construction.
+3. **The engine owns playback state.** Everything else requests and displays.
+4. **React for editing and controls only**, off the live path.
+5. **Windows 10/11 is the acceptance platform**; development is on Linux under XWayland. Displays on two GPUs are not supported.
+6. **Target machine: Ryzen 3 2200G, 8 GB, GTX 1050 Ti.** Features are judged against it. Software decoding stays the default until it is profiled there.
+7. **Audio goes to the system default device**, with reconnect; pitch follows speed.
+8. **Monitors and previews come from the real renderer**, never a second layout engine or decoder.
+9. **Only what the native renderer draws is offered** in the style settings.
+10. **Keep the system light:** no unused code or settings, bounded queues, no redraw without a change, no per-frame data through JSON.
+11. **Offline-first:** sync feeds the local library and is never needed to run a service; while a service is live, PALTO owns it.
 
-### Cloud data model
+### Known limits
 
-- **songs / sections**: the library. A section is a labelled block of lyrics ("Verse 1"); a blank line inside it is a slide break. A song's *usual order* lists section IDs and can repeat them.
-- **services / serviceItems**: a dated service and its songs. Each item has its own **sequence**: the order its sections are sung in for this service.
-- A **sequence entry** points at a library section, so library fixes flow into every service. It can carry its own label/lyrics: a *variation* for this service only. "Save to library" promotes a variation; "Use library version" drops it. An entry with no section is a service-only part. When a library section or song is deleted, services that use it get a copy.
-- **users** have one role: admin, librarian, leader, operator or singer. Permissions are one table in `web/backend/convex/lib/auth.ts`.
-- **devices**: projection computers. An operator gets a one-time pairing code on the Team tab and types it into the projection app, which then works as that operator until removed.
+- Kerning around spaces is restored for left-to-right lines only. Color emoji draw as single-color shapes.
+- Hardware decoding copies frames back to system memory; 10-bit and 4:2:2/4:4:4 video is converted on the CPU.
+- Captures travel through system memory and are capped at 30 fps. X11 capture cannot read the screen under XWayland.
+- Only one foreground file is prepared at a time.
 
-### Why edits are small operations
+### Test aids
 
-The song leader on a phone and the operator at the desk may arrange the same service at once. The server never accepts "here is the whole new list"; it only takes operations like "move entry *abc* to position 2". Convex runs each as a transaction, so every change lands. Every entry has a stable `key`, which tells repeated sections (several choruses) apart.
+`PALTO_DATA_DIR=<dir>` (another data folder), `PALTO_SHOW_OUTPUTS=1` (show outputs at start), `MAGI_TEST_CAPTURE=1` (a test-pattern capture method), `MAGI_OUTPUT_CAPTURE=<dir>` (PNG of each settled output), `WGPU_BACKEND=dx12|vulkan`, `RUST_LOG`. Every 5 s the log has a `profile:` line with per-stage frame timings.
 
-## Sync (planned)
+## Song library
 
-Not built yet; the items and decisions are in [ROADMAP.md](ROADMAP.md#4-cloud-sync-offline-first). The intended design:
+A phone-friendly PWA on [Convex](https://convex.dev) with [Clerk](https://clerk.com) sign-in. The lyric team edits songs early in the week, the song leader arranges services, singers read them on the weekend.
 
-1. **Pair** the projection computer once with a code from the web app.
-2. **Pull** services, songs and media into the local library whenever online. Library songs are kept as local reference copies; the local copy is complete enough to run any service with no connection.
-3. **Run locally.** Cues, media and outputs only ever read local data. While a service is live, the projection computer owns it: the web shows it as "live on site" and holds edits to it until the service ends.
-4. **Push** desktop edits as the same small Convex operations the web app uses. They come from the desktop's edit history in SQLite (which also powers undo), are queued while offline, and are sent when the connection returns.
-5. **Conflicts never block the operator.** Operations that do not touch the same thing merge automatically. Changes to the same thing on both sides go to a "needs attention" list, settled in a side-by-side dialog when the operator chooses.
-6. **Switches (flags)** control costly or chatty updates such as "now showing" for the singers' view. Admins set team defaults on the web and per-computer overrides; the computer keeps its last known switches while offline. A **full offline** setting stops sync entirely.
-7. **Media** syncs both ways through Convex storage for files up to 100 MB, identified by content hash; larger files stay local.
+- **songs / sections:** a section is a labelled block of lyrics; a blank line is a slide break. A song's usual order lists section ids and may repeat them.
+- **services / serviceItems:** each item has its own sequence. An entry points at a library section and can carry a service-only variation.
+- **users** have one role (admin, librarian, leader, operator, singer); permissions are in `web/backend/convex/lib/auth.ts`.
+- **Edits are small operations** ("move entry *abc* to 2"), each a Convex transaction, so concurrent editors never overwrite each other.
 
-### Planned data model change
-
-The library becomes the reference artifact: editing a service never changes the library song. Library fixes reach **upcoming** services but not past ones; per-service variations are never overwritten. Desktop and cloud move to shared string IDs. The cloud model below describes today's web app, where library fixes flow into every service.
-
-## How the repo is split
-
-`desktop/` and `web/` are independent projects: each has its own lockfile, commands and release. Changing one never requires rebuilding or redeploying the other. The only link is the Convex API:
-
-- `web/` never imports anything from `desktop/`.
-- When the desktop gets sync, its control panel imports the generated API from `web/backend` (and lyric code from `web/shared`) as a local path dependency.
-- Once a desktop release is out, only add to the Convex functions it calls (new optional arguments, new functions). Never rename or remove anything a released desktop still uses: venues update the desktop less often than the web app redeploys.
+`web/` never imports from `desktop/`. When PALTO syncs, it will import the generated Convex API. After a desktop release, Convex functions may only gain optional arguments or new functions, because venues update less often than the web redeploys.
 
 ## Where to change things
 
-| I want to… | Look in |
+| To change | Look in |
 |---|---|
-| Change the control panel | `desktop/crates/app/frontend/src/` (`App.tsx` is the layout; panels and editors are their own components) |
-| Add a command or change a data shape | `desktop/crates/protocol/src/lib.rs`, then the engine, then the app command in `main.rs`, then the frontend; regenerate protocol fixtures |
-| Change navigation or on-air behavior | `desktop/crates/core_engine/src/engine.rs` (tests at the bottom) |
-| Change how the screens look | `desktop/crates/render_engine/src/` (`main_scene.rs`, `confidence.rs`, `text.rs`) and the scene feed in `desktop/crates/app/src/native_scene.rs` |
-| Change playback, decoding or audio | `desktop/crates/media_engine/src/` |
-| Change output settings fields | `desktop/crates/protocol/src/output_config.rs` and `frontend/src/outputState.ts` (the settings page is `frontend/src/OutputSettings.tsx`) |
-| Add an operator action, key or controller | `desktop/crates/protocol/src/input.rs` (actions, triggers, default keys), `desktop/crates/app/src/input.rs` (what each action does), `midi.rs`, `streamdeck.rs` |
-| Change text effects, transitions or shader backgrounds | `desktop/crates/render_engine/src/` (`paint.rs` + `paint.wgsl`, `main_scene.rs`, `shader_bg.rs` + `shader_bg.wgsl`) |
-| Change how songs and services are stored | `desktop/crates/persistence/src/repo.rs` |
-| Change screen capture or add a capture method | `desktop/crates/app/src/capture/` (`mod.rs` manager and routing, one file per platform method) |
-| Change updates or releases | `desktop/crates/app/src/updates.rs`, `desktop/tools/build-windows.sh` (signing, `latest.json`), `desktop/tools/release.sh`, `.github/workflows/ci.yml` |
-| Change the phone remote, pairing or OSC | `desktop/crates/network_server/` (`remote/` is the phone page) and `desktop/crates/app/src/remote.rs` |
-| Change the song library web app | `web/app/src/pages/` |
-| Change the cloud data model or server rules | `web/backend/convex/` (`schema.ts`, tests in `services.test.ts`) |
-| Change who may do what | `web/backend/convex/lib/auth.ts` |
-| Change how pasted lyrics are split into sections/slides | `web/shared/src/lyrics.ts` |
+| The control panel | `desktop/crates/app/frontend/src/` (`App.tsx` is the layout; folders by area) |
+| A command or data shape | `protocol/src/`, then `core_engine`, then `app/src/commands/`, then `frontend/src/api/`; regenerate fixtures |
+| Navigation or on-air behavior | `core_engine/src/engine/` (tests in `engine/tests/`) |
+| How the screens look | `render_engine/src/` (`main_scene/`, `confidence/`, `text/`, `paint/`) and `app/src/output/scene/` |
+| Playback, decoding or audio | `media_engine/src/` (`decoder/`, `audio/`) |
+| Output settings fields | `protocol/src/output_config.rs` and `frontend/src/settings/outputState.ts` |
+| Keys and controllers | `protocol/src/input.rs` and `app/src/input/` |
+| Screen capture | `app/src/capture/` (one file per platform method) |
+| Updates and releases | `app/src/system/updates.rs`, `tools/build-windows.sh`, `tools/release.sh`, `.github/workflows/ci.yml` |
+| Phone remote, pairing, OSC | `network_server/` (`remote/` is the phone page) and `app/src/remote.rs` |
+| The web app or its data | `web/app/src/pages/`, `web/backend/convex/`, `web/shared/src/lyrics.ts` |

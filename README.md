@@ -1,305 +1,73 @@
 # Magi Projection
 
-Software for a church worship team: a song library the team prepares during the week, and a projection app (**PALTO**) that puts it on screen on Saturday and Sunday.
+Software for a church worship team: a song library the team prepares during the week (web), and **PALTO**, the projection app that runs the service from its own local copy.
 
-**Download:** the newest Windows installer is on the [Releases page](https://github.com/jabezdev/projection/releases/latest). Run `PALTO_<version>_x64-setup.exe`; Windows may warn because the installer is not signed (More info → Run anyway). After that, PALTO updates itself.
+**Download:** the Windows installer is on the [Releases page](https://github.com/jabezdev/projection/releases/latest). It is unsigned, so Windows may warn (More info → Run anyway). PALTO then updates itself.
 
 ## What PALTO does
 
-**Running a service**
-- Shows song lyrics, pictures, videos, music and slide presentations on the projector, one cue at a time.
-- Moves between slides with a soft fade, a cut or a slide, whichever you prefer.
-- One button each for **Black** (screen off), **Clear** (hide the words, keep the background) and **Logo** (your church logo or a looping logo video), above the projection's live view. Press a lit button again to go back to live.
-- Each screen (projection, confidence) has its own On/Off switch; the arrow beside it picks the display, window size and aspect ratio.
-- Gets the next picture or video ready ahead of time, so it appears straight away when you move on.
-- Shows which cue is waiting for its video to load, so you never wonder what the audience sees.
+- Lyrics, images, video, audio, image and PDF slides, and live screen or window capture, cued one at a time on a **projection** screen and a stage **confidence** screen, each with its own style.
+- **Black**, **Clear** and **Logo** keys; crossfade, cut or slide transitions; text shadow, outline and glow; `:icon:` codes ([Lucide](https://lucide.dev/icons)); built-in moving backgrounds.
+- A song library and a service editor with sections, service-only song variations and Undo; quick search (Ctrl+K); OpenLyrics import.
+- Keyboard, presenter clickers, MIDI, Stream Deck, a paired phone remote (`palto.local`) and OSC (Bitfocus Companion).
+- Built for Sunday: fully offline, crash recovery to the last cue, keeps displays awake, reconnects HDMI audio, weekly backups, updates that never install while the screens are shown.
 
-**The screens**
-- A **projection screen** for the audience and a **confidence screen** for the stage, each with its own style.
-- The confidence screen shows the current and coming lyrics, the song's parts (verse, chorus, bridge) and the time. A video can be shown there too.
-- Lyric styling: any installed font, size, color, spacing, position, a box behind the words, and shadow, outline or glow.
-- Backgrounds: a picture, a looping video, or a built-in moving background (gradient, aurora, bokeh lights) that stays light on the computer.
-- Symbols in the lyrics: type a code like `:heart:` or `:music:` and a clean icon appears on screen.
-- Live screen sharing: show another screen or a window of this computer (for example a sermon PowerPoint) on the projector, the stage screen or both. If that window closes, the screen goes black instead of freezing.
-- Live previews in the control panel of exactly what each screen shows.
+Best video format: MP4, H.264 8-bit 4:2:0, 1080p or smaller, AAC audio. Other formats play but cost more.
 
-**Songs, media and presentations**
-- A song library with verses, choruses and the order they are sung in. The song editor shows the lyrics on the left and, on the right, the slide under the cursor exactly as the projection will show it, with title, author, arrangement and background.
-- A service editor (the pencil beside the service name): every item with its picture on the left, the selected item's settings on the right. Hover between items and choose *insert here* to pick from a small library with thumbnails. Song changes made there stay in that service and are marked as edited; the library song is untouched until you choose its version again.
-- Services can be split into sections (for example Praise & Worship, Message, Response). Each section collapses in the left column, and Next and Previous pass over the headings.
-- Videos, images, slides and screen captures appear in the middle column as pictures you click to put on air. While a video or audio is on air, a bar at the bottom of the middle column has play/pause (or Space), a scrub bar with time remaining, volume, stop, Fade out and what plays next. Whether a cued video starts playing at once is a setting (Settings → System → Playback, on by default).
-- The Library (bottom of the left column) manages songs and media at the source: create songs, import files, rename, delete, see where each is used.
-- Quick search (Ctrl+K) to find any song or media file and add it to the service.
-- Import songs from OpenLyrics files, picture groups as slides, and **PDF files** (each page becomes a slide).
-- Videos: play, pause, seek, loop, trim the start and end, change the speed and volume. Smooth looping backgrounds.
-- Media you add is copied into PALTO's own library folder, and missing files can be found again by searching a folder.
-
-**Controls**
-- Keyboard shortcuts you can change, presenter clickers, MIDI controllers and Stream Deck buttons.
-- **Phone remote:** open a page on a phone on the church Wi-Fi, pair it once with a code, and go next/previous or switch to Black, Clear or Logo while seeing the current and next slide.
-- Works with Bitfocus Companion and other show controllers (OSC).
-- Asks before risky actions (loading another service, removing an item) while the audience can see the screens.
-
-**Safe and dependable on Sunday**
-- Works fully offline; nothing on screen depends on the internet.
-- Reopens the service at the same slide if the computer or PALTO crashes; screens stay hidden until you show them.
-- Keeps the displays awake while showing, reconnects sound if the HDMI audio device drops, and remembers which display each screen goes to.
-- Automatic weekly backups and one-click backup export.
-- Updates download in the background and install only when you choose, never while the screens are shown; you can go back to the previous version.
-- Uses the graphics card to play video (hardware decoding can be switched on in Settings) so older computers keep up.
-
-**During the week (web app)**
-- A phone-friendly website where the lyric team enters songs, the song leader arranges services and singers read the arrangement, with team roles. (Not yet connected to PALTO; that comes next.)
-
-## Documentation
-
-| Doc | What |
-|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | How the two apps fit together; offline-first with cloud sync |
-| [ENGINE.md](ENGINE.md) | How the projection app's outputs, media and engine work, and why |
-| [ROADMAP.md](ROADMAP.md) | What's done and what's next |
-| [WINDOWS.md](WINDOWS.md) | Windows release checklist for the church PC |
-| [docs/church-pc-checklist.md](docs/church-pc-checklist.md) | One printable page of checks for the next visit to the church PC |
-| [docs/media-profile.md](docs/media-profile.md) | Which video and audio files play best |
-| [docs/records/](docs/records/) | Frozen design records (history) |
-
-The repo holds two separate projects that share one git history. Each has its own dependencies, lockfile, tooling and deploys.
+## Repository
 
 | Folder | What | Built with |
 |---|---|---|
-| [desktop/](desktop/) | Projection app the operator runs at the venue | Rust, Tauri, wgpu, FFmpeg, React |
-| [web/](web/) | Song library web app: lyrics, service arrangements, roles | React PWA, Convex, Clerk |
+| [desktop/](desktop/) | PALTO, the projection app | Rust, Tauri, wgpu, FFmpeg 9, React |
+| [web/](web/) | Song library web app | React PWA, Convex, Clerk |
 
----
+The two are independent projects with their own lockfiles and releases. How they work: [ARCHITECTURE.md](ARCHITECTURE.md). What's next: [ROADMAP.md](ROADMAP.md).
 
-## Projection app (`desktop/`)
+## Desktop (`desktop/`)
 
-The operator works in a web-style control panel. The projection and confidence screens are native GPU windows (no webview); one media session decodes each video once for both and owns the only audio output. Details in [ENGINE.md](ENGINE.md).
+**UI only, in a browser** (no Rust needed): `cd desktop/crates/app/frontend && bun install && bun run dev`, then open http://localhost:5174. A built-in demo backend (`src/demo/`) stands in for the engine and loads a service with every item type; nothing is projected.
 
-### Run the UI only, in a browser
-
-Fast, no Rust needed; best for layout and styling work. Needs [Bun](https://bun.sh/).
+**Full app.** Needs Rust, Bun, FFmpeg 9 and the [Tauri system libraries](https://tauri.app/start/prerequisites/) (Arch: `sudo pacman -S ffmpeg webkit2gtk-4.1 base-devel`).
 
 ```bash
-cd desktop/crates/app/frontend
-bun install
+cd desktop/crates/app
+bun install && bun install --cwd frontend
 bun run dev
 ```
 
-Open http://localhost:5174. There is no engine in this mode: [src/tauri.ts](desktop/crates/app/frontend/src/tauri.ts) fakes it. Buttons work, but nothing is projected. The web app uses port 5175, so both can run at once.
+The projection and confidence windows start hidden; switch them on in the right column. Linux runs through XWayland (`GDK_BACKEND=x11`).
 
-Every page load opens **Demo · Every item type**, a service with one of each kind of cue: songs with image, video and shader backgrounds, an image, a video, audio, a scripture slideshow, sermon slides from a PDF, and window and screen captures, plus library songs and media and a church logo for the Logo key ([src/demoService.ts](desktop/crates/app/frontend/src/demoService.ts)). Its media lives in `desktop/crates/app/frontend/demo/` and is served at `/demo/` by the dev server only, so it never reaches a build. Changes last until the page is refreshed; a refresh starts again from the demo.
-
-### Run the full desktop app
-
-Needs:
-
-- **Rust**: https://rustup.rs
-- **Bun**: https://bun.sh
-- **FFmpeg 8.x** and the **Tauri system libraries** (https://tauri.app/start/prerequisites/):
-  - Arch: `sudo pacman -S ffmpeg webkit2gtk-4.1 base-devel`
-  - Debian/Ubuntu: `sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
-
-```bash
-cd desktop/crates/app
-bun install
-bun install --cwd frontend
-bun run dev        # builds everything and opens the app
-```
-
-The first build takes several minutes. Three windows exist: **PALTO** (the control panel), and the **projection** and **confidence** outputs, which start hidden; show them from the Screens panel (right column). On Linux, `bun run dev` forces X11 (`GDK_BACKEND=x11`, XWayland under Wayland sessions) because native Wayland output is not supported.
-
-### How the UI talks to the engine
-
-- On startup the UI fetches the current state once (`get_engine_snapshot`), then listens for `engine:event`.
-- `project_changed`, `program_changed` and `playback_changed` each carry the **complete** state of their domain, so the UI replaces what it has. `error` means a command failed.
-- The UI never decides what is on air; it asks the engine and shows what the engine reports.
-- Commands and data shapes are defined in [protocol/src/lib.rs](desktop/crates/protocol/src/lib.rs). [protocol.fixtures.ts](desktop/crates/app/frontend/src/protocol.fixtures.ts) is generated from Rust and checked against the UI's TypeScript types by the UI build; an error there means the two disagree.
-
-### Everyday commands
-
-From `desktop/` unless noted.
-
-| What | Command |
+| What | Command (from `desktop/`) |
 |---|---|
-| Check the Rust code compiles | `cargo check` |
-| Run every Rust test | `cargo test --workspace` |
-| Type-check, build, lint and test the UI | `cd crates/app/frontend && bun run build && bun run lint && bun run test` |
+| Rust tests | `cargo test --workspace` |
+| UI build, lint, tests | `cd crates/app/frontend && bun run build && bun run lint && bun run test` |
 | Regenerate protocol fixtures after a wire change | `UPDATE_PROTOCOL_FIXTURES=1 cargo test -p protocol --test typescript` |
-| Compare outputs with the frozen parity references | `tools/parity/run.sh` (needs ImageMagick) |
-| Build an installable app | `cd crates/app && bun tauri build` |
-| Build the Windows installer from Linux (bumps the version) | `tools/build-windows.sh` |
-| Publish that installer as a GitHub release (installed copies update to it) | `tools/release.sh` |
-| Bump the version by hand (`0.MINOR.BUILD`) | `tools/bump-version.sh [minor]` |
-| End-to-end check over the WebSocket (needs a built app) | `bun tools/e2e/e2e.ts` |
-| Remote access: phone page, pairing, LAN refusals, rate limit, OSC, `palto.local` | `bun tools/e2e/remote.ts` |
-| 30-minute soak (memory, decoders, frames) | `bun tools/e2e/soak.ts --video <file>` |
-| Per-stage video timings, CPU and memory, software vs hardware decoding | `bun tools/e2e/profile.ts --video <file> --compare` |
+| Output parity check (needs ImageMagick) | `tools/parity/run.sh` |
+| End-to-end, remote, soak, profile (needs a built app) | `bun tools/e2e/{e2e,remote,soak,profile}.ts` |
+| Windows installer, cross-built from Linux | `tools/build-windows.sh` (bumps `0.MINOR.BUILD`) |
+| Publish it as a GitHub release | `tools/release.sh` |
 
-CI (`.github/workflows/ci.yml`) runs the Rust tests, the UI build/lint/test and the web typecheck/tests on every push; a `v*` tag also cross-builds the Windows installer and attaches it to the GitHub release, unless the release already has one (published with `tools/release.sh`). The parity check is not in CI because its results depend on the installed fonts.
+CI runs the Rust tests, the UI checks and the web checks on every push; a `v*` tag cross-builds and publishes the Windows installer.
 
-### Where your data lives
+**Data** lives in `%APPDATA%\com.magi.projection\` (Linux: `~/.local/share/com.magi.projection/`): `app.db` (library and services), `media/`, the settings JSON files, `logs/palto.log`, `backups/`. `PALTO_DATA_DIR=<folder>` uses another folder.
 
-In the OS app-data folder, never in the repo:
+**Windows builds** come from `tools/build-windows.sh`, which fetches its toolchain without sudo (rustup into `~/.cargo`, `cargo-xwin`, the BtbN FFmpeg 9.0 LGPL build and NSIS into `~/.local/share/projection-win`) and needs `clang`, `lld`, `llvm` and `bsdtar`. The installer is `target/x86_64-pc-windows-msvc/release/bundle/nsis/PALTO_<version>_x64-setup.exe`.
 
-- Linux: `~/.local/share/com.magi.projection/`
-- Windows: `%APPDATA%\com.magi.projection\`
+**Releases.** Updates are signed with `~/.tauri/palto-updater.key` (public half in `tauri.conf.json`); keep a copy safe, since installed copies accept no other key. Locally: `RELEASE_NOTES="…" tools/build-windows.sh`, push the version bump, then `tools/release.sh`. From CI: push an annotated tag whose message is the notes; this needs the key as the `TAURI_SIGNING_PRIVATE_KEY` secret.
 
-`app.db` holds the library and services; `app-config.json` the remote port, LAN access, OSC and the video decoder (Settings → Remote and System); `remote-devices.json` paired phones and tablets; `capture-tokens.json` screens and windows the sharing dialog allowed (Wayland); `updates/` downloaded installers; `output-settings.json` and `output-displays.json` output styling and display assignments; `input-bindings.json` keys and controller bindings; `session-state.json` the last cue, for crash recovery. `logs/` holds `palto.log` and up to four older logs (Settings → System → Open logs folder). Existing MVP installs keep using the `com.tauri.dev` folder when it contains the library; logs always go to `com.magi.projection`. Media imported from now on is copied into `media/` in the data folder (an identical file is reused), and so are presentation images and the logo; media added before this still references its original file. When files go missing (for example a library moved from another computer), the Library's missing-files banner searches a chosen folder for files with the same names and relinks the library, every service and the logo. `PALTO_DATA_DIR=<folder>` runs the app on another data folder, as the test scripts do.
+**Stream Deck on Linux** needs a udev rule: `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", TAG+="uaccess"`.
 
-**Backups.** Settings → System → Export backup… writes a zip with a consistent copy of `app.db`, the settings files and `media.json` (every media file the library uses, which services use it and whether it still exists; the media files themselves are not included). Once a week the app also writes `backups/auto-<date>.zip` and keeps the newest five. To restore, close PALTO and unzip `app.db` and the settings files into the data folder.
+## Web (`web/`)
 
-### Folder layout
+From `web/`, with Bun:
 
-```
-desktop/
-  crates/
-    app/            The desktop app: windows, UI commands, startup, storage worker
-      frontend/     React control panel
-    core_engine/    The engine: decides what's on screen and which media plays
-    render_engine/  Native output drawing (one GPU device, a thread per output)
-    media_engine/   Decoding, audio output and playback clocks (FFmpeg)
-    protocol/       The shared list of commands, events and settings
-    persistence/    Saving/loading songs and services (SQLite)
-    network_server/ Remote control: WebSocket, phone remote page, pairing, mDNS, OSC
-  tools/
-    parity/         Output regression check against frozen references
-    e2e/            End-to-end, remote, soak and profile scripts over the WebSocket (Bun)
-    bump-version.sh Version bump (0.MINOR.BUILD)
-    build-windows.sh  Cross-builds the Windows installer (signed for updates)
-    release.sh      Publishes that installer as a GitHub release
-  assets/           Sample backgrounds
-```
+1. Create a Clerk app with a **Convex** JWT template; copy its Issuer URL.
+2. `bun install && bun run dev:backend` (creates the Convex project), then set `CLERK_JWT_ISSUER_DOMAIN` to the Issuer URL in the Convex dashboard.
+3. Copy `app/.env.example` to `app/.env.local` and fill in `VITE_CONVEX_URL` and `VITE_CLERK_PUBLISHABLE_KEY`.
+4. `bun run dev:app`, then open http://localhost:5175. The first person to sign in becomes admin.
 
-"Crate" is Rust's word for a package; each folder builds separately.
-
-### Using it
-
-**Operator layout.** Three resizable columns (30/45/35). Settings are at the top left. Selecting a song part on the left jumps to its cue in the center; extra scroll space keeps the last cue reachable. The right column holds output controls and two previews: still images of exactly what each output shows, refreshed when a cue, style or size changes (they do not play video).
-
-**Media cards.** Standalone video and audio cards in the center have play/pause, stop, seek, volume, mute, loop, clip start/end and speed, saved with the service. Video cards also have a Confidence checkbox that shows the video on the confidence screen too (muted there; audio plays once). Song and Logo video backgrounds loop muted without transport controls.
-
-**Displays.** Output display assignments and fullscreen/windowed choices are saved and restored by display identity. A missing display stays saved and shows as disconnected. If the connected displays change while Settings is open, reopen Settings before placing an output.
-
-**Audio device.** Choose the venue output in the OS sound settings. If it disappears, the media card shows a reconnecting message and playback resumes on the new default device.
-
-**Keys and controllers.** With the operator window focused and no dialog open: → / Space / Page Down next, ← / Page Up previous, ↓ / ↑ next and previous item, B (or `.`) Black, C Clear, L Logo (each toggles back to Live), Esc Live, P play/pause media, Ctrl+K quick search. Presenter clickers send Page Up / Page Down. Settings → Controls changes any binding and binds MIDI notes, controls or program changes and Stream Deck keys: press Add, then the key or pad. MIDI inputs and Stream Decks are found when plugged in. While the outputs are shown, loading another service or removing an item asks first. A cue whose media is still loading is marked in amber until the projection shows it.
-
-*Stream Deck on Linux* needs read access to its hidraw device, for example `/etc/udev/rules.d/70-streamdeck.rules` with `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", TAG+="uaccess"`, then replug it. On Windows close Elgato's Stream Deck app, which otherwise holds the device.
-
-**Screen capture.** Service → *+ Screen capture*: choose a screen or window (on Wayland the system's sharing dialog asks once; PALTO remembers the choice), whether it shows on the projection, the confidence screen or both, and whether it fits whole or fills each screen. It is captured only while cued. If the window closes or the display disconnects, the outputs go black (never a frozen picture) and the cue says why. Settings → System → Screen capture switches the method if a capture looks wrong.
-
-**Updates.** PALTO checks GitHub for a new version a few minutes after starting and every few hours, downloads it in the background, and shows a notice. Settings → System → Updates shows the release notes and installs it; installing is refused while the outputs are shown. The last few installers are kept, so an earlier version can be reinstalled from the same place.
-
-**Icons on screen.** Type `:name:` in a slide with a [Lucide](https://lucide.dev/icons) icon name, for example `:heart:`, `:music:` or `:book-open:`; the outputs draw the icon in the lyric style. The operator lists show the code as typed.
-
-**Phone remote.** Settings → Remote → *Allow phones and other computers on this network*. On the phone (same Wi-Fi), open `http://palto.local:8080/` or scan the QR code, then choose *Pair a device* on the operator screen and type the six-digit code on the phone. The phone remote has Next / Previous, Live / Clear / Black / Logo and the current and next slide. Paired devices are listed there and can be removed.
-
-**Companion and OSC.** Settings → Remote → *Accept OSC messages* (UDP 9000). In Bitfocus Companion, add a *Generic: OSC* connection to this computer's address and port 9000, and give buttons actions that send `/palto/next`, `/palto/previous`, `/palto/black`, `/palto/clear`, `/palto/logo`, `/palto/live`, `/palto/next_item`, `/palto/previous_item`, `/palto/play_pause` or `/palto/stop`. Companion on another computer also needs LAN access on and that computer's IP address in the allowed list.
-
-**Video decoding.** Settings → System → Video decoding: Software (default), Automatic, or a hardware decoder found on this computer. See [docs/media-profile.md](docs/media-profile.md) for the formats that play best.
-
-**Not there yet.** No undo, no operator-designed service templates; see [ROADMAP.md](ROADMAP.md).
-
-### MVP rehearsal
-
-Build and launch the production executable:
-
-```bash
-cd desktop/crates/app
-bun install
-bun install --cwd frontend
-bun run tauri build --no-bundle
-GDK_BACKEND=x11 ../../target/release/app     # Linux
-```
-
-1. **Songs and services.** Open Library, create a song, edit its parts and arrangement and save. From the service name's list, create a service; in its editor insert the song, reorder items and rename the service. Restart and reopen it. Library songs and service copies are separate: an edit in the service editor marks the song as edited there and leaves the library song unchanged.
-2. **Images and Logo.** Import images in the Library (Import files…). Give a scheduled song an image or video background. Add an image directly to the service and cue it. In Output Settings choose a logo image or video, press Logo (logo videos loop muted), then Live to return to lyrics.
-3. **Presentations.** Create an image presentation, choose and reorder several images, save, and cue each thumbnail. Edit and reopen it to check the order persists. Import a PDF (*Import PDF…*): each page becomes a slide.
-4. **Displays and lyrics.** In Output Settings → Output displays, assign the projector and confidence displays and press Show fullscreen for each (Show windowed to inspect). Advance lyrics: old and new text fade together using the configured fade while the border and box fill stay; confidence scrolls the active slide into view. Try rapid navigation.
-5. **Video.** Import a video with sound, add it and cue it. Check play/pause, stop, seek, loop, volume, mute and speed. Backgrounds keep the outgoing picture until the new one is ready, then crossfade. Try the actual files you intend to use.
-6. **Audio.** Import an audio file, add it and cue it. The audio card has the same transport; the projection keeps the song background, and audio keeps playing under the Logo.
-7. **Switching.** Move between lyrics, images, video, Logo, Clear and Black. Both outputs recover, and a video stops sounding when you leave its cue.
-
-Automated checks do not certify smoothness, monitor placement or venue audio; only a real multi-display rehearsal does.
-
-### Packaging
-
-Bundles appear under `desktop/target/release/bundle/`. Platform settings: [tauri.linux.conf.json](desktop/crates/app/tauri.linux.conf.json), [tauri.windows.conf.json](desktop/crates/app/tauri.windows.conf.json).
-
-**Linux** (`.deb`, AppImage): `cd desktop/crates/app && bun tauri build`. The `.deb` depends on the FFmpeg 8 runtime libraries (`libavcodec62`, `libavformat62`, `libavutil60`, `libswresample6`, `libswscale9`); the AppImage carries them. On Arch, use `NO_STRIP=true bun tauri build`: linuxdeploy's `strip` cannot read current system libraries.
-
-**Windows** (NSIS installer; MSI only when built on Windows). The app links FFmpeg 8 dynamically and needs only `avcodec`, `avformat`, `avutil`, `swresample` and `swscale`; the installer places those DLLs next to `app.exe` and downloads WebView2 (for the control panel) if missing.
-
-*From Linux* (the usual way): `desktop/tools/build-windows.sh`. The installer appears at `desktop/target/x86_64-pc-windows-msvc/release/bundle/nsis/PALTO_<version>_x64-setup.exe` (installed as `PALTO.exe`; the script bumps the build number first, `--no-bump` skips that). The script needs `clang`, `lld`, `llvm` and `bsdtar`; it fetches the rest without sudo: rustup into `~/.cargo` (the system Rust stays default), `cargo-xwin` (downloads the MSVC SDK on first use), the BtbN FFmpeg 8.1 LGPL shared build and Debian's NSIS, into `~/.local/share/projection-win`. The installer is unsigned: SmartScreen asks for confirmation (More info → Run anyway).
-
-*On Windows* (not yet tried):
-
-1. Install Rust (MSVC toolchain), Bun, and LLVM/Clang (the FFmpeg bindings use `bindgen`).
-2. Unpack an FFmpeg 8.x **shared, LGPL** win64 build, e.g. to `C:\ffmpeg` (with `include\`, `lib\`, `bin\`), and set `$env:FFMPEG_DIR = "C:\ffmpeg"`.
-3. Copy the five runtime DLLs into `desktop\crates\app\windows\ffmpeg\` (git-ignored):
-   ```powershell
-   New-Item -ItemType Directory -Force crates\app\windows\ffmpeg
-   Copy-Item C:\ffmpeg\bin\avcodec-*.dll, C:\ffmpeg\bin\avformat-*.dll, C:\ffmpeg\bin\avutil-*.dll, C:\ffmpeg\bin\swresample-*.dll, C:\ffmpeg\bin\swscale-*.dll crates\app\windows\ffmpeg\
-   ```
-4. `cd crates\app; bun install; bun install --cwd frontend; bun tauri build`.
-
-Install on a machine without FFmpeg or developer tools, then run the rehearsal. Remaining Windows checks are in [WINDOWS.md](WINDOWS.md).
-
-**Releases and updates.** Installed copies update themselves from GitHub Releases (Settings → System → Updates). Updates must be signed with the key in `~/.tauri/palto-updater.key` (its public half is in [tauri.conf.json](desktop/crates/app/tauri.conf.json)); keep a copy somewhere safe, since installed copies accept no other.
-
-- *From this computer* (the usual way): `RELEASE_NOTES="What changed, for the operator" desktop/tools/build-windows.sh`, commit and push the bumped version, then `desktop/tools/release.sh`. It tags the pushed commit and publishes the installer, its `.sig` and `latest.json` (which carries the notes shown before installing).
-- *From CI:* push an annotated tag whose message is the release notes (`git tag -a v0.1.3 -m "Fixes the logo fade"`, `git push origin v0.1.3`). CI builds, signs and publishes, once the key is in the repository's Actions secrets as `TAURI_SIGNING_PRIVATE_KEY` (and an empty `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); without it the installer builds but cannot be offered as an update.
-
----
-
-## Song library (`web/`)
-
-A phone-friendly site (installable as an app) where the week's prep happens: the lyric team adds songs, the song leader arranges the service, singers read the arrangement. Data lives in [Convex](https://convex.dev) and sign-in uses [Clerk](https://clerk.com). Data model: [ARCHITECTURE.md](ARCHITECTURE.md#cloud-data-model). Today the web app and the projection app are separate: services are entered on the desktop by hand. Next, the library is reworked so library songs stay untouched references (fixes reach upcoming services only), then the projection app syncs offline-first with Convex, including media up to 100 MB ([roadmap](ROADMAP.md#3-library-revamp-and-data-model), phases 3–4).
-
-All commands run from `web/`. Needs Bun.
-
-### First-time setup
-
-1. Create a Clerk application. In Clerk's dashboard: **JWT templates → New → Convex** (keep the name `convex`) and copy its **Issuer** URL.
-2. Start the backend; the first run asks you to log in to Convex and create a project:
-   ```bash
-   bun install
-   bun run dev:backend
-   ```
-   In the Convex dashboard → Settings → Environment variables, set `CLERK_JWT_ISSUER_DOMAIN` to the Issuer URL.
-3. Copy `app/.env.example` to `app/.env.local` and fill in `VITE_CONVEX_URL` (printed by step 2, also in `backend/.env.local`) and `VITE_CLERK_PUBLISHABLE_KEY` (Clerk → API keys).
-4. In a second terminal: `bun run dev:app`, then open http://localhost:5175.
-
-**The first person to sign in becomes admin.** Everyone after starts as a *singer* (read-only) until an admin gives them a role on the **Team** tab.
-
-### Commands
-
-| What | Command |
-|---|---|
-| Run the backend (watches and pushes changes) | `bun run dev:backend` |
-| Run the web app | `bun run dev:app` |
-| Typecheck everything | `bun run typecheck` |
-| Run all tests | `bun run test` |
-| Build the web app (output in `app/dist`) | `bun run build` |
-| Deploy the backend to production | `bun run deploy:backend` |
-
-### Deploying
-
-- **Backend:** `bun run deploy:backend` pushes the Convex functions and schema to production.
-- **Web app:** point your host (Vercel, Netlify, Cloudflare Pages) at this repo with root directory `web`, build command `bun run build`, output directory `app/dist`. Set `VITE_CONVEX_URL` (production) and `VITE_CLERK_PUBLISHABLE_KEY` in the host's settings.
-
-### Folder layout
-
-```
-web/
-  app/        The web app (React PWA)
-  backend/    Convex: schema (convex/schema.ts) and server functions
-  shared/     Lyric parsing and slide splitting, for the web app and later the desktop
-```
+Other commands: `bun run typecheck`, `bun run test`, `bun run build` (output in `app/dist`), `bun run deploy:backend`.
 
 ## License
 
-MIT
-
-Bundled third-party assets: [Lucide](https://lucide.dev) icons and font (ISC, see `desktop/crates/render_engine/assets/lucide/LICENSE`).
+MIT. Bundled: [Lucide](https://lucide.dev) icons and font (ISC, `desktop/crates/render_engine/assets/lucide/LICENSE`).
