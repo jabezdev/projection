@@ -8,6 +8,19 @@ Everything is judged against the church PC: **Ryzen 3 2200G, 8 GB, GTX 1050 Ti, 
 
 Released: `v0.2.0` (the redesigned operator workspace). Done: phases 1 and 2 (live readiness, CI, backups), 5 (per-screen looks, effects, transitions, shader backgrounds, Lucide icons), 6 (input layer, MIDI, Stream Deck, OSC), 7 (YUV upload, hardware decoding, seamless loops, profiling, live monitors), 10 (LAN remote, pairing, `palto.local`, phone remote), 11 (updater), local screen capture and PDF import. The codebase was reorganized into small modules and moved to FFmpeg 9 the same day.
 
+## Working order (2026-11-21)
+
+- [ ] **1. Data model:** songs, sections and services with variations; upcoming vs past; string IDs; edit history and undo; song credits; service templates (phase 3).
+- [ ] **2. Visual revamp:** the operator UI's look. **Open:** design.
+- [ ] **3. UI, usability and display nitpicks:** collected as found.
+- [ ] **4. Performance and optimizations:** audio underruns after seeks and "Audio flush not acknowledged"; baseline memory 298 → 366 MB since phase 5; church-PC profile.
+- [ ] **5. Stage tools:** timers and operator messages on the confidence screen (phase 6).
+- [ ] **6. Screen sharing from other devices:** share page, WebRTC, audio (phase 8).
+- [ ] **7. PowerPoint import** (phase 9).
+- [ ] **8. OBS plugin:** designed; waits on item 1 for credits (phase 12).
+- [ ] **9. Web app:** hosting, Convex production, then sync with PALTO (phase 4).
+- [ ] **10. Others:** native phone app, macOS, native Wayland, the updater signing key as a CI secret.
+
 ## Next church-PC visit
 
 Bring one installer with every fix batched in, a test video, the logo and `desktop/tools/e2e/` with Bun.
