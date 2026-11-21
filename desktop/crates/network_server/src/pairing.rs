@@ -1,9 +1,3 @@
-//! Pairing remote devices. The operator starts pairing, which shows a
-//! six-digit code for a few minutes; a device that sends the code gets a
-//! random token it presents on every connection. Only a hash of each token
-//! is kept, in `remote-devices.json`. Wrong codes are limited: after a few,
-//! the code is withdrawn and the operator starts again.
-
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -13,12 +7,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub const FILENAME: &str = "remote-devices.json";
-/// How long a pairing code stays valid.
 pub const CODE_LIFETIME: Duration = Duration::from_secs(5 * 60);
-/// Wrong codes allowed within [`FAILURE_WINDOW`] before the code is withdrawn.
 const MAX_FAILURES: usize = 5;
 const FAILURE_WINDOW: Duration = Duration::from_secs(60);
-/// `last_seen` is written to disk at most this often per device.
 const SEEN_SAVE_INTERVAL_MS: i64 = 60_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -37,10 +28,8 @@ struct Saved {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PairError {
-    /// No code is being shown on the operator screen.
     NotPairing,
     WrongCode,
-    /// Too many wrong codes; the operator must start pairing again.
     Locked,
     Storage(String),
 }
@@ -60,7 +49,6 @@ struct Inner {
     code: Option<(String, Instant)>,
     failures: VecDeque<Instant>,
     devices: Vec<Device>,
-    /// Bumped whenever a device is removed, so connections re-check.
     revision: u64,
 }
 
@@ -80,13 +68,11 @@ fn hash(token: &str) -> String {
 }
 
 impl Pairing {
-    /// Loads paired devices from `path` (none when it is missing or unreadable).
     pub fn load(path: PathBuf) -> Self {
         let saved: Saved = std::fs::read(&path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
         Self { inner: Mutex::new(Inner { code: None, failures: VecDeque::new(), devices: saved.devices, revision: 0 }), path: Some(path) }
     }
 
-    /// Without a file, for tests.
     pub fn in_memory() -> Self {
         Self { inner: Mutex::new(Inner { code: None, failures: VecDeque::new(), devices: Vec::new(), revision: 0 }), path: None }
     }
@@ -98,7 +84,6 @@ impl Pairing {
         std::fs::write(&temporary, bytes).and_then(|()| std::fs::rename(&temporary, path)).map_err(|e| e.to_string())
     }
 
-    /// Shows a new code for [`CODE_LIFETIME`]; returns it.
     pub fn start(&self, now: Instant) -> String {
         let mut inner = self.inner.lock().expect("pairing poisoned");
         let code = format!("{:06}", u32::from_le_bytes(random_bytes()) % 1_000_000);
@@ -111,7 +96,6 @@ impl Pairing {
         self.inner.lock().expect("pairing poisoned").code = None;
     }
 
-    /// The code being shown and how long it stays valid.
     pub fn code(&self, now: Instant) -> Option<(String, Duration)> {
         let mut inner = self.inner.lock().expect("pairing poisoned");
         match &inner.code {
@@ -124,7 +108,6 @@ impl Pairing {
         }
     }
 
-    /// Pairs a device that sent `code`; returns its token.
     pub fn pair(&self, code: &str, name: &str, now: Instant, now_ms: i64) -> Result<String, PairError> {
         let mut inner = self.inner.lock().expect("pairing poisoned");
         let current = match &inner.code {
@@ -158,7 +141,6 @@ impl Pairing {
         Ok(token)
     }
 
-    /// The paired device presenting `token`, noting that it was seen.
     pub fn authorize(&self, token: &str, now_ms: i64) -> Option<Device> {
         let digest = hash(token);
         let mut inner = self.inner.lock().expect("pairing poisoned");
@@ -174,7 +156,6 @@ impl Pairing {
         Some(found)
     }
 
-    /// Whether device `id` is still paired.
     pub fn is_paired(&self, id: &str) -> bool {
         self.inner.lock().expect("pairing poisoned").devices.iter().any(|d| d.id == id)
     }
@@ -190,7 +171,6 @@ impl Pairing {
         self.save(&inner)
     }
 
-    /// Changes when a device is removed.
     pub fn revision(&self) -> u64 {
         self.inner.lock().expect("pairing poisoned").revision
     }

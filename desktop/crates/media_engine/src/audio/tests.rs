@@ -12,8 +12,6 @@ fn format(rate: u32, channels: u16) -> DeviceFormat {
 
 #[test]
 fn conversion_resamples_and_maps_channels_without_losing_frames() {
-    // 1 kHz mono session on a 2 kHz stereo device: every device frame
-    // pair spans one session frame, copied to both channels.
     let mut converter = Converter::new(format(1_000, 1), format(2_000, 2));
     let mut consumed = 0;
     let mut out = vec![0.0; 2 * 8];
@@ -28,7 +26,6 @@ fn conversion_resamples_and_maps_channels_without_losing_frames() {
     assert_eq!(left, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5], "interpolated from the previous block's last frame (silence)");
     assert!(out.chunks(2).all(|f| f[0] == f[1]), "mono is copied to both channels");
 
-    // Over many blocks, consumption matches the rate ratio exactly.
     let mut total = 0;
     for _ in 0..1_000 {
         converter.fill(&mut out[..2 * 7], |input| total += input.len());
@@ -58,7 +55,6 @@ fn a_failed_stream_is_reopened_with_the_original_session_format() {
         AudioOutput::supervise(move |_slot, failed, session| {
             calls.lock().unwrap().push(session);
             *flag.lock().unwrap() = Some(failed);
-            // The device is gone for one retry, then back with 44.1 kHz.
             if session.is_some() && failures.fetch_add(1, Ordering::AcqRel) == 0 {
                 anyhow::bail!("device unavailable");
             }
@@ -98,7 +94,6 @@ fn running_sessions_apply_gain_and_advance_the_clock_by_frames_heard() {
     let mut out = [0.0; 20];
     audio.render(&mut out, 1_000_000);
     assert_eq!(out, [0.25; 20]);
-    // 10 frames at 1 kHz = 10 ms, heard from t = 1 s.
     assert_eq!(audio.position(1_000_000), 0);
     assert_eq!(audio.position(1_010_000), 10_000);
     audio.render(&mut out, 1_010_000);

@@ -10,9 +10,6 @@ use super::Channels;
 use crate::system::recovery::{restore_commands, Previous, Recovery};
 use crate::Db;
 
-/// After a crash, queues the commands that reopen the last service at its last
-/// cue, then keeps recording what is on air for the next start. Returns what
-/// the operator should be told.
 pub(super) fn restore_last_service(app: &tauri::App, dir: &Path, db: &Db, channels: &Channels) -> std::io::Result<Vec<String>> {
     let (recovery, previous) = Recovery::start(dir);
     let warning = match previous {

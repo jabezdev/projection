@@ -1,15 +1,11 @@
-
-
 use crate::clock::now_us;
 
 use super::*;
 
-/// The device callback: pulls from the attached session or plays silence.
 pub(super) fn feeder<T>(slot: Slot, session: DeviceFormat, device: DeviceFormat) -> impl FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
 where
     T: cpal::SizedSample + cpal::FromSample<f32>,
 {
-    // Grown only if the device asks for a larger block than ever before.
     let mut scratch = vec![0f32; 16_384];
     let mut converter = (session != device).then(|| Converter::new(session, device));
     move |data: &mut [T], info| {
@@ -31,17 +27,11 @@ where
     }
 }
 
-/// Feeds a device whose format differs from the sessions' (after reopening
-/// on another device): linear resampling and channel mapping. Sessions keep
-/// counting frames in their own format, so the audio clock stays correct.
 pub(super) struct Converter {
     session: DeviceFormat,
     device: DeviceFormat,
-    /// Session frames per device frame.
     step: f64,
-    /// Offset of the next device frame past `input[0]`, in session frames.
     frac: f64,
-    /// The previous block's last session frame, then this block's frames.
     input: Vec<f32>,
 }
 
@@ -57,8 +47,6 @@ impl Converter {
         }
     }
 
-    /// Fills `out` (device format) from `render`, which fills a block of
-    /// session frames.
     pub(super) fn fill(&mut self, out: &mut [f32], render: impl FnOnce(&mut [f32])) {
         let session_channels = self.session.channels.max(1) as usize;
         let device_channels = self.device.channels.max(1) as usize;
@@ -87,8 +75,6 @@ impl Converter {
     }
 }
 
-/// Device channel `channel` of `frame`: mono is copied to every channel,
-/// many channels mix down to mono, and extra device channels stay silent.
 pub(super) fn map_channel(frame: &[f32], channel: usize, device_channels: usize) -> f32 {
     match (frame.len(), device_channels) {
         (session, device) if session == device => frame[channel],

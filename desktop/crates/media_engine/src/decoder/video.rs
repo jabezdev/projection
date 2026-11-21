@@ -23,8 +23,6 @@ impl Worker {
         Ok(())
     }
 
-    /// Moves decoded frames into the queue and decodes stashed video while it
-    /// has room. Never waits.
     pub(super) fn drain_video(&mut self) -> anyhow::Result<()> {
         loop {
             while let Some(frame) = self.pending_frames.pop_front() {
@@ -34,7 +32,6 @@ impl Worker {
                 }
                 self.head_pending = self.head_pending.saturating_sub(1);
             }
-            // Only loop-head frames waiting: keep decoding what follows them.
             if self.pending_frames.len() > self.head_pending || self.shared.interrupted() || self.hw_failure.is_some() {
                 return Ok(());
             }
@@ -77,9 +74,6 @@ impl Worker {
         Ok(())
     }
 
-    /// Replaces a failed hardware decoder with a software one and continues
-    /// after the last frame it produced. Audio already queued is not
-    /// decoded again, so playback continues without a jump.
     pub(super) fn fall_back_to_software(&mut self, reason: &str) -> anyhow::Result<()> {
         let Some(index) = self.video.as_ref().filter(|v| v.hw.is_some()).map(|v| v.index) else { return Ok(()) };
         log::warn!("Hardware decoding failed ({reason}); continuing in software");
@@ -177,7 +171,6 @@ impl Worker {
             self.video_interval_us = media_us - previous;
         }
         self.last_video_us = Some(media_us);
-        // A frame lasts until the next one, so the content runs one interval past it.
         self.content_end_us = self.content_end_us.max(media_us + self.video_interval_us);
         self.pending_frames.push_back(frame);
         Ok(())

@@ -11,8 +11,6 @@ use crate::system::backup;
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(30);
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
-/// Writes the weekly backup when it is due. Checking every few hours means an
-/// app left running for days still makes one.
 pub(super) fn start(app: tauri::AppHandle, db: Db, dir: PathBuf) -> std::io::Result<()> {
     thread::Builder::new().name("backup".into()).spawn(move || loop {
         thread::sleep(FIRST_CHECK_AFTER);

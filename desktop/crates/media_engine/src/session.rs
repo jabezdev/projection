@@ -1,6 +1,3 @@
-//! One playback session: a decoder thread, its frame queue and audio feed,
-//! and the clock that decides which frame is due.
-
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, Weak};
 use std::thread::JoinHandle;
@@ -12,13 +9,11 @@ use crate::clock::{now_us, MonotonicClock};
 use crate::decoder::{self, Clip, Control, DecoderParams, DecoderShared};
 use crate::frames::{FrameQueue, FrameStats, VideoFrame};
 
-/// Decoded frames held ahead of presentation (~3 MB each at 1080p YUV).
 const FRAME_QUEUE: usize = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SessionOptions {
     pub clip: Clip,
-    /// Media seconds per second, 0.5–2.0. Pitch follows the rate.
     pub rate: f64,
     pub volume: f32,
     pub muted: bool,
@@ -37,7 +32,6 @@ pub enum Phase {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionStatus {
     pub phase: Phase,
-    /// Media position (inside the clip, loops folded back).
     pub position_us: i64,
     pub duration_us: Option<i64>,
     pub error: Option<String>,
@@ -51,13 +45,10 @@ struct State {
     ever_played: bool,
     monotonic: MonotonicClock,
     requested_epoch: u64,
-    /// Timeline position of the latest requested restart until it is applied.
     pending_position: i64,
-    /// Once the audio has run out, video continues on wall time from here.
     audio_ended: Option<MonotonicClock>,
 }
 
-/// What the session position is derived from; the decoder reads it too.
 struct SessionClock {
     audio: Option<Arc<SessionAudio>>,
     shared: Arc<DecoderShared>,
@@ -91,7 +82,6 @@ impl SessionClock {
                 match (&mut state.audio_ended, exhausted) {
                     (Some(clock), true) => clock.position(now_us),
                     (ended, true) => {
-                        // Video may run past the last sample; hand over to wall time.
                         let mut clock = MonotonicClock::new(audio.position(now_us), state.options.rate);
                         clock.set_running(state.running, now_us);
                         *ended = Some(clock);
@@ -114,8 +104,6 @@ impl SessionClock {
 }
 
 impl MediaSession {
-    /// Starts decoding immediately (preloading frames and audio) but stays
-    /// silent until `play`. `audio` must already be attached to the output.
     pub fn open(path: &str, options: SessionOptions, audio: Option<Arc<SessionAudio>>) -> anyhow::Result<Self> {
         let frames = Arc::new(FrameQueue::new(FRAME_QUEUE));
         let shared = Arc::new(DecoderShared::new());
@@ -151,13 +139,10 @@ impl MediaSession {
         Ok(Self { frames, clock, controls, thread: Mutex::new(Some(thread)) })
     }
 
-    /// Timeline position at `now_us` (keeps increasing across loops).
     pub fn timeline_position(&self, now_us: i64) -> i64 {
         self.clock.position(now_us)
     }
 
-    /// The frame to show at `now_us`. Only the renderer should call this: it
-    /// consumes due frames from the queue.
     pub fn current_frame(&self, now_us: i64) -> Option<Arc<VideoFrame>> {
         self.frames.select(self.timeline_position(now_us))
     }
@@ -183,7 +168,6 @@ impl MediaSession {
         }
     }
 
-    /// Discards everything decoded and continues from media `position_us`.
     pub fn seek(&self, position_us: i64, now_us: i64) {
         let mut state = self.clock.state.lock().expect("session state poisoned");
         let rate = state.options.rate;
@@ -200,8 +184,6 @@ impl MediaSession {
         self.frames.wake();
     }
 
-    /// Applies new options: volume/mute immediately, rate by restarting at the
-    /// current position, clip bounds without interrupting playback.
     pub fn configure(&self, options: SessionOptions, now_us: i64) {
         let mut state = self.clock.state.lock().expect("session state poisoned");
         let previous = state.options;
@@ -221,7 +203,6 @@ impl MediaSession {
         }
     }
 
-    /// Folds a timeline position back into the clip after loop wraps.
     fn media_position(&self, timeline_us: i64, options: &SessionOptions) -> i64 {
         let loop_len = self.clock.shared.loop_len_us.load(Ordering::Acquire);
         let start = options.clip.start_us;
@@ -268,7 +249,6 @@ impl MediaSession {
         self.clock.audio.as_ref()
     }
 
-    /// Stops the decoder and waits for it; releases every frame.
     pub fn close(&self) {
         if let Some(audio) = &self.clock.audio {
             audio.set_running(false);

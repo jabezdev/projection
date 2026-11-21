@@ -5,9 +5,6 @@ use super::Channels;
 
 const ENGINE_EVENT: &str = "engine:event";
 
-/// Sends every engine event to the operator UI. Events carry whole state
-/// domains, so after falling behind the current snapshot replaces what was
-/// missed.
 pub(super) fn forward_engine_events(app: tauri::AppHandle, channels: &Channels) {
     let mut events = channels.events.subscribe();
     let snapshot = channels.snapshot.clone();

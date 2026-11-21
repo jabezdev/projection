@@ -1,6 +1,3 @@
-
-
-
 use super::*;
 
 impl RenderEngine {
@@ -12,8 +9,6 @@ impl RenderEngine {
         }
     }
 
-    /// Letterboxes `role`'s content to `aspect` (width, height); `None` fills
-    /// the window.
     pub fn set_aspect(&self, role: OutputRole, aspect: Option<(u32, u32)>) {
         let mut aspects = self.aspects.lock().expect("aspects poisoned");
         match aspect {
@@ -27,14 +22,12 @@ impl RenderEngine {
         }
     }
 
-    /// Shows or parks `role`'s presentation, following its window.
     pub fn set_shown(&self, role: OutputRole, shown: bool) {
         if let Some(worker) = self.outputs.get(&role) {
             worker.set_shown(shown);
         }
     }
 
-    /// Previews and monitors render the letterboxed content only.
     pub(super) fn resize_preview(&self, role: OutputRole) {
         if !self.sizes.lock().expect("sizes poisoned").contains_key(&role) {
             return;
@@ -48,7 +41,6 @@ impl RenderEngine {
         }
     }
 
-    /// Presents `role` again, for windows whose contents the system discarded.
     pub fn redraw(&self, role: OutputRole) {
         if let Some(worker) = self.outputs.get(&role) {
             worker.redraw();
@@ -60,8 +52,6 @@ impl RenderEngine {
     }
 }
 
-/// The centered (x, y, width, height) area of `size` with the `aspect`
-/// ratio; the whole of `size` without one.
 pub fn fit_aspect(size: (u32, u32), aspect: Option<(u32, u32)>) -> [u32; 4] {
     let (width, height) = size;
     let Some((aw, ah)) = aspect.filter(|&(w, h)| w > 0 && h > 0 && width > 0 && height > 0) else {

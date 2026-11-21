@@ -8,12 +8,8 @@ use crate::Gpu;
 
 use super::*;
 
-/// Idle outputs check for pending media and clock changes this often.
 pub(super) const IDLE_POLL: Duration = Duration::from_millis(16);
 
-/// Debug aid (`MAGI_OUTPUT_CAPTURE=<dir>`): saves each scene as presented,
-/// once its transitions settle, so the real output can be inspected even
-/// when its window is covered.
 pub(super) struct DebugCapture {
     pub(super) dir: std::path::PathBuf,
     pub(super) since: Option<Instant>,
@@ -27,7 +23,6 @@ impl DebugCapture {
         Some(Self { dir, since: None, count: 0 })
     }
 
-    /// Saves once transitions end and media is shown (or after 5 s regardless).
     pub(super) fn after_frame(&mut self, role: OutputRole, settled: bool, save: impl FnOnce() -> (Vec<u8>, (u32, u32))) {
         let Some(since) = self.since else { return };
         if !settled && since.elapsed() < Duration::from_secs(5) {
@@ -48,15 +43,9 @@ pub(super) struct Presenter {
     pub(super) role: OutputRole,
     pub(super) surface: wgpu::Surface<'static>,
     pub(super) config: wgpu::SurfaceConfiguration,
-    /// Format of the views drawn into: non-sRGB, so blending happens on
-    /// sRGB-encoded values as in browsers.
     pub(super) view_format: wgpu::TextureFormat,
-    /// True while the window has zero size (minimized or not yet mapped).
     pub(super) zero_size: bool,
-    /// True while the window is shown; starts hidden.
     pub(super) shown: bool,
-    /// True once the surface matches `config`. A failed configure is retried
-    /// before the next frame.
     pub(super) configured: bool,
 }
 
@@ -94,7 +83,6 @@ impl Presenter {
         let mut window_start = Instant::now();
         let mut window_frames = 0u64;
         let mut window_max_ms = 0f64;
-        // Refreshes missed between back-to-back frames (not idle gaps).
         let mut window_dropped = 0u64;
         let mut debug_capture = DebugCapture::from_env();
         let mut reported_loading = false;
@@ -113,7 +101,6 @@ impl Presenter {
             let activity = renderer.activity(now);
             let idle = self.hidden() || !(dirty || activity.redraw || activity.generation != shown_generation);
             let event = if idle {
-                // Zero-size outputs park longer; idle ones poll for media readiness.
                 let timeout = if self.hidden() { Duration::from_millis(250) } else { IDLE_POLL };
                 match events.recv_timeout(timeout) {
                     Ok(event) => Some(event),
@@ -148,7 +135,6 @@ impl Presenter {
             let shown = pending.shown.load(std::sync::atomic::Ordering::Acquire);
             if shown != self.shown {
                 self.shown = shown;
-                // A remapped window may have lost its swapchain.
                 self.configured = false;
                 last_present = None;
                 dirty = true;
@@ -161,7 +147,6 @@ impl Presenter {
                 }
             }
             if idle {
-                // Intervals measure active presentation, not idle gaps.
                 last_present = None;
                 if !dirty {
                     continue;
@@ -206,8 +191,6 @@ impl Presenter {
             };
             let now = Instant::now();
             let drawing = now;
-            // The acquired texture's own size: draws never exceed the target,
-            // even if the window resized since the last configure.
             let area = crate::fit_aspect((texture.texture.width(), texture.texture.height()), *pending.aspect.lock().expect("output aspect poisoned"));
             let size = (area[2], area[3]);
             let list = renderer.frame(&resources.fonts, size, now);

@@ -1,6 +1,3 @@
-//! Settings files in the app-data directory: atomic replacement on save, and
-//! malformed files set aside rather than silently overwritten.
-
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -9,9 +6,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{Emitter, Manager};
 use crate::output::scene;
 
-
-/// Writes through a sibling temporary file and renames it into place, so a
-/// crash mid-write leaves the previous file intact.
 pub fn write_atomic(path: &Path, value: &impl Serialize) -> anyhow::Result<()> {
     let bytes = serde_json::to_vec_pretty(value)?;
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
@@ -23,7 +17,6 @@ pub fn write_atomic(path: &Path, value: &impl Serialize) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Like [`write_atomic`], for raw bytes.
 pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     std::fs::write(&temporary, bytes)?;
@@ -34,12 +27,9 @@ pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 pub struct Loaded<T> {
     pub value: T,
-    /// Where an unreadable file was moved, so the operator can recover it.
     pub set_aside: Option<PathBuf>,
 }
 
-/// Reads `path`, using `T::default()` when it does not exist. A file that
-/// fails to parse is renamed to `<name>.invalid-<ms>.json` and reported.
 pub fn load_or_set_aside<T: DeserializeOwned + Default>(path: &Path, now_ms: i64) -> Loaded<T> {
     let bytes = match std::fs::read(path) {
         Ok(bytes) => bytes,
@@ -64,20 +54,14 @@ pub const DB_FILENAME: &str = "app.db";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
-    /// The remote's port (WebSocket and phone remote page).
     pub ws_port: u16,
     pub projection_size: Option<(u32, u32)>,
-    /// `software`, `auto` or an FFmpeg hardware device name.
     pub video_decoder: String,
-    /// Other devices may connect (after pairing); otherwise this computer only.
     pub lan_enabled: bool,
     pub osc_enabled: bool,
     pub osc_port: u16,
-    /// Other computers allowed to send OSC, as IP addresses.
     pub osc_allowed: Vec<String>,
-    /// Screen capture method (`wgc`, `dxgi`, `portal`, `x11`); empty for the default.
     pub capture_method: String,
-    /// Cued video and audio start playing at once; otherwise they wait paused.
     pub media_autoplay: bool,
 }
 
@@ -97,8 +81,6 @@ impl Default for AppConfig {
     }
 }
 
-/// `app-config.json`, shared by startup, the window handlers and the
-/// System settings. Settings changes save at once; the window size at exit.
 pub struct ConfigStore {
     pub value: std::sync::Arc<std::sync::RwLock<AppConfig>>,
     pub path: PathBuf,
@@ -125,14 +107,10 @@ pub struct DecoderOption {
 
 #[derive(Serialize)]
 pub struct VideoDecoding {
-    /// The saved choice.
     choice: String,
-    /// Accelerators that open on this computer.
     available: Vec<DecoderOption>,
 }
 
-/// The saved video decoder and the accelerators found here (probed once,
-/// which can take a moment, so off the UI thread).
 #[tauri::command]
 pub async fn get_video_decoding(config: tauri::State<'_, ConfigStore>) -> Result<VideoDecoding, String> {
     let choice = config.get().video_decoder;
@@ -143,7 +121,6 @@ pub async fn get_video_decoding(config: tauri::State<'_, ConfigStore>) -> Result
     })
 }
 
-/// Saves and applies the decoder for videos started from now on.
 #[tauri::command]
 pub fn set_video_decoder(config: tauri::State<ConfigStore>, choice: String) -> Result<(), String> {
     let parsed = media_engine::hwaccel::DecoderChoice::parse(&choice);
@@ -156,25 +133,19 @@ pub fn set_video_decoder(config: tauri::State<ConfigStore>, choice: String) -> R
     Ok(())
 }
 
-/// Whether cued video and audio start playing at once.
 #[tauri::command]
 pub fn get_media_autoplay(config: tauri::State<ConfigStore>) -> bool {
     config.get().media_autoplay
 }
 
-/// Saves and applies whether cued video and audio start playing at once.
 #[tauri::command]
 pub fn set_media_autoplay(config: tauri::State<ConfigStore>, state: tauri::State<crate::AppState>, enabled: bool) -> Result<(), String> {
     config.update(|c| c.media_autoplay = enabled)?;
     state.send(core_engine::EngineCommand::SetAutoplay { enabled })
 }
 
-/// Overrides the data folder (library, settings and logs), so test scripts
-/// run against a scratch copy on any platform.
 pub const DATA_DIR_ENV: &str = "PALTO_DATA_DIR";
 
-/// All runtime state lives in the OS app-data dir, never the workspace. An
-/// existing MVP library under the pre-release identifier stays in use.
 pub fn data_dir(new_data_dir: std::path::PathBuf) -> std::path::PathBuf {
     if let Some(dir) = std::env::var_os(DATA_DIR_ENV).filter(|dir| !dir.is_empty()) {
         return PathBuf::from(dir);
@@ -211,7 +182,6 @@ pub fn get_output_state(state: tauri::State<OutputState>, domain: String) -> Res
     Ok(state.config.lock().map_err(|e| e.to_string())?.clone())
 }
 
-/// Validates before saving, so the outputs never receive a style they cannot render.
 #[tauri::command]
 pub fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle, domain: String, value: protocol::OutputConfig) -> Result<(), String> {
     if domain != "config" { return Err("Unknown output domain".into()); }

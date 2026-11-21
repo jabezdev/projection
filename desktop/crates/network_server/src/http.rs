@@ -1,7 +1,3 @@
-//! The little HTTP the remote needs, on the same port as the WebSocket: the
-//! phone remote's files, pairing, and a token check. Requests are read with
-//! a size and time limit; anything else is a 404.
-
 use std::time::{Duration, Instant};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,10 +7,8 @@ use crate::pairing::Pairing;
 
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_BODY: usize = 4 * 1024;
-/// A client that sends its request slower than this is dropped.
 pub const READ_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The phone remote, compiled in.
 const FILES: &[(&str, &str, &str)] = &[
     ("/", "text/html; charset=utf-8", include_str!("../remote/index.html")),
     ("/remote.js", "text/javascript; charset=utf-8", include_str!("../remote/remote.js")),
@@ -26,11 +20,9 @@ const FILES: &[(&str, &str, &str)] = &[
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
     pub method: String,
-    /// Without the query.
     pub path: String,
     pub query: String,
     pub headers: Vec<(String, String)>,
-    /// Bytes of the request line and headers, including the blank line.
     pub head_len: usize,
 }
 
@@ -43,13 +35,11 @@ impl Request {
         self.header("upgrade").is_some_and(|v| v.eq_ignore_ascii_case("websocket"))
     }
 
-    /// A query parameter, percent-decoding not needed for tokens.
     pub fn param(&self, name: &str) -> Option<&str> {
         self.query.split('&').filter_map(|pair| pair.split_once('=')).find(|(k, _)| *k == name).map(|(_, v)| v)
     }
 }
 
-/// Parses a request head; `None` until `bytes` holds all of it.
 pub fn parse(bytes: &[u8]) -> Option<Result<Request, &'static str>> {
     let end = bytes.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
     let Ok(text) = std::str::from_utf8(&bytes[..end]) else { return Some(Err("not text")) };
@@ -70,8 +60,6 @@ pub fn parse(bytes: &[u8]) -> Option<Result<Request, &'static str>> {
     Some(Ok(Request { method: method.to_string(), path: path.to_string(), query: query.to_string(), headers, head_len: end }))
 }
 
-/// Waits until the request head has arrived, without consuming it, so a
-/// WebSocket handshake can still read it.
 pub async fn peek_request(stream: &TcpStream) -> anyhow::Result<Request> {
     let deadline = Instant::now() + READ_TIMEOUT;
     let mut buffer = vec![0u8; MAX_HEAD];
@@ -83,7 +71,6 @@ pub async fn peek_request(stream: &TcpStream) -> anyhow::Result<Request> {
         }
         anyhow::ensure!(read < MAX_HEAD, "request head too large");
         anyhow::ensure!(Instant::now() < deadline, "request too slow");
-        // Peek returns at once while data is waiting; give the rest time to arrive.
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
@@ -110,14 +97,12 @@ struct PairRequest {
     name: String,
 }
 
-/// Serves one plain HTTP request (the head was peeked, not read).
 pub async fn serve(mut stream: TcpStream, request: Request, pairing: &Pairing, now_ms: impl Fn() -> i64) -> anyhow::Result<()> {
     let mut head = vec![0u8; request.head_len];
     tokio::time::timeout(READ_TIMEOUT, stream.read_exact(&mut head)).await??;
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", path) => {
             if path == "/api/check" {
-                // Tells the remote whether its saved token is still paired.
                 let known = request.param("token").is_some_and(|token| pairing.authorize(token, now_ms()).is_some());
                 return if known {
                     respond(&mut stream, "200 OK", "application/json", b"{\"paired\":true}").await

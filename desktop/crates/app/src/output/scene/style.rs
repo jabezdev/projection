@@ -1,11 +1,9 @@
-
 use protocol::{
     OutputConfig, TextAlign as ConfigAlign, VerticalAlign,
 };
 use render_engine::{
     css_color, ConfidenceStyle, Direction, Easing, LyricStyle, Shadow, ShaderSpec, Stroke, TextAlign, Transition, TransitionKind, Vertical, VideoKey,
 };
-
 
 pub fn lyric_style(config: &OutputConfig) -> LyricStyle {
     let mut box_color = css_color(&config.box_color, [0.0, 0.0, 0.0, 1.0]);
@@ -47,14 +45,11 @@ pub fn lyric_style(config: &OutputConfig) -> LyricStyle {
     }
 }
 
-/// `color` with a 0–100 opacity applied.
 pub(super) fn opacity(mut color: render_engine::Rgba, percent: f64) -> render_engine::Rgba {
     color[3] *= (percent as f32 / 100.0).clamp(0.0, 1.0);
     color
 }
 
-/// The shader background named by a `shader:<preset>` path, in the
-/// configured colors and speed.
 pub fn shader_key(config: &OutputConfig, path: &str) -> VideoKey {
     let preset = path.trim_start_matches(protocol::SHADER_PREFIX);
     VideoKey::Shader(ShaderSpec::encode(preset, &config.shader_color_a, &config.shader_color_b, config.shader_speed as f32, config.shader_animate))

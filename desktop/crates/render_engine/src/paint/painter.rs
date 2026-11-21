@@ -17,7 +17,6 @@ pub(super) struct Instance {
 pub(super) const SOLID: f32 = 0.0;
 pub(super) const TEXTURE: f32 = 1.0;
 pub(super) const MASK: f32 = 2.0;
-/// Distance field: `kind.y` is the spread, `kind.zw` the edge band.
 pub(super) const SDF: f32 = 3.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -164,7 +163,6 @@ impl Painter {
         }
     }
 
-    /// Draws `list` into `target` (cleared to black first).
     pub fn paint(
         &mut self,
         device: &wgpu::Device,
@@ -178,8 +176,6 @@ impl Painter {
         self.paint_in(device, queue, fonts, list, target, [0, 0, size.0, size.1], encoder);
     }
 
-    /// Draws `list`, laid out for an `area` (x, y, width, height) sized
-    /// canvas, into that part of `target`; the rest stays black.
     #[allow(clippy::too_many_arguments)]
     pub fn paint_in(
         &mut self,
@@ -195,7 +191,6 @@ impl Painter {
         let (instances, batches) = match self.build(queue, fonts, list, size) {
             Ok(built) => built,
             Err(AtlasFull) => {
-                // Too many distinct glyphs: start over with empty atlases.
                 self.atlas.clear();
                 self.sdf.clear();
                 self.build(queue, fonts, list, size).unwrap_or_default()
@@ -209,7 +204,6 @@ impl Painter {
         if !instances.is_empty() {
             queue.write_buffer(&self.instances, 0, bytemuck::cast_slice(&instances));
         }
-        // Bind groups for textures no longer drawn are dropped.
         let mut used = HashMap::new();
         for item in &list.entries {
             if let Item::Image { texture, .. } = &item.item {

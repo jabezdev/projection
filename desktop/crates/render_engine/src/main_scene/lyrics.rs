@@ -6,12 +6,9 @@ use super::*;
 
 pub(super) struct Lyric {
     pub(super) text: String,
-    /// 0 out, 1 in place: opacity when fading, position when sliding.
     pub(super) opacity: Fade,
 }
 
-/// Port of `LyricLayers`: the new text comes in while the previous goes out
-/// from wherever it was, both on one clock; the box persists across them.
 #[derive(Default)]
 pub(super) struct Lyrics {
     pub(super) current: Option<Lyric>,
@@ -42,7 +39,6 @@ impl Lyrics {
         }
     }
 
-    /// Visible texts with their progress, and whether each is the incoming one.
     pub(super) fn visible(&self) -> impl Iterator<Item = (&Lyric, bool)> {
         self.previous.iter().map(|l| (l, false)).chain(self.current.iter().map(|l| (l, true))).filter(|(l, _)| !l.text.is_empty())
     }

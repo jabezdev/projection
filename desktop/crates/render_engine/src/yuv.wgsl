@@ -1,15 +1,7 @@
-// Converts one decoded YUV frame into the shared RGBA frame. Output values
-// stay gamma-encoded (sRGB-like), as the rest of the outputs expect. The
-// planes may be larger than the output (4K into 1080p): linear sampling at
-// output pixel centers scales them down.
-
 struct Uniforms {
-    // Each row: RGB channel = dot(row.xyz, yuv) + row.w.
     r: vec4<f32>,
     g: vec4<f32>,
     b: vec4<f32>,
-    // Output size in pixels. flags.x > 0.5: interleaved UV (NV12); flags.y
-    // > 0.5: the first plane is already RGB (a BGRA capture), only scaled.
     size: vec2<f32>,
     flags: vec2<f32>,
 }

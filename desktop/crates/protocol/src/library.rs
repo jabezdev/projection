@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectModel {
     pub id: i64,
@@ -61,7 +60,6 @@ pub struct SessionModel {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionItem {
-    /// Stable item identifier within a project.
     pub id: i64,
     pub title: Option<String>,
     pub kind: SessionItemKind,
@@ -77,18 +75,13 @@ pub enum SessionItemKind {
     Text { steps: Vec<String> },
     Image { path: String },
     Video { path: String, #[serde(default)] options: VideoOptions },
-    /// Standalone audio shares the video transport options; `confidence` is ignored.
     Audio { path: String, #[serde(default)] options: VideoOptions },
     Presentation { path: String, #[serde(default)] slides: Vec<String> },
-    /// A screen or window of this computer, captured live.
     Capture { source: CaptureSource, #[serde(default)] options: CaptureOptions },
-    /// A heading that groups the items after it (its name is the item's
-    /// title). Never on air: navigation passes over it.
     Section {},
 }
 
 impl SessionItemKind {
-    /// Whether the item can be cued (everything but section headings).
     pub fn is_cueable(&self) -> bool {
         !matches!(self, SessionItemKind::Section {})
     }
@@ -101,9 +94,6 @@ pub enum CaptureKind {
     Window,
 }
 
-/// What to capture. `id` lets the capture method find it again (a display
-/// name, a window's program and title, or a screen-sharing restore token);
-/// `name` is shown to the operator.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CaptureSource {
     pub kind: CaptureKind,
@@ -114,14 +104,11 @@ pub struct CaptureSource {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureFit {
-    /// The whole capture, letterboxed.
     #[default]
     Fit,
-    /// Fills the screen, cropping the edges.
     Fill,
 }
 
-/// Which screens show a capture, and how it fills each.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct CaptureOptions {

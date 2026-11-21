@@ -17,15 +17,12 @@ pub struct CaptureStatus {
 
 pub struct Captures {
     pub(super) backends: Vec<Arc<dyn Backend>>,
-    /// The chosen method's name; empty for the default (the first).
     pub(super) choice: Mutex<String>,
     pub(super) running: Mutex<HashMap<String, (CaptureSource, Box<dyn CaptureStream>, FrameSlot)>>,
-    /// Sources that could not start, by id, with the reason; they show black.
     pub(super) failed: Mutex<HashMap<String, (CaptureSource, String, FrameSlot)>>,
 }
 
 impl Captures {
-    /// `data_dir` keeps what a method needs to reopen sources (portal tokens).
     pub fn new(choice: &str, data_dir: &std::path::Path) -> Self {
         Self::with_backends(detect(Some(data_dir)), choice)
     }
@@ -39,7 +36,6 @@ impl Captures {
         self.backends.iter().find(|b| b.name() == choice).or(self.backends.first()).cloned()
     }
 
-    /// Switches method; running captures restart with it.
     pub fn set_choice(&self, choice: &str) {
         *self.choice.lock().expect("capture choice poisoned") = choice.to_string();
         let sources: Vec<CaptureSource> = self.running.lock().expect("captures poisoned").values().map(|(s, ..)| s.clone()).collect();
@@ -48,8 +44,6 @@ impl Captures {
         self.set_active(&sources);
     }
 
-    /// Keeps exactly these sources captured. Starting is quick for listed
-    /// sources; a failure is reported in [`Captures::status`] and shows black.
     pub fn set_active(&self, sources: &[CaptureSource]) {
         let mut running = self.running.lock().expect("captures poisoned");
         let mut failed = self.failed.lock().expect("captures poisoned");
@@ -79,7 +73,6 @@ impl Captures {
         }
     }
 
-    /// The frame to show for capture `id`; black when it failed to start.
     pub fn frame(&self, id: &str) -> Option<Arc<dyn PixelFrame>> {
         let slot = self.running.lock().expect("captures poisoned").get(id).map(|(_, _, slot)| slot.clone());
         let slot = slot.or_else(|| self.failed.lock().expect("captures poisoned").get(id).map(|(.., slot)| slot.clone()));
@@ -89,7 +82,6 @@ impl Captures {
         }
     }
 
-    /// Running and failed captures, for the operator.
     pub fn status(&self) -> Vec<CaptureStatus> {
         let running = self.running.lock().expect("captures poisoned");
         let failed = self.failed.lock().expect("captures poisoned");

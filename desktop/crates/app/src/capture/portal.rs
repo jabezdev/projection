@@ -1,9 +1,3 @@
-//! Wayland capture through the xdg screen-cast portal and PipeWire. The
-//! system's own dialog picks the screen or window once; the portal's
-//! restore token then reopens it without asking. Tokens are single use, so
-//! each source keeps a stable id and its newest token is kept in
-//! `capture-tokens.json`.
-
 use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
@@ -47,9 +41,6 @@ fn source_types(kind: CaptureKind) -> SourceType {
     }
 }
 
-/// Opens a screen-cast session (showing the system dialog unless `token`
-/// restores the previous choice). Returns the PipeWire node, its remote and
-/// the next restore token; the session stays open while `session` lives.
 async fn open(kind: CaptureKind, token: Option<&str>) -> anyhow::Result<(u32, (i32, i32), OwnedFd, Option<String>, ashpd::desktop::Session<'static, Screencast<'static>>)> {
     let proxy = Screencast::new().await?;
     let session = proxy.create_session().await?;
@@ -145,8 +136,6 @@ struct Format {
     info: spa::param::video::VideoInfoRaw,
 }
 
-/// Receives frames from PipeWire node `node` until `stopped` fires or the
-/// stream ends.
 fn stream(node: u32, fd: OwnedFd, slot: &FrameSlot, stopped: pw::channel::Receiver<()>) -> anyhow::Result<()> {
     use spa::param::video::VideoFormat;
     pw::init();
@@ -198,7 +187,6 @@ fn stream(node: u32, fd: OwnedFd, slot: &FrameSlot, stopped: pw::channel::Receiv
             let Some(pixels) = bytes.get(offset..offset + stride * height as usize) else { return };
             let mut copy = pixels.to_vec();
             if matches!(video_format, VideoFormat::RGBx | VideoFormat::RGBA) {
-                // The outputs take BGRA; swap red and blue.
                 for row in copy.chunks_exact_mut(stride) {
                     for pixel in row[..width as usize * 4].chunks_exact_mut(4) {
                         pixel.swap(0, 2);

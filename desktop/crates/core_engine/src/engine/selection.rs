@@ -5,9 +5,6 @@ use protocol::{
 use super::*;
 
 impl Engine {
-    /// Makes `(item_id, step)` the active selection, resolving it against the
-    /// loaded project. Media for the active item is (re)applied when the item
-    /// changes, or always with `force_media`.
     pub(super) fn select(
         &mut self,
         item_id: Option<i64>,
@@ -35,7 +32,6 @@ impl Engine {
             program.active_text = sel.text;
         }
 
-        // Foreground media sessions follow the active item, before visuals change.
         self.sync_session(active_item.as_ref(), ports);
 
         let presentation_step = step_changed
@@ -62,8 +58,6 @@ pub(super) struct Selection {
     text: String,
 }
 
-/// Resolves a desired selection against the project. Unknown items fall back
-/// to the first item; out-of-range steps fall back to step 0.
 pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, step: Option<u32>) -> Selection {
     let items = &project.session.items;
     if items.is_empty() {
@@ -75,7 +69,6 @@ pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, st
         };
     }
 
-    // Section headings are never on air: a cue on one lands on the item after it.
     let requested = item_id.and_then(|id| items.iter().position(|it| it.id == id)).unwrap_or(0);
     let Some(idx) = next_cueable(items, requested).or_else(|| previous_cueable(items, requested)) else {
         return Selection { active_item_id: None, next_item_id: None, step: None, text: String::new() };
@@ -102,12 +95,10 @@ pub(super) fn resolve_selection(project: &ProjectModel, item_id: Option<i64>, st
     }
 }
 
-/// The first item at or after `from` that can go on air.
 pub(super) fn next_cueable(items: &[SessionItem], from: usize) -> Option<usize> {
     (from..items.len()).find(|&i| items[i].kind.is_cueable())
 }
 
-/// The last item at or before `from` that can go on air.
 pub(super) fn previous_cueable(items: &[SessionItem], from: usize) -> Option<usize> {
     (0..=from.min(items.len().checked_sub(1)?)).rev().find(|&i| items[i].kind.is_cueable())
 }

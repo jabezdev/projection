@@ -1,11 +1,6 @@
-//! Per-frame timings of the decoding stages, summed per reporting window and
-//! logged by the app with the rest of the media telemetry. Recording is a
-//! few atomic adds per frame, so it is always on.
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-/// Count, total and worst time of one stage since the last [`Stage::take`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StageStats {
     pub count: u64,
@@ -51,7 +46,6 @@ impl Stage {
         self.max_us.fetch_max(us, Ordering::Relaxed);
     }
 
-    /// The stats so far, starting a new window.
     pub fn take(&self) -> StageStats {
         StageStats {
             count: self.count.swap(0, Ordering::Relaxed),
@@ -67,14 +61,10 @@ impl Default for Stage {
     }
 }
 
-/// Wall time inside the video decoder per decoded frame (all sessions).
 pub static DECODE: Stage = Stage::new();
-/// Copying a hardware frame back to system memory.
 pub static TRANSFER: Stage = Stage::new();
-/// Packing planes for upload, including any pixel format conversion.
 pub static CONVERT: Stage = Stage::new();
 
-/// Decode, transfer and convert stats since the last call.
 pub fn take() -> [StageStats; 3] {
     [DECODE.take(), TRANSFER.take(), CONVERT.take()]
 }

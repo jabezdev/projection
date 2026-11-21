@@ -1,9 +1,5 @@
-
-
 use crate::scene::ConfidenceStyle;
 
-
-/// Pixel metrics for one output width (`cq` = 1% of the width).
 pub(super) struct Metrics {
     pub(super) cq: f32,
     pub(super) w: f32,
@@ -22,7 +18,6 @@ impl Metrics {
     pub(super) fn topbar(&self) -> f32 {
         if self.bar() { (6.0 * self.cq).max(20.0) } else { 0.0 }
     }
-    /// Top of the scroll viewport, below the topbar's 1px border.
     pub(super) fn scroll_top(&self) -> f32 {
         if self.bar() { self.topbar() + 1.0 } else { 0.0 }
     }
@@ -35,12 +30,9 @@ impl Metrics {
     pub(super) fn tape_left(&self) -> f32 {
         if self.clock { self.time_width() + 1.0 } else { 0.0 }
     }
-    /// `flex: 0 0 18cqw` under the app's border-box sizing: the padding and
-    /// right border are inside.
     pub(super) fn card_width(&self) -> f32 {
         18.0 * self.cq
     }
-    /// The title's room: the card less its padding, right border, code and gap.
     pub(super) fn card_title_room(&self, code_width: f32) -> f32 {
         (self.card_width() - 2.0 * self.cq - 1.0 - code_width - self.cq).max(0.0)
     }

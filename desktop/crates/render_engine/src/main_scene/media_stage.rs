@@ -6,7 +6,6 @@ use crate::media::{ImageSlot, MediaTextures};
 use crate::paint::{fit, DrawList, Rect};
 use crate::scene::{millis, Activity, Fade, MediaLayer, MediaSource, Transition, TransitionKind};
 
-
 pub(super) enum Handle {
     Video(Arc<SharedFrame>),
     Image(Arc<ImageSlot>),
@@ -64,8 +63,6 @@ pub(super) struct Layer {
     pub(super) opacity: Fade,
 }
 
-/// A new source comes in (fading, cut or sliding) only once it can be
-/// drawn, while the previous one stays until then and goes out.
 #[derive(Default)]
 pub(crate) struct MediaStage {
     pub(super) target: Option<MediaSource>,
@@ -75,13 +72,10 @@ pub(crate) struct MediaStage {
     pub(super) transition: Transition,
 }
 
-/// How long a transition of `kind` lasts.
 pub(super) fn duration(kind: TransitionKind, fade_ms: f32) -> f32 {
     if kind == TransitionKind::Cut { 0.0 } else { fade_ms }
 }
 
-/// Where a sliding layer is at `progress` (0 out of view, 1 in place): the
-/// incoming one arrives from behind the movement, the outgoing one leaves ahead.
 pub(super) fn slide_offset(transition: &Transition, incoming: bool, progress: f32, area: Rect) -> (f32, f32) {
     let (vx, vy) = transition.direction.vector();
     let away = 1.0 - progress;
@@ -104,7 +98,6 @@ impl MediaStage {
         if key == self.target {
             return;
         }
-        // Keep only what is on screen; an earlier target still loading is dropped.
         let shown = self.shown.clone();
         self.layers.retain(|l| Some(&l.source) == shown.as_ref());
         if let Some(layer) = layer {
@@ -126,7 +119,6 @@ impl MediaStage {
         self.target = key;
     }
 
-    /// Advances readiness and removes faded layers.
     pub fn update(&mut self, now: Instant, fade_ms: f32) {
         let fade_ms = duration(self.transition.kind, fade_ms);
         if let Some(target) = self.target.clone() {
@@ -169,8 +161,6 @@ impl MediaStage {
         }
     }
 
-    /// Whether another frame would differ: a fade, a pending source or a
-    /// visible video (drawn every refresh); plus the visible generations.
     pub fn activity(&self, now: Instant) -> Activity {
         let fading = self.layers.iter().any(|l| l.opacity.running(now)) || self.remove_at.is_some();
         let pending = self.target.is_some() && self.shown != self.target;
@@ -188,7 +178,6 @@ impl MediaStage {
         *self = Self::default();
     }
 
-    /// Highest layer opacity, for a backing drawn behind letterboxed media.
     pub fn opacity(&self, now: Instant) -> f32 {
         self.layers.iter().filter(|l| l.handle.ready()).map(|l| l.opacity.value(now)).fold(0.0, f32::max)
     }

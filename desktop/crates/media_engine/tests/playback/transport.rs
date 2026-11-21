@@ -108,7 +108,6 @@ fn muting_silences_the_output_without_stopping_the_clock() {
     let Some((av, _)) = fixtures() else { return };
     let audio = Arc::new(SessionAudio::new(DEVICE_RATE, CHANNELS));
     let session = MediaSession::open(av.to_str().unwrap(), SessionOptions { muted: true, ..options(whole()) }, Some(audio.clone())).unwrap();
-    // Drive the consumer manually: wait for buffered audio, then render.
     let deadline = Instant::now() + Duration::from_secs(5);
     while audio.ring.len() < 9_600 {
         audio.render(&mut [0.0; 2], now_us());
@@ -132,7 +131,6 @@ fn closing_stops_the_decoder_promptly_and_frees_its_frames() {
     wait_for(&first, Phase::Ready, Duration::from_secs(5));
     wait_for(&second, Phase::Ready, Duration::from_secs(5));
     assert_eq!(active_decoders(), before + 2, "one decoder per session");
-    // Closing while the decoder is blocked on a full queue must not hang.
     let started = Instant::now();
     first.close();
     second.close();
@@ -155,7 +153,6 @@ fn a_missing_file_fails_with_a_reason() {
 
 #[test]
 fn playback_reaches_the_end_when_no_output_is_drawing() {
-    // Hidden outputs may stop polling for frames; audio and the clock must not wait for them.
     let _serial = serial();
     let Some((av, _)) = fixtures() else { return };
     let (session, audio, _device) = open(av, options(whole()));
@@ -174,7 +171,6 @@ fn playback_reaches_the_end_when_no_output_is_drawing() {
     assert!(audio.ring.is_empty());
 }
 
-/// Reproduces against a real file: `MAGI_MEDIA=<path> cargo test -- --ignored paused_seek`.
 #[test]
 #[ignore]
 fn paused_seek_then_play_keeps_presenting() {

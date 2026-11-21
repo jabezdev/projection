@@ -1,9 +1,5 @@
 use std::time::{Duration, Instant};
 
-
-
-
-/// Browser-like smooth scrolling: eases from wherever it is to the target.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Smooth {
     pub(super) from: f32,

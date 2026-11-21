@@ -1,4 +1,3 @@
-
 use protocol::{
     BackgroundFit, BackgroundKind, DisplayMode, OutputConfig, PlaybackState, ProgramState, ProjectModel,
     SessionItem, SessionItemKind,
@@ -125,7 +124,6 @@ fn a_video_item_uses_its_foreground_session_on_both_outputs_when_enabled() {
     assert_eq!(main.background.unwrap().source, MediaSource::Video(VideoKey::Session(7)));
     let confidence = confidence_scene(&OutputConfig::default(), &program, Some(&project), Some(&playback));
     assert_eq!(confidence.video, Some(VideoKey::Session(7)));
-    // Only while Live.
     program.display = DisplayMode::Black;
     assert_eq!(confidence_scene(&OutputConfig::default(), &program, Some(&project), Some(&playback)).video, None);
 }
@@ -178,7 +176,6 @@ fn the_cues_either_side_are_prepared() {
     let project = project(vec![image_item(1, "/i/before.png"), video_item(3, false), song, slides]);
     let config = OutputConfig { logo_path: "/logo/spin.mov".into(), ..Default::default() };
 
-    // On the video: the image before and the song after (its background loop).
     let program = ProgramState { active_item_id: Some(3), ..Default::default() };
     let main = main_scene(&config, &program, Some(&project), None);
     let plan = media_plan(&config, &main, &program, Some(&project), None);
@@ -186,12 +183,10 @@ fn the_cues_either_side_are_prepared() {
     assert_eq!(plan.prepared_ambient, ["/logo/spin.mov", "/bg/next-loop.mp4"]);
     assert_eq!(plan.foreground, None);
 
-    // On the first image: the video after it is prepared as the next foreground.
     let program = ProgramState { active_item_id: Some(1), ..Default::default() };
     let plan = media_plan(&config, &main_scene(&config, &program, Some(&project), None), &program, Some(&project), None);
     assert_eq!(plan.foreground.as_deref(), Some("/v/clip.mp4"));
 
-    // In a presentation: the slides either side.
     let program = ProgramState { active_item_id: Some(4), active_step_index: Some(1), ..Default::default() };
     let plan = media_plan(&config, &main_scene(&config, &program, Some(&project), None), &program, Some(&project), None);
     assert!(plan.images.contains(&"/s/1.png".to_string()) && plan.images.contains(&"/s/3.png".to_string()), "{:?}", plan.images);

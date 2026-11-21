@@ -1,8 +1,3 @@
-//! The audience output: background media, Black/Logo overrides and the
-//! lyric box. Margins are inset inside the output, so they always hold.
-
-
-
 mod geometry;
 mod lyrics;
 mod media_stage;

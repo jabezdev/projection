@@ -1,11 +1,7 @@
-//! Output styling saved in `output-settings.json`. Field names and defaults
-//! match the operator's `defaultOutputConfig` so existing files load unchanged.
-
 use serde::{Deserialize, Serialize};
 
 pub const OUTPUT_CONFIG_VERSION: u32 = 2;
 
-/// Built-in animated backgrounds, chosen as a `shader:<name>` background.
 pub const SHADER_PRESETS: [&str; 3] = ["gradient", "aurora", "bokeh"];
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -32,7 +28,6 @@ pub enum TransitionKind {
     #[default]
     Fade,
     Cut,
-    /// The new content pushes the old out in `TransitionDirection`.
     Slide,
 }
 
@@ -47,7 +42,6 @@ pub enum Easing {
     EaseInOut,
 }
 
-/// Which way content moves during a slide.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TransitionDirection {
@@ -66,14 +60,6 @@ pub enum BackgroundFit {
     Contain,
 }
 
-/// Sizes are in the operator's units: `size`, `marginX` and `letterSpacing / 16`
-/// are percentages of output width; `marginY * 9/16` likewise; `lineHeight`
-/// is a multiple of the font size; `transition` is milliseconds. Border,
-/// shadow, outline and glow sizes are sixteenths of a percent of the width.
-///
-/// The flat fields style the projection; `confidence*` fields style the
-/// confidence screen. Older files' numeric `shadow`, `outline` and `glow`
-/// (from the webview outputs) are not reused, so they cannot switch effects on.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OutputConfig {
@@ -93,7 +79,6 @@ pub struct OutputConfig {
     pub border: f64,
     pub border_color: String,
     pub box_color: String,
-    /// Percent, 0–100.
     pub box_opacity: f64,
     pub background_fit: BackgroundFit,
     pub transition: f64,
@@ -105,7 +90,6 @@ pub struct OutputConfig {
     pub shadow_offset_x: f64,
     pub shadow_offset_y: f64,
     pub shadow_color: String,
-    /// Percent, 0–100.
     pub shadow_opacity: f64,
     pub text_outline: bool,
     pub outline_width: f64,
@@ -113,13 +97,10 @@ pub struct OutputConfig {
     pub text_glow: bool,
     pub glow_size: f64,
     pub glow_color: String,
-    /// Percent, 0–100.
     pub glow_opacity: f64,
-    /// Colors and speed of the built-in shader backgrounds.
     pub shader_color_a: String,
     pub shader_color_b: String,
     pub shader_speed: f64,
-    /// Off shows shader backgrounds as a still.
     pub shader_animate: bool,
     pub confidence_size: f64,
     pub confidence_font: String,
@@ -127,11 +108,8 @@ pub struct OutputConfig {
     pub confidence_caps: bool,
     pub confidence_clock: bool,
     pub confidence_tape: bool,
-    /// Fade of the confidence screen's video, in milliseconds.
     pub confidence_transition: f64,
     pub logo_path: String,
-    /// Fields this version does not render survive a round trip: those written
-    /// by newer versions, and the outline/shadow/glow of older ones.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -192,7 +170,6 @@ impl Default for OutputConfig {
 }
 
 impl OutputConfig {
-    /// Rejects values no output can render, with a message for the operator.
     pub fn validate(&self) -> Result<(), String> {
         let finite = [
             ("size", self.size), ("weight", self.weight), ("marginX", self.margin_x), ("marginY", self.margin_y),
@@ -231,7 +208,6 @@ impl OutputConfig {
 mod tests {
     use super::*;
 
-    /// A settings file saved by an earlier version, with outline, shadow and glow.
     const SAVED: &str = r##"{
       "align": "center", "backgroundFit": "cover", "border": 2, "borderColor": "#000000",
       "boxColor": "#000000", "boxOpacity": 100, "caps": true, "color": "#ffffff",
@@ -262,7 +238,6 @@ mod tests {
         let mut written = serde_json::to_value(&config).unwrap();
         written.as_object_mut().unwrap().remove("version");
         let (written, saved) = (written.as_object().unwrap(), saved.as_object().unwrap());
-        // Every saved key survives; fields added since are written too.
         assert!(saved.keys().all(|key| written.contains_key(key)));
         for (key, value) in saved {
             // JSON numbers compare by value: `0.9` must not become `0.8999999761`.

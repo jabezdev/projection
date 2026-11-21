@@ -1,21 +1,14 @@
-//! Still thumbnails of video files for the operator UI, decoded in-process so
-//! a packaged app needs no FFmpeg command-line tool.
-
 use anyhow::Context;
 use ffmpeg_next as ffmpeg;
 
-/// Gives up on files whose video stream yields no frame this early.
 const PACKET_LIMIT: usize = 4096;
 
-/// One video frame as tightly packed RGB.
 pub struct Poster {
     pub width: u32,
     pub height: u32,
     pub rgb: Vec<u8>,
 }
 
-/// The first decodable frame of `path`, scaled down to at most `max_width`
-/// pixels wide (never up), with an even height.
 pub fn poster(path: &str, max_width: u32) -> anyhow::Result<Poster> {
     ffmpeg::init()?;
     let mut input = ffmpeg::format::input(&path).with_context(|| format!("Opening {path}"))?;
@@ -30,7 +23,6 @@ pub fn poster(path: &str, max_width: u32) -> anyhow::Result<Poster> {
         }
         packets += 1;
         anyhow::ensure!(packets <= PACKET_LIMIT, "No video frame could be decoded");
-        // A damaged packet early in a file is skipped, as a player would.
         if decoder.send_packet(&packet).is_err() {
             continue;
         }

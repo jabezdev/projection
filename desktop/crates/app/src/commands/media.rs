@@ -1,7 +1,6 @@
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-
 use crate::AppState;
 
 use super::*;
@@ -50,8 +49,6 @@ pub async fn choose_presentation_images(app: tauri::AppHandle) -> Result<Vec<Str
     Ok(imported)
 }
 
-/// Copies a chosen file into the library's media folder (off the UI thread)
-/// and lets the operator UI load it.
 pub(super) async fn import_into_library(app: &tauri::AppHandle, path: std::path::PathBuf) -> Result<String, String> {
     let data_dir = app.state::<DataDir>().0.clone();
     let copy = tauri::async_runtime::spawn_blocking(move || crate::library::import_file(&data_dir, &path).map_err(|e| format!("Copying {} into the library: {e}", path.display())))
@@ -73,8 +70,6 @@ pub async fn choose_media_file(app: tauri::AppHandle, kind: String) -> Result<Op
     app.dialog().file().set_title("Choose media").add_filter("Media files", extensions).pick_file(move |file| { let _ = sender.send(file); });
     let Some(file) = receiver.await.map_err(|e| e.to_string())? else { return Ok(None) };
     let path = file.into_path().map_err(|e| e.to_string())?;
-    // The logo goes straight into the settings, so it is copied now; other
-    // media is copied when imported (`create_media`).
     if kind == "logo" {
         return import_into_library(&app, path).await.map(Some);
     }
@@ -99,8 +94,6 @@ pub async fn create_media(app: tauri::AppHandle, title: String, kind: protocol::
     created.map_err(|e| e.to_string())
 }
 
-/// Removes a media item from the library. Its file stays, so services that
-/// use it keep working.
 #[tauri::command]
 pub fn delete_media(state: tauri::State<AppState>, id: i64) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -116,7 +109,6 @@ pub fn rename_media(state: tauri::State<AppState>, id: i64, title: String) -> Re
     db.rename_media(id, title).map_err(|e| e.to_string())
 }
 
-/// The library kind of a file, from its extension.
 pub fn media_kind_of(path: &std::path::Path) -> Option<protocol::MediaKind> {
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
     match extension.as_str() {
@@ -127,8 +119,6 @@ pub fn media_kind_of(path: &std::path::Path) -> Option<protocol::MediaKind> {
     }
 }
 
-/// Asks for any number of image, video and audio files and imports each into
-/// the library, titled by its file name. Empty when cancelled.
 #[tauri::command]
 pub async fn import_media_files(app: tauri::AppHandle) -> Result<Vec<protocol::MediaModel>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();

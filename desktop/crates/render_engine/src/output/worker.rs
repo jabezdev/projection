@@ -16,7 +16,6 @@ impl OutputWorker {
         height: u32,
         stall: Option<Duration>,
     ) -> anyhow::Result<Self> {
-        // Bounded: a stalled worker never makes the UI thread block.
         let (events, receiver) = bounded(64);
         let stats = Arc::new(Mutex::new(OutputStats::default()));
         let pending = Arc::new(Pending::default());
@@ -58,7 +57,6 @@ impl OutputWorker {
 
     pub(super) fn wake(&self) {
         match self.events.try_send(OutputEvent::Wake) {
-            // A full queue already holds a wake for the stored values.
             Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
         }
     }
@@ -67,10 +65,7 @@ impl OutputWorker {
         self.stats.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
-    /// Asks the worker to exit. A worker blocked acquiring a frame from a
-    /// hidden surface notices after the acquire times out.
     pub fn signal_stop(&self) {
-        // Shutdown must not be dropped by a full queue.
         let _ = self.events.send_timeout(OutputEvent::Shutdown, Duration::from_secs(1));
     }
 

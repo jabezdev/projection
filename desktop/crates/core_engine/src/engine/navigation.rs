@@ -5,7 +5,6 @@ use protocol::{
 
 use super::*;
 
-/// Where a navigation command wants to go, as `(item_id, step)`.
 pub(super) fn navigation_target(
     project: &ProjectModel,
     program: &ProgramState,
@@ -23,7 +22,6 @@ pub(super) fn navigation_target(
         _ => 0,
     };
 
-    // Within-item moves; `None` when the item has no steps to move through.
     let step_forward = |cur: Option<u32>| match cur {
         _ if steps == 0 => None,
         None => Some(0),
@@ -38,11 +36,9 @@ pub(super) fn navigation_target(
         cur => cur.map(|i| i.saturating_sub(1)),
     };
 
-    // Neighbouring items skip section headings.
     let next = |from: usize| next_cueable(items, from);
     let previous = |from: Option<usize>| from.and_then(|from| previous_cueable(items, from));
     match cmd {
-        // Smart next/prev: move within the item, else to the neighbouring item.
         EngineCommand::Next => {
             let stepped = step_forward(step);
             if stepped != step {
@@ -75,7 +71,6 @@ pub(super) fn navigation_target(
         }
         EngineCommand::Cue { item_id, index } => {
             if let Some(i) = items.iter().position(|it| it.id == *item_id) {
-                // A cue on a heading goes to the first item it groups.
                 if let Some(c) = next(i) { idx = c; step = if c == i { Some(*index) } else { None }; }
             }
         }

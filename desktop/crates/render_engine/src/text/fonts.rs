@@ -34,8 +34,6 @@ impl Fonts {
         f(&mut system.lock().expect("font system poisoned"))
     }
 
-    /// The family to use for `requested`: itself when installed, else what
-    /// the platform would substitute (fontconfig on Linux).
     pub(super) fn resolve(&self, system: &FontSystem, requested: &str) -> FamilyChoice {
         let key = requested.trim().to_ascii_lowercase();
         match key.as_str() {
@@ -59,8 +57,6 @@ impl Fonts {
         choice
     }
 
-    /// Blink's line metrics for a font at `size`: rounded ascent, descent
-    /// and line gap in pixels.
     pub(super) fn line_metrics(&self, system: &mut FontSystem, id: cosmic_text::fontdb::ID, weight: cosmic_text::fontdb::Weight, size: f32) -> Option<(f32, f32, f32)> {
         let cached = self.metrics.lock().expect("font metrics poisoned").get(&id).copied();
         let em = match cached {
@@ -82,7 +78,6 @@ pub(super) fn installed(system: &FontSystem, name: &str) -> bool {
     system.db().faces().any(|face| face.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
 }
 
-/// Points the generic families at what browsers use on this platform.
 pub(super) fn set_generic_families(system: &mut FontSystem) {
     #[cfg(target_os = "linux")]
     let generics = [
@@ -107,7 +102,6 @@ pub(super) fn set_generic_families(system: &mut FontSystem) {
     }
 }
 
-/// Families substituted for missing ones when fontconfig is unavailable.
 pub(super) const ALIASES: &[(&str, &str)] = &[
     ("arial", "Liberation Sans"),
     ("helvetica", "Liberation Sans"),

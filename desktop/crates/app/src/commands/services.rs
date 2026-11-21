@@ -1,9 +1,7 @@
-
 use core_engine::EngineCommand;
 use protocol::{ProjectHeader, ProjectModel};
 
 use crate::{now_ms, AppState};
-
 
 #[tauri::command]
 pub fn list_projects(state: tauri::State<AppState>) -> Result<Vec<ProjectHeader>, String> {
@@ -33,7 +31,6 @@ pub fn save_project(state: tauri::State<AppState>, project: ProjectModel) -> Res
     state.send(EngineCommand::SaveProject { project })
 }
 
-/// Deletes a service. The loaded service cannot be deleted.
 #[tauri::command]
 pub fn delete_project(state: tauri::State<AppState>, project_id: i64) -> Result<(), String> {
     let loaded = state.snapshot.read().map_err(|e| e.to_string())?.project.as_ref().map(|p| p.id);

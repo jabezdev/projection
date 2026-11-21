@@ -1,11 +1,3 @@
-//! Windows capture. Windows.Graphics.Capture (the default) captures a
-//! monitor or a single window, even a covered one, and reports when the
-//! window closes. Desktop Duplication is the fallback for drivers where it
-//! misbehaves: whole monitors only, without the mouse pointer.
-//!
-//! Sources are identified by the monitor's device name (`\\.\DISPLAY1`,
-//! shared by both methods) or a window's program and title.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,9 +20,6 @@ pub fn wgc_supported() -> bool {
     GraphicsCaptureApi::is_supported().unwrap_or(false)
 }
 
-/// Screens named as the display pickers name them: the model's own name,
-/// with Windows' number (not the enumeration order) to tell identical
-/// models apart.
 fn monitors() -> anyhow::Result<Vec<CaptureSource>> {
     use crate::output::display_names::{display_names, readable_name, system_number};
     let names = display_names();
@@ -64,7 +53,6 @@ fn window_key(window: &Window) -> Option<(String, String)> {
     Some((window.process_name().unwrap_or_default(), title))
 }
 
-/// Windows to offer: titled, not PALTO's own (capturing an output would loop).
 fn windows() -> anyhow::Result<Vec<(Window, String, String)>> {
     let own = std::process::id();
     Ok(Window::enumerate()
@@ -83,8 +71,6 @@ fn find_monitor(device: &str) -> anyhow::Result<Monitor> {
         .ok_or_else(|| anyhow::anyhow!("The display {device} is not connected"))
 }
 
-/// The window with this program and title; else the program's only window
-/// (titles often change, such as a document's name).
 fn find_window(key: &str, name: &str) -> anyhow::Result<Window> {
     let (program, title) = key.split_once('|').unwrap_or(("", key));
     let candidates = windows()?;
@@ -216,7 +202,6 @@ impl Backend for Dxgi {
         let Some(device) = source.id.strip_prefix("monitor:").map(str::to_string) else {
             anyhow::bail!("Desktop Duplication captures whole screens only; choose Windows.Graphics.Capture for windows");
         };
-        // Fail now, not on the capture thread, when the display is missing.
         let mut duplication = duplication::Duplication::open(&device)?;
         let running = Arc::new(AtomicBool::new(true));
         let keep = running.clone();
@@ -226,7 +211,6 @@ impl Backend for Dxgi {
                 match duplication.next_frame(&slot) {
                     Ok(()) => {}
                     Err(duplication::Problem::AccessLost) => {
-                        // A mode change, the secure desktop or a driver reset: reopen.
                         std::thread::sleep(Duration::from_millis(200));
                         match duplication::Duplication::open(&device) {
                             Ok(reopened) => duplication = reopened,
@@ -270,11 +254,10 @@ mod duplication {
         staging: Option<(ID3D11Texture2D, (u32, u32))>,
     }
 
-    // The thread that opens a duplication is the only one that uses it.
+    // SAFETY: the thread that opens a duplication is the only one that uses it.
     unsafe impl Send for Duplication {}
 
     impl Duplication {
-        /// Duplicates the output named `device` (`\\.\DISPLAY1`).
         pub fn open(device: &str) -> anyhow::Result<Self> {
             unsafe {
                 let factory: IDXGIFactory1 = CreateDXGIFactory1()?;
@@ -301,8 +284,6 @@ mod duplication {
             }
         }
 
-        /// Copies the next changed desktop image into `slot` (nothing when
-        /// the screen did not change within a tenth of a second).
         pub fn next_frame(&mut self, slot: &FrameSlot) -> Result<(), Problem> {
             unsafe {
                 let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
@@ -320,7 +301,6 @@ mod duplication {
         }
 
         unsafe fn copy(&mut self, resource: Option<IDXGIResource>, changed: bool, slot: &FrameSlot) -> windows::core::Result<()> {
-            // Pointer-only updates carry no new image.
             let Some(resource) = resource.filter(|_| changed) else { return Ok(()) };
             let texture: ID3D11Texture2D = resource.cast()?;
             let mut desc = D3D11_TEXTURE2D_DESC::default();

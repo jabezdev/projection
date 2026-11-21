@@ -1,6 +1,3 @@
-//! What each output shows, in the operator's units. Outputs convert these to
-//! pixels for their own size: `cq` below is 1% of the output width.
-
 use std::time::{Duration, Instant};
 
 use crate::frame::VideoKey;
@@ -25,7 +22,6 @@ pub enum MediaSource {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MediaLayer {
     pub source: MediaSource,
-    /// Crop to fill (`true`) or letterbox.
     pub cover: bool,
 }
 
@@ -37,10 +33,8 @@ pub enum Vertical {
     Bottom,
 }
 
-/// A text effect in the operator's units: sizes in sixteenths of a `cq`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shadow {
-    /// Color with its opacity.
     pub color: Rgba,
     pub x: f32,
     pub y: f32,
@@ -49,9 +43,7 @@ pub struct Shadow {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stroke {
-    /// Color with its opacity.
     pub color: Rgba,
-    /// Outline width, or glow radius.
     pub size: f32,
 }
 
@@ -74,7 +66,6 @@ pub enum Easing {
 }
 
 impl Easing {
-    /// CSS timing functions (cubic Béziers) at progress `t`.
     pub fn apply(self, t: f32) -> f32 {
         if t <= 0.0 {
             return 0.0;
@@ -92,7 +83,6 @@ impl Easing {
     }
 }
 
-/// `cubic-bezier(x1, y1, x2, y2)` at `x`, solved for its parameter by bisection.
 fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     let curve = |a: f32, b: f32, t: f32| 3.0 * (1.0 - t) * (1.0 - t) * t * a + 3.0 * (1.0 - t) * t * t * b + t * t * t;
     let (mut low, mut high) = (0.0f32, 1.0f32);
@@ -103,7 +93,6 @@ fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     curve(y1, y2, (low + high) / 2.0)
 }
 
-/// Which way content moves during a slide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Direction {
     #[default]
@@ -114,7 +103,6 @@ pub enum Direction {
 }
 
 impl Direction {
-    /// Unit vector of the movement, y down.
     pub fn vector(self) -> (f32, f32) {
         match self {
             Direction::Left => (-1.0, 0.0),
@@ -125,7 +113,6 @@ impl Direction {
     }
 }
 
-/// How the projection changes from one cue to the next.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Transition {
     pub kind: TransitionKind,
@@ -133,11 +120,9 @@ pub struct Transition {
     pub direction: Direction,
 }
 
-/// Main lyric styling (decision 8's reduced set).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LyricStyle {
     pub font: String,
-    /// Font size in `cq`.
     pub size: f32,
     pub weight: u16,
     pub italic: bool,
@@ -145,17 +130,12 @@ pub struct LyricStyle {
     pub color: Rgba,
     pub align: TextAlign,
     pub vertical: Vertical,
-    /// Side margins in `cq`; top/bottom margins are `margin_y * 9/16` `cq`.
     pub margin_x: f32,
     pub margin_y: f32,
-    /// Multiple of the font size.
     pub line_height: f32,
-    /// Sixteenths of a `cq`.
     pub letter_spacing: f32,
-    /// Border width in sixteenths of a `cq`.
     pub border: f32,
     pub border_color: Rgba,
-    /// Box fill, opacity included.
     pub box_color: Rgba,
     pub shadow: Option<Shadow>,
     pub outline: Option<Stroke>,
@@ -189,21 +169,17 @@ impl Default for LyricStyle {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MainScene {
-    /// The cued text; shown only while `display` is `Live`.
     pub text: String,
     pub display: Display,
     pub background: Option<MediaLayer>,
-    /// Shown letterboxed within the margins under `Display::Logo`.
     pub logo: Option<MediaSource>,
     pub style: LyricStyle,
     pub transition_ms: f32,
     pub transition: Transition,
 }
 
-/// One arrangement occurrence (or one non-song item) in the teleprompter.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfidenceGroup {
-    /// Stable identity: `(item, occurrence)`.
     pub key: String,
     pub code: String,
     pub title: String,
@@ -211,15 +187,12 @@ pub struct ConfidenceGroup {
     pub lines: Vec<String>,
 }
 
-/// The teleprompter's own style.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfidenceStyle {
     pub font: String,
-    /// Multiple of the lyric size.
     pub line_height: f32,
     pub caps: bool,
     pub clock: bool,
-    /// The arrangement tape beside the clock.
     pub tape: bool,
 }
 
@@ -232,13 +205,9 @@ impl Default for ConfidenceStyle {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConfidenceScene {
     pub groups: Vec<ConfidenceGroup>,
-    /// Active `(group, line within the group)`.
     pub active: Option<(usize, usize)>,
-    /// Lyric size in `cq`.
     pub size: f32,
-    /// When set, the foreground video (or a capture) replaces the teleprompter.
     pub video: Option<VideoKey>,
-    /// Fill the screen with the video, cropping, rather than fit it whole.
     pub video_cover: bool,
     pub transition_ms: f32,
     pub style: ConfidenceStyle,
@@ -250,16 +219,11 @@ pub enum Scene {
     Confidence(ConfidenceScene),
 }
 
-/// What an output's next frame needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Activity {
-    /// Drawing now would differ from the last frame.
     pub redraw: bool,
-    /// No transition or pending media remains (playing video is settled).
     pub settled: bool,
-    /// Sum of the generations of visible video textures.
     pub generation: u64,
-    /// New media is waiting to be drawable: the previous picture is still up.
     pub loading: bool,
 }
 
@@ -274,8 +238,6 @@ impl Activity {
     }
 }
 
-/// A linear opacity transition that, like a CSS transition, restarts from
-/// the current value when retargeted.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Fade {
     from: f32,
@@ -306,7 +268,6 @@ impl Fade {
         *self = Self { from: self.value(now), to, start: now, duration, easing };
     }
 
-    /// The value this fade is heading for.
     pub fn target(&self) -> f32 {
         self.to
     }
@@ -344,7 +305,6 @@ mod tests {
         }
         assert!(Easing::EaseIn.apply(0.25) < 0.25 && Easing::EaseOut.apply(0.25) > 0.25);
         assert!((Easing::EaseInOut.apply(0.5) - 0.5).abs() < 1e-3);
-        // CSS `ease` is about 80% done halfway.
         assert!((Easing::Ease.apply(0.5) - 0.8024).abs() < 0.01, "{}", Easing::Ease.apply(0.5));
     }
 }

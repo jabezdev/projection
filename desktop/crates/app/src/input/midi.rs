@@ -1,7 +1,3 @@
-//! MIDI controllers: every connected input port is listened to, and ports
-//! that appear or disappear are picked up within a couple of seconds. Notes,
-//! control changes and program changes become input triggers.
-
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -13,9 +9,6 @@ use crate::input::{self, InputState};
 const RESCAN: Duration = Duration::from_secs(2);
 const CLIENT: &str = "PALTO";
 
-/// The trigger in one MIDI message, if it is a press: note on with velocity,
-/// a control rising to 64 or more (from below), or a program change.
-/// `controls` remembers each control's last value per channel.
 pub fn parse(message: &[u8], controls: &mut HashMap<(u8, u8), u8>) -> Option<InputTrigger> {
     let (&status, data) = message.split_first()?;
     let channel = (status & 0x0f) + 1;
@@ -30,8 +23,6 @@ pub fn parse(message: &[u8], controls: &mut HashMap<(u8, u8), u8>) -> Option<Inp
     }
 }
 
-/// Starts the listener thread. Without MIDI support on the system it logs
-/// once and stops.
 pub fn start(app: tauri::AppHandle) -> anyhow::Result<()> {
     std::thread::Builder::new().name("midi".into()).spawn(move || run(app))?;
     Ok(())

@@ -1,9 +1,3 @@
-//! Crash recovery. `session-state.json` records that the app is running and
-//! where the operator is (service, item, step). A start that finds the app
-//! still marked as running follows a crash: the last service is reopened at
-//! the last cue with media paused. Outputs always start hidden, so nothing
-//! reaches the audience until the operator shows them.
-
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -18,24 +12,17 @@ pub const FILENAME: &str = "session-state.json";
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SessionState {
-    /// True from start until a clean exit.
     pub running: bool,
     pub project_id: Option<i64>,
     pub item_id: Option<i64>,
     pub step: Option<u32>,
-    /// This run restored the cue it still shows. If it crashes too, the next
-    /// start does not restore again, so a cue that crashes cannot loop.
     pub recovered: bool,
 }
 
-/// What the previous run left behind.
 pub enum Previous {
     Clean,
-    /// Crashed with a service loaded: reopen it.
     Restore(SessionState),
-    /// Crashed right after a recovery; not restored again.
     RepeatedCrash,
-    /// Crashed with no service loaded.
     Crashed,
 }
 
@@ -45,7 +32,6 @@ pub struct Recovery {
 }
 
 impl Recovery {
-    /// Reads the previous run's state and marks this run as running.
     pub fn start(dir: &Path) -> (Self, Previous) {
         let path = dir.join(FILENAME);
         let previous: SessionState = std::fs::read(&path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
@@ -64,7 +50,6 @@ impl Recovery {
         (recovery, outcome)
     }
 
-    /// Records the current cue when it changes.
     pub fn observe(&self, snapshot: &EngineSnapshot) {
         let program = &snapshot.program_state;
         let Ok(current) = self.state.lock().map(|s| s.clone()) else { return };
@@ -72,11 +57,9 @@ impl Recovery {
         if cue == (current.project_id, current.item_id, current.step) {
             return;
         }
-        // Moving on from the restored cue proves this run survived it.
         self.write(SessionState { running: true, project_id: cue.0, item_id: cue.1, step: cue.2, recovered: false });
     }
 
-    /// Marks a clean exit, keeping the last cue for reference.
     pub fn clean_exit(&self) {
         let Ok(current) = self.state.lock().map(|s| s.clone()) else { return };
         self.write(SessionState { running: false, recovered: false, ..current });
@@ -91,8 +74,6 @@ impl Recovery {
     }
 }
 
-/// The commands that reopen `state` in `project`: load it, cue the last item
-/// and step, and pause cued media so nothing plays unannounced.
 pub fn restore_commands(state: &SessionState, project: &ProjectModel) -> Vec<EngineCommand> {
     let mut commands = vec![EngineCommand::LoadProject { project_id: project.id }];
     let item = state.item_id.and_then(|id| project.session.items.iter().find(|item| item.id == id));
@@ -139,12 +120,11 @@ mod tests {
         let dir = temp_dir();
         let (recovery, _) = Recovery::start(&dir);
         recovery.observe(&snapshot(3, 30, 2));
-        drop(recovery); // crash: no clean exit
+        drop(recovery);
         let (recovery, previous) = Recovery::start(&dir);
         let Previous::Restore(state) = previous else { panic!("expected a restore") };
         assert_eq!((state.project_id, state.item_id, state.step), (Some(3), Some(30), Some(2)));
 
-        // Crashing again on the restored cue does not restore it a second time.
         recovery.observe(&snapshot(3, 30, 2));
         drop(recovery);
         assert!(matches!(Recovery::start(&dir).1, Previous::RepeatedCrash));
@@ -176,7 +156,6 @@ mod tests {
             EngineCommand::Cue { item_id: 30, index: 0 },
             EngineCommand::Media { session_id: None, action: MediaAction::Pause },
         ]));
-        // A removed item reopens the service without a cue.
         let gone = SessionState { item_id: Some(99), ..state };
         assert_eq!(restore_commands(&gone, &project).len(), 1);
     }

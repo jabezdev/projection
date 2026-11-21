@@ -1,7 +1,4 @@
-
-
 use crate::paint::{css_color, Rgba};
-
 
 pub(super) const UI_FONT: &str = "Segoe UI";
 pub(super) const MONO_FONT: &str = "monospace";
@@ -10,7 +7,6 @@ pub(super) fn rgb(hex: &str) -> Rgba {
     css_color(hex, [1.0, 0.0, 1.0, 1.0])
 }
 
-/// CSS `saturate()`.
 pub(super) fn saturate(c: Rgba, s: f32) -> Rgba {
     let [r, g, b, a] = c;
     [
@@ -21,7 +17,6 @@ pub(super) fn saturate(c: Rgba, s: f32) -> Rgba {
     ]
 }
 
-/// CSS `color-mix(in srgb, a p, b)`.
 pub(super) fn mix(a: Rgba, p: f32, b: Rgba) -> Rgba {
     [a[0] * p + b[0] * (1.0 - p), a[1] * p + b[1] * (1.0 - p), a[2] * p + b[2] * (1.0 - p), 1.0]
 }

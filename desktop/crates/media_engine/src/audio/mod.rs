@@ -1,5 +1,3 @@
-//! The application's single audio output and the per-session sample feed.
-
 mod convert;
 mod output;
 mod session;

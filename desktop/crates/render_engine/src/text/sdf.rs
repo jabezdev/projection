@@ -6,13 +6,8 @@ use cosmic_text::{
 
 use super::*;
 
-/// The largest distance an SDF glyph encodes, in pixels. Effects reaching
-/// further are cut off at this distance.
 pub const MAX_SPREAD: u32 = 96;
 
-/// Signed-distance glyphs for text effects (outline, glow, shadow). Each
-/// glyph is rasterized at its drawn size and padded by `spread` pixels; a
-/// texel stores `0.5 + distance / (2 * spread)`, distance positive outside.
 pub struct SdfAtlas {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -43,8 +38,6 @@ impl SdfAtlas {
         }
     }
 
-    /// The padded distance field of `key` (its `left`/`top` already include
-    /// the padding). `None` for glyphs with no pixels.
     pub fn glyph(&mut self, fonts: &Fonts, queue: &wgpu::Queue, key: CacheKey, spread: u32) -> Result<Option<AtlasGlyph>, AtlasFull> {
         if let Some(entry) = self.glyphs.get(&(key, spread)) {
             return Ok(*entry);
@@ -86,10 +79,6 @@ impl SdfAtlas {
     }
 }
 
-/// The signed distance field of a coverage mask, padded by `spread` on every
-/// side and encoded as `0.5 + d / (2 * spread)` (d in pixels, positive
-/// outside). Exact Euclidean distances (Felzenszwalb–Huttenlocher); pixels
-/// on the antialiased edge use their coverage for sub-pixel accuracy.
 pub fn signed_distance(coverage: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>, u32, u32) {
     let pad = spread as usize;
     let (w, h) = (width as usize + 2 * pad, height as usize + 2 * pad);
@@ -133,7 +122,6 @@ pub fn signed_distance(coverage: &[u8], width: u32, height: u32, spread: u32) ->
     (field, w as u32, h as u32)
 }
 
-/// Squared Euclidean distance to the nearest zero, in place: columns, then rows.
 pub(super) fn distance_transform(grid: &mut [f32], w: usize, h: usize) {
     let n = w.max(h);
     let (mut f, mut d, mut v, mut z) = (vec![0.0; n], vec![0.0; n], vec![0usize; n], vec![0.0; n + 1]);
@@ -153,7 +141,6 @@ pub(super) fn distance_transform(grid: &mut [f32], w: usize, h: usize) {
     }
 }
 
-/// The lower envelope of parabolas rooted at each sample (squared distances).
 pub(super) fn transform_1d(f: &[f32], d: &mut [f32], v: &mut [usize], z: &mut [f32]) {
     let n = f.len();
     if n == 0 {

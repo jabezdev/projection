@@ -1,21 +1,15 @@
-
 use crate::paint::{Rect, TextEffects};
 use crate::scene::{LyricStyle, Vertical};
 use crate::text::TextStyle;
 
-
-/// Geometry of the lyric composition for one output size.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LyricGeometry {
-    /// Area inside the margins.
     pub area: Rect,
     pub border: f32,
     pub padding_x: f32,
     pub padding_y: f32,
     pub text_style: TextStyle,
-    /// Wrapping width for the text.
     pub text_width: f32,
-    /// Shadow, outline and glow in pixels.
     pub effects: TextEffects,
 }
 
@@ -47,7 +41,6 @@ impl LyricGeometry {
         Self { area, border, padding_x, padding_y, text_style, text_width, effects }
     }
 
-    /// The box around text `text_height` tall.
     pub fn text_box(&self, vertical: Vertical, text_height: f32) -> Rect {
         let height = text_height + 2.0 * self.padding_y + 2.0 * self.border;
         let y = match vertical {

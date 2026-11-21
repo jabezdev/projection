@@ -1,11 +1,3 @@
-//! Keeps the operator UI's hand-written TypeScript types in step with the
-//! wire format. Serialized samples are written to `protocol.fixtures.ts`,
-//! where each is checked with `satisfies <Type>`; the frontend build's type
-//! check then fails on a missing field, an unknown field or a wrong literal.
-//!
-//! Regenerate after an intended protocol change with
-//! `UPDATE_PROTOCOL_FIXTURES=1 cargo test -p protocol --test typescript`.
-
 use std::path::PathBuf;
 
 use protocol::{

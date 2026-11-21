@@ -1,8 +1,3 @@
-//! Library files. Imported media is copied into `<data>/media/`, so the
-//! library is self-contained and travels with backups and (later) sync.
-//! Media that went missing can be relinked by searching a folder for files
-//! with the same names.
-
 pub mod storage;
 
 use std::collections::{BTreeMap, HashMap};
@@ -10,12 +5,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const MEDIA_FOLDER: &str = "media";
-/// How deep a relink search looks below the chosen folder.
 const SEARCH_DEPTH: usize = 6;
 
-/// Copies `source` into the library's media folder and returns the copy.
-/// A file already in the folder is used as it is; an identical file already
-/// imported is reused; a different file with the same name gets " (2)", " (3)"….
 pub fn import_file(data_dir: &Path, source: &Path) -> std::io::Result<PathBuf> {
     let folder = data_dir.join(MEDIA_FOLDER);
     std::fs::create_dir_all(&folder)?;
@@ -35,7 +26,6 @@ pub fn import_file(data_dir: &Path, source: &Path) -> std::io::Result<PathBuf> {
             }
             continue;
         }
-        // Copied under a temporary name, so an interrupted copy is never used.
         let partial = folder.join(format!("{name}.partial"));
         if let Err(e) = std::fs::copy(&source, &partial).and_then(|_| std::fs::rename(&partial, &target)) {
             let _ = std::fs::remove_file(&partial);
@@ -46,13 +36,9 @@ pub fn import_file(data_dir: &Path, source: &Path) -> std::io::Result<PathBuf> {
     unreachable!("the loop returns")
 }
 
-/// Writes `bytes` (for example a rendered PDF page) into the media folder as
-/// `name` and returns the file; like [`import_file`], an identical file is
-/// reused and a different one with the same name gets a number.
 pub fn import_bytes(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
     let folder = data_dir.join(MEDIA_FOLDER);
     std::fs::create_dir_all(&folder)?;
-    // Only a plain file name, never a path.
     let name: String = name.chars().map(|c| if c.is_alphanumeric() || " ._-()".contains(c) { c } else { '_' }).collect();
     let name = name.trim_start_matches('.');
     let (stem, extension) = match name.rsplit_once('.') {
@@ -96,13 +82,10 @@ fn same_contents(a: &Path, b: &Path) -> std::io::Result<bool> {
     }
 }
 
-/// The file name of a stored path, whichever system wrote it.
 pub fn file_name(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
-/// Finds files under `folder` named like each missing path (ignoring case),
-/// nearest first. Returns old path → found path.
 pub fn search(folder: &Path, missing: &[String]) -> BTreeMap<String, String> {
     let mut wanted: HashMap<String, Vec<&String>> = HashMap::new();
     for path in missing {
@@ -134,8 +117,6 @@ pub fn search(folder: &Path, missing: &[String]) -> BTreeMap<String, String> {
     found
 }
 
-/// Replaces every string equal to an old path, including inside strings that
-/// hold JSON documents (a service item's song). Returns whether anything changed.
 pub fn replace_paths(value: &mut serde_json::Value, map: &BTreeMap<String, String>) -> bool {
     match value {
         serde_json::Value::String(text) => {

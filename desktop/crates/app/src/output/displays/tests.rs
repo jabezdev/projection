@@ -1,7 +1,3 @@
-
-
-
-
 use super::*;
 
 fn display(name: &str, x: i32) -> OutputRoute { OutputRoute { name: Some(name.into()), x, y: 0, width: 1920, height: 1080, fullscreen: true, size: None, aspect: None, device: None } }
@@ -11,7 +7,6 @@ fn follows_a_windows_display_renumbered_after_replugging() {
     projector.device = Some("projector-path".into());
     let mut renumbered = display(r"\\.\DISPLAY3", 1920);
     renumbered.device = projector.device.clone();
-    // The old number now belongs to another screen at the old position.
     assert_eq!(matching_route(&projector, &[display(r"\\.\DISPLAY2", 1920), renumbered]), Some(1));
 }
 #[test]
@@ -21,7 +16,6 @@ fn a_disconnected_device_does_not_use_another_monitors_recycled_number() {
     let mut replacement = display(r"\\.\DISPLAY2", 1920);
     replacement.device = Some("operator-monitor-path".into());
     assert_eq!(matching_route(&projector, &[replacement]), None);
-    // If the OS cannot report device paths, retain the older name fallback.
     assert_eq!(matching_route(&projector, &[display(r"\\.\DISPLAY2", 1920)]), Some(0));
 }
 #[test]

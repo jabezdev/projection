@@ -5,8 +5,6 @@ use protocol::{
 use super::*;
 
 impl Engine {
-    /// Keeps exactly one foreground session for the active media item. Edits to
-    /// the active item's options reconfigure the session without restarting it.
     pub(super) fn sync_session(&mut self, item: Option<&SessionItem>, ports: &mut Ports) {
         let target = item.and_then(|item| match &item.kind {
             SessionItemKind::Video { path, options } => Some((item.id, PlaybackKind::Video, path, options)),
@@ -57,7 +55,6 @@ impl Engine {
     }
 }
 
-/// Starts a new seek generation at `position_ms`.
 pub(super) fn seek(playback: &mut PlaybackState, position_ms: u64, ports: &mut Ports) {
     playback.generation += 1;
     playback.position_ms = position_ms;
@@ -81,13 +78,11 @@ pub(super) fn transport_directive(playback: &PlaybackState) -> MediaDirective {
     }
 }
 
-/// Copies saved clip/volume/rate/loop options onto a session.
 pub(super) fn apply_options(playback: &mut PlaybackState, options: &VideoOptions) {
     playback.volume = options.volume.min(100);
     playback.rate_percent = options.rate_percent.clamp(50, 200);
     playback.looping = options.looping;
     playback.confidence = options.confidence;
     playback.start_ms = options.start_ms;
-    // Empty or reversed clips play to the end.
     playback.end_ms = options.end_ms.filter(|&end| end > options.start_ms);
 }

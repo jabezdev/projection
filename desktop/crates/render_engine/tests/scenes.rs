@@ -1,6 +1,3 @@
-//! Scene behavior rendered offscreen: transitions, readiness and overrides.
-//! Skipped when no GPU adapter is available.
-
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -26,7 +23,6 @@ fn pixel(frame: &[u8], x: u32, y: u32) -> [u8; 4] {
     [frame[i], frame[i + 1], frame[i + 2], frame[i + 3]]
 }
 
-/// Brightest gray level inside a rectangle.
 fn brightest(frame: &[u8], x0: u32, y0: u32, x1: u32, y1: u32) -> u8 {
     let mut best = 0;
     for y in y0..y1 {
@@ -51,7 +47,6 @@ fn main_scene(text: &str) -> MainScene {
     MainScene { text: text.into(), transition_ms: 200.0, style: LyricStyle { size: 8.0, ..Default::default() }, ..Default::default() }
 }
 
-/// White lyrics in the bottom half, measured on red so a blue box does not count.
 fn text_brightness(frame: &[u8]) -> u8 {
     let mut best = 0;
     for y in 180..SIZE.1 {
@@ -79,7 +74,6 @@ fn lyrics_crossfade_on_one_clock_and_the_box_stays() {
     let half = capture.render(SIZE, t1 + Duration::from_millis(100));
     let level = text_brightness(&half);
     assert!((100..200).contains(&level), "outgoing text half faded: {level}");
-    // The box (blue) persists while the outgoing text fades.
     assert!(half.chunks_exact(4).any(|p| p[2] == 255 && p[0] == 0), "box still drawn");
     let gone = capture.render(SIZE, t1 + Duration::from_millis(250));
     assert_eq!(brightest(&gone, 0, 180, SIZE.0, SIZE.1), 0, "box and text removed after the fade");
@@ -92,7 +86,6 @@ fn rapid_cues_keep_only_the_newest_and_one_outgoing_text() {
     for (i, text) in ["A", "B", "C", "D"].iter().enumerate() {
         capture.set_scene(Scene::Main(main_scene(text)), t0 + Duration::from_millis(20 * i as u64));
     }
-    // 60 ms in: D fading in from 0, C fading out from its partial opacity.
     let frame = capture.render(SIZE, t0 + Duration::from_millis(120));
     assert!(text_brightness(&frame) > 0);
     let done = capture.render(SIZE, t0 + Duration::from_millis(400));
@@ -210,7 +203,6 @@ fn a_logo_image_is_letterboxed_within_the_margins() {
     let scene = MainScene { display: Display::Logo, logo: Some(MediaSource::Image(white.to_str().unwrap().into())), ..main_scene("") };
     capture.set_scene(Scene::Main(scene), t0);
     let (frame, _) = capture.settle(SIZE, t0, Duration::from_secs(5));
-    // 64x36 image contained in the area inside 5cq / 10*9/16cq margins.
     let (cq, area_y) = (6.4, 10.0 * 9.0 / 16.0 * 6.4);
     assert_eq!(pixel(&frame, SIZE.0 / 2, SIZE.1 / 2), [255, 255, 255, 255]);
     assert_eq!(pixel(&frame, (5.0 * cq) as u32 - 2, SIZE.1 / 2), [0, 0, 0, 255], "left margin stays black");
@@ -236,7 +228,6 @@ fn long_service_layout_time() {
     let started = Instant::now();
     capture.render((1920, 1080), t0);
     let first = started.elapsed();
-    // Edit one line: the rebuild runs on a worker and reuses shaped text.
     let mut edited = scene;
     edited.groups[10].lines[0] = "An edited line".into();
     capture.set_scene(Scene::Confidence(edited), t0);
@@ -251,7 +242,6 @@ fn long_service_layout_time() {
     println!("1800 rows: first layout {first:?}; frame during a rebuild {during:?}; edited rebuild done in {:?}", started.elapsed());
 }
 
-/// Columns (x) in the lower half where text is drawn.
 fn lit_columns(frame: &[u8]) -> Vec<u32> {
     (0..SIZE.0).filter(|&x| (180..SIZE.1).any(|y| pixel(frame, x, y)[0] > 128)).collect()
 }

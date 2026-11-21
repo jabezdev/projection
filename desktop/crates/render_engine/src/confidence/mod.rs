@@ -1,6 +1,3 @@
-//! The confidence output: clock, arrangement tape and the scrolling
-//! teleprompter, or the foreground video when its confidence option is on.
-
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -24,17 +21,13 @@ use smooth::*;
 pub struct ConfidenceRenderer {
     scene: ConfidenceScene,
     revision: u64,
-    /// The layout on screen; replaced when a rebuild finishes.
     layout: Option<Arc<Layout>>,
-    /// The active row within `layout`, which may lag the scene while a
-    /// rebuild for new groups is in flight.
     active: Option<(usize, usize)>,
     building: Option<(LayoutKey, Receiver<Layout>)>,
     cache: Arc<Mutex<TextCache>>,
     video: MediaStage,
     scroll: Smooth,
     tape: Smooth,
-    /// Scroll targets were computed for this revision and size.
     focused: Option<(u64, (u32, u32))>,
     clock: Option<(String, u32, Arc<TextLayout>)>,
 }

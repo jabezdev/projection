@@ -61,7 +61,6 @@ fn a_loop_shows_its_prepared_start_again_at_each_wrap() {
     wait_for(&session, Phase::Ready, Duration::from_secs(5));
     let first = session.current_frame(now_us()).expect("first frame");
     session.play(now_us());
-    // (wall time, timeline pts) of every newly shown frame across one wrap.
     let mut shown: Vec<(Instant, i64)> = Vec::new();
     let mut wrapped = None;
     let deadline = Instant::now() + Duration::from_millis(3_000);
@@ -99,8 +98,6 @@ fn hardware_decoding_plays_when_chosen_or_falls_back_to_software() {
     session.play(now_us());
     let shown = run_for(&session, Duration::from_millis(500));
     hwaccel::set_choice(hwaccel::DecoderChoice::Software);
-    // An accelerator that opens may still not decode (a CPU-only Vulkan
-    // driver in CI): the same session then decodes in software.
     assert!(matches!(frame.format, FrameFormat::Nv12 | FrameFormat::I420), "hardware NV12 or the software fallback ({available:?}): {:?}", frame.format);
     assert!(shown.len() >= 8, "and keep playing: {shown:?}");
 }

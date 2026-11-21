@@ -1,7 +1,3 @@
-//! Builds what each native output shows from the engine's state and the
-//! saved output style, and keeps the renderer and ambient videos in step.
-
-
 use protocol::{
     CaptureFit, PlaybackState, ProgramState, ProjectModel,
     SessionItem, SessionItemKind,
@@ -35,7 +31,6 @@ fn active_item<'a>(program: &ProgramState, project: Option<&'a ProjectModel>) ->
     project?.session.items.iter().find(|item| item.id == id)
 }
 
-/// The foreground session showing `item`, if it is a video being played.
 fn foreground_video(item: Option<&SessionItem>, playback: Option<&PlaybackState>) -> Option<VideoKey> {
     let item = item?;
     let playback = playback?;
@@ -47,8 +42,6 @@ fn foreground_video(item: Option<&SessionItem>, playback: Option<&PlaybackState>
     }
 }
 
-/// The capture `item` shows, with whether it fills (crops) the screen, if
-/// it is routed to the projection (`confidence` false) or confidence screen.
 fn capture_on(item: Option<&SessionItem>, confidence: bool) -> Option<(VideoKey, bool)> {
     let SessionItemKind::Capture { source, options } = &item?.kind else { return None };
     let (shown, fit) = if confidence { (options.confidence, options.confidence_fit) } else { (options.projection, options.projection_fit) };

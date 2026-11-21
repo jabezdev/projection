@@ -12,9 +12,6 @@ use crate::output::NativeOutputs;
 use crate::output::scene::SceneFeed;
 use crate::settings::{AppConfig, OutputState};
 
-/// Opens the projection and confidence windows (hidden until the operator
-/// shows them), starts the shared media session and the scene feed that keeps
-/// both outputs in step with the engine.
 pub(super) fn start(app: &tauri::App, channels: &Channels, config: &Arc<RwLock<AppConfig>>, dir: &Path) -> anyhow::Result<Arc<NativeMedia>> {
     let projection_size = config.read().expect("config lock poisoned").projection_size.unwrap_or(WINDOWED_SIZE);
     let projection = crate::output::build_output_window(app, OUTPUTS[0].0, OUTPUTS[0].1, projection_size)?;

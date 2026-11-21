@@ -1,6 +1,3 @@
-//! A token bucket per connection, so a stuck button or a runaway script on
-//! a remote device cannot flood the engine queue.
-
 use std::time::Instant;
 
 pub struct Throttle {
@@ -15,7 +12,6 @@ impl Throttle {
         Self { tokens: burst, last: now, per_second, burst }
     }
 
-    /// Takes one command's worth; false when the client is over its rate.
     pub fn allow(&mut self, now: Instant) -> bool {
         let elapsed = now.saturating_duration_since(self.last).as_secs_f64();
         self.last = now;

@@ -29,8 +29,6 @@ use crate::system::updates;
 
 const EVENT_BACKLOG: usize = 1024;
 
-/// The channels that connect the engine thread, the operator UI and the
-/// remote server. Created before Tauri starts so setup can hand them out.
 pub(crate) struct Channels {
     engine: EngineHandle,
     engine_inputs: Receiver<EngineInput>,

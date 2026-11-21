@@ -6,7 +6,6 @@ use protocol::{
 use super::*;
 
 impl Engine {
-    /// Returns whether the loaded project changed.
     pub(super) fn apply(&mut self, cmd: EngineCommand, ports: &mut Ports, errors: &mut Vec<EngineEvent>) -> bool {
         let program = &mut self.state.program_state;
         match cmd {
@@ -17,9 +16,6 @@ impl Engine {
             EngineCommand::SetDisplay { display } => {
                 let was_logo = program.display == DisplayMode::Logo;
                 program.display = display;
-                // Logo suspends foreground video and resumes it on the way out;
-                // Black and Clear leave transport running. Standalone audio has
-                // no picture to hide, so it keeps playing under the Logo.
                 if let Some(playback) = self.state.playback.as_mut().filter(|p| p.kind == PlaybackKind::Video) {
                     let is_logo = display == DisplayMode::Logo;
                     if is_logo != was_logo {
@@ -64,7 +60,6 @@ impl Engine {
                     ));
                     return false;
                 }
-                // Saving some other project doesn't touch what's on air.
                 if self.state.project.as_ref().map(|p| p.id) != Some(project.id) {
                     return false;
                 }
@@ -75,7 +70,6 @@ impl Engine {
                 let media_changed = old_item.as_ref().map(|i| (&i.background, &i.kind))
                     != new_item.as_ref().map(|i| (&i.background, &i.kind));
                 self.state.project = Some(project);
-                // Re-resolve so an edited/removed active item stays consistent.
                 let program = &self.state.program_state;
                 let (item, step) = (program.active_item_id, program.active_step_index);
                 self.select(item, step, media_changed, ports, errors);

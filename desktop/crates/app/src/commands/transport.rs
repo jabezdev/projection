@@ -1,8 +1,6 @@
-
 use core_engine::{EngineCommand, EngineSnapshot};
 
 use crate::AppState;
-
 
 #[tauri::command]
 pub fn play(state: tauri::State<AppState>) -> Result<(), String> {
@@ -49,8 +47,6 @@ pub fn cue(state: tauri::State<AppState>, item_id: i64, index: u32) -> Result<()
     state.send(EngineCommand::Cue { item_id, index })
 }
 
-/// Any typed engine command; local controls use the same vocabulary as
-/// WebSocket clients.
 #[tauri::command]
 pub fn engine_command(state: tauri::State<AppState>, command: EngineCommand) -> Result<(), String> {
     state.send(command)

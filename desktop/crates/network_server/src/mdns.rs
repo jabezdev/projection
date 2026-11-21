@@ -1,7 +1,3 @@
-//! Advertises the remote on the local network as `palto.local`, so phones
-//! and browsers reach it by name. Devices that do not resolve `.local`
-//! names use the address shown on the operator screen instead.
-
 use std::net::IpAddr;
 use std::sync::Mutex;
 
@@ -16,8 +12,6 @@ pub struct Advertiser {
     running: Mutex<Option<(ServiceDaemon, String, u16)>>,
 }
 
-/// Interfaces of virtual machines, containers and VPNs: listed last, since
-/// phones on the Wi-Fi cannot reach them.
 fn virtual_interface(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     ["docker", "br-", "veth", "virbr", "vethernet", "virtualbox", "vmware", "vmnet", "tailscale", "zt", "wg", "tun", "tap", "hyper-v"]
@@ -25,8 +19,6 @@ fn virtual_interface(name: &str) -> bool {
         .any(|prefix| name.starts_with(prefix) || name.contains(prefix))
 }
 
-/// This computer's IPv4 addresses other devices can reach: home and office
-/// ranges first (192.168, then 10, then 172.16–31), virtual adapters last.
 pub fn lan_addresses() -> Vec<IpAddr> {
     let mut found: Vec<(u8, IpAddr)> = if_addrs::get_if_addrs()
         .unwrap_or_default()
@@ -50,7 +42,6 @@ pub fn lan_addresses() -> Vec<IpAddr> {
 }
 
 impl Advertiser {
-    /// Advertises on `port`, or stops with `None`.
     pub fn set(&self, port: Option<u16>) {
         let mut running = self.running.lock().expect("mdns poisoned");
         if running.as_ref().map(|(_, _, p)| *p) == port {

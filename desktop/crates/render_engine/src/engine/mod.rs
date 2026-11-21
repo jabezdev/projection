@@ -11,18 +11,14 @@ mod windows;
 pub use windows::fit_aspect;
 use windows::*;
 
-/// A window to present into. The window must outlive the [`RenderEngine`];
-/// call [`RenderEngine::shutdown`] before destroying it.
 pub struct OutputSpec {
     pub role: OutputRole,
     pub target: Box<dyn wgpu::DisplayAndWindowHandle + 'static>,
     pub width: u32,
     pub height: u32,
-    /// Debug-only artificial delay per presented frame, to prove isolation.
     pub stall: Option<std::time::Duration>,
 }
 
-/// The largest video frame a texture holds; decoders scale to fit.
 pub const FRAME_CAPACITY: (u32, u32) = (1920, 1080);
 
 pub struct RenderEngine {
@@ -35,15 +31,11 @@ pub struct RenderEngine {
     sizes: Mutex<HashMap<OutputRole, (u32, u32)>>,
     aspects: Mutex<HashMap<OutputRole, (u32, u32)>>,
     previews: Mutex<Option<Previews>>,
-    /// Live views of the outputs in the operator window, added on first use.
     monitors: Mutex<HashMap<OutputRole, MonitorWorker>>,
-    /// Stills loaded ahead of their cue, kept with the scenes' own media.
     preloads: Mutex<HashSet<String>>,
 }
 
 impl RenderEngine {
-    /// Creates surfaces on the calling thread, selects one adapter compatible
-    /// with all of them and starts one presentation thread per output.
     pub fn start(specs: Vec<OutputSpec>, frames: Arc<dyn VideoFrames>) -> anyhow::Result<Self> {
         anyhow::ensure!(!specs.is_empty(), "At least one output is required");
         let fonts = Fonts::load();
@@ -65,7 +57,6 @@ impl RenderEngine {
         }))
         .context("No GPU adapter can present to the projection output")?;
         for (role, surface, ..) in &surfaces {
-            // Cross-adapter output configurations are not supported yet.
             anyhow::ensure!(
                 adapter.is_surface_supported(surface),
                 "The {} display is not supported by the selected GPU",
@@ -100,8 +91,6 @@ impl RenderEngine {
 }
 
 impl RenderEngine {
-    /// Stops the frame pump and joins every output thread, releasing all
-    /// surfaces. Must run before the output windows are destroyed.
     pub fn shutdown(&mut self) {
         if let Some(previews) = self.previews.lock().ok().and_then(|mut p| p.take()) {
             previews.stop();
@@ -116,7 +105,6 @@ impl RenderEngine {
         if let Some(pump) = self.pump.take() {
             pump.stop();
         }
-        // Signal every output before joining so their exits overlap.
         for worker in self.outputs.values() {
             worker.signal_stop();
         }

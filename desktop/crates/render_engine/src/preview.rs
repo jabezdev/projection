@@ -1,10 +1,3 @@
-//! Low-frequency still images of what the outputs show, for the operator UI.
-//!
-//! One background thread keeps its own renderers (separate from the output
-//! threads, so a preview never delays presentation) and renders a scene once
-//! its transitions settle. Video layers sample the shared textures, so a
-//! preview shows the frame current at that moment and opens no decoder.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -19,23 +12,17 @@ use crate::paint::Painter;
 use crate::scene::Scene;
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-/// Scenes render at output size up to this width, then scale down to the
-/// preview width, so pixel-sized borders keep their proportions.
 const MAX_RENDER_WIDTH: u32 = 1920;
 const PREVIEW_WIDTH: u32 = 640;
-/// A scene whose media never loads is still previewed after this long.
 const SETTLE_LIMIT: Duration = Duration::from_secs(3);
 const BUSY_POLL: Duration = Duration::from_millis(50);
 const IDLE_POLL: Duration = Duration::from_secs(1);
 
-/// What a preview shows: an output's current scene, or a style sample.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PreviewTarget {
     Projection,
     Confidence,
-    /// A main scene for the output settings dialog, at the projection's size.
     Style,
-    /// A confidence scene for the output settings dialog, at the confidence size.
     ConfidenceStyle,
 }
 
@@ -57,7 +44,6 @@ impl PreviewTarget {
     }
 }
 
-/// A JPEG still of one preview target.
 pub struct Snapshot {
     pub width: u32,
     pub height: u32,
@@ -115,7 +101,6 @@ impl Previews {
 struct Slot {
     renderer: Renderer,
     has_scene: bool,
-    /// Set while a new scene or size waits to be previewed.
     since: Option<Instant>,
     clock: String,
 }
@@ -157,7 +142,6 @@ fn run(resources: &Resources, pending: &Mutex<Pending>, woken: &Receiver<()>, ru
                 slot.since = Some(now);
             }
         }
-        // The confidence clock is the only thing that changes while idle.
         let clock = chrono::Local::now().format("%H:%M").to_string();
         for (target, slot) in &mut slots {
             if *target == PreviewTarget::Confidence && slot.has_scene && slot.since.is_none() && slot.clock != clock {
@@ -168,7 +152,6 @@ fn run(resources: &Resources, pending: &Mutex<Pending>, woken: &Receiver<()>, ru
             let Some(since) = slot.since else { continue };
             let Some(&(width, height)) = sizes.get(&target.role()).filter(|(w, h)| *w > 0 && *h > 0) else { continue };
             let size = render_size(width, height);
-            // Building the draw list advances loads and layout builds.
             let list = slot.renderer.frame(&resources.fonts, size, now);
             if !slot.renderer.activity(now).settled && since.elapsed() < SETTLE_LIMIT {
                 continue;

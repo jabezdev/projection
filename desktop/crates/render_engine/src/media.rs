@@ -1,7 +1,3 @@
-//! GPU textures for everything a scene can show: videos (one texture per
-//! source, written by the frame pump) and still images (decoded off the
-//! output threads). Shared by all outputs.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -11,8 +7,6 @@ use crate::frame::{SharedFrame, VideoKey};
 use crate::paint::GpuTexture;
 use crate::{Gpu, FRAME_CAPACITY};
 
-/// Stills larger than this are scaled down on load; outputs are 1080p and
-/// presentations are shown full screen.
 const MAX_IMAGE: u32 = 3840;
 
 pub enum ImageState {
@@ -26,7 +20,6 @@ pub struct ImageSlot {
 }
 
 impl ImageSlot {
-    /// The texture and its size once loaded.
     pub fn ready(&self) -> Option<(Arc<GpuTexture>, (u32, u32))> {
         match &*self.state.lock().expect("image slot poisoned") {
             ImageState::Ready { texture, size } => Some((texture.clone(), *size)),
@@ -68,7 +61,6 @@ impl MediaTextures {
         Arc::new(Self { gpu, videos: Mutex::default(), images: Mutex::default(), loads })
     }
 
-    /// The texture following `key`, created on first use.
     pub fn video(&self, key: &VideoKey) -> Arc<SharedFrame> {
         self.videos
             .lock()
@@ -78,7 +70,6 @@ impl MediaTextures {
             .clone()
     }
 
-    /// The still at `path`, loading in the background on first use.
     pub fn image(&self, path: &str) -> Arc<ImageSlot> {
         let mut images = self.images.lock().expect("image textures poisoned");
         if let Some(slot) = images.get(path) {
@@ -90,13 +81,10 @@ impl MediaTextures {
         slot
     }
 
-    /// Videos the pump should keep fed.
     pub fn videos(&self) -> Vec<(VideoKey, Arc<SharedFrame>)> {
         self.videos.lock().expect("video textures poisoned").iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
-    /// Forgets textures no scene wants. Outputs still fading one out keep
-    /// their own reference until the fade ends.
     pub fn retain(&self, videos: &HashSet<VideoKey>, images: &HashSet<String>) {
         self.videos.lock().expect("video textures poisoned").retain(|key, _| videos.contains(key));
         self.images.lock().expect("image textures poisoned").retain(|path, _| images.contains(path));
@@ -108,7 +96,6 @@ fn load_image(gpu: &Gpu, path: &str) -> anyhow::Result<(Arc<GpuTexture>, (u32, u
     let mut decoder = image::ImageReader::open(path)?.with_guessed_format()?.into_decoder()?;
     let orientation = decoder.orientation()?;
     let mut decoded = image::DynamicImage::from_decoder(decoder)?;
-    // Browsers honor EXIF orientation for <img>; so do the native outputs.
     decoded.apply_orientation(orientation);
     let limit = MAX_IMAGE.min(gpu.device.limits().max_texture_dimension_2d);
     if decoded.width() > limit || decoded.height() > limit {

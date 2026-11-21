@@ -1,10 +1,3 @@
-//! Hardware video decoding through FFmpeg's hwaccels. Decoded frames are
-//! copied back to system memory as NV12 and take the same path as software
-//! frames from there, so a hardware decoder only takes the decoding work off
-//! the CPU. Software decoding is always the fallback: when a device cannot
-//! be opened, the codec or profile is not supported, or decoding fails
-//! midway, the session continues in software.
-
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{Mutex, OnceLock, RwLock};
@@ -12,20 +5,15 @@ use std::sync::{Mutex, OnceLock, RwLock};
 use ffmpeg_next as ffmpeg;
 use ffmpeg::ffi;
 
-/// Which decoder new sessions use.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum DecoderChoice {
-    /// Software only.
     #[default]
     Software,
-    /// The first working accelerator in [`candidates`] order.
     Auto,
-    /// One accelerator by FFmpeg device name (e.g. `d3d11va`, `vaapi`).
     Device(String),
 }
 
 impl DecoderChoice {
-    /// `"software"`, `"auto"` or a device name; anything unknown is software.
     pub fn parse(value: &str) -> Self {
         match value {
             "auto" => DecoderChoice::Auto,
@@ -36,10 +24,6 @@ impl DecoderChoice {
     }
 }
 
-/// Accelerators worth trying on this platform, in the order Auto tries them,
-/// with a label for the settings page. Intel Quick Sync and AMD AMF are
-/// reached through D3D11VA (Windows) and VA-API (Linux): FFmpeg uses them
-/// as separate decoders rather than hwaccels.
 pub fn candidates() -> &'static [(&'static str, &'static str)] {
     if cfg!(windows) {
         &[
@@ -63,7 +47,6 @@ pub fn candidates() -> &'static [(&'static str, &'static str)] {
 
 static CHOICE: RwLock<DecoderChoice> = RwLock::new(DecoderChoice::Software);
 
-/// Applies to sessions opened from now on; open ones keep their decoder.
 pub fn set_choice(choice: DecoderChoice) {
     *CHOICE.write().expect("decoder choice poisoned") = choice;
 }
@@ -72,10 +55,9 @@ pub fn choice() -> DecoderChoice {
     CHOICE.read().expect("decoder choice poisoned").clone()
 }
 
-/// An FFmpeg hardware device context (`AVBufferRef`).
 struct Device(*mut ffi::AVBufferRef);
 
-// FFmpeg device contexts are reference counted and safe to share between
+// SAFETY: FFmpeg device contexts are reference counted and safe to share between
 // decoders on different threads.
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -100,9 +82,6 @@ fn create_device(kind: ffi::AVHWDeviceType) -> Result<Device, ffmpeg::Error> {
     }
 }
 
-/// One device per accelerator, opened on first use and kept for the app's
-/// lifetime (opening one can take a few hundred milliseconds). `None` once
-/// opening it failed.
 fn shared_device(name: &str) -> Option<&'static Device> {
     static DEVICES: OnceLock<Mutex<HashMap<String, Option<&'static Device>>>> = OnceLock::new();
     let mut devices = DEVICES.get_or_init(Mutex::default).lock().expect("hw devices poisoned");
@@ -121,8 +100,6 @@ fn shared_device(name: &str) -> Option<&'static Device> {
     })
 }
 
-/// Accelerators that open on this computer, probed once (each device is
-/// opened and closed again). FFmpeg builds without one leave it out.
 pub fn available() -> Vec<(&'static str, &'static str)> {
     static AVAILABLE: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
     AVAILABLE
@@ -137,7 +114,6 @@ pub fn available() -> Vec<(&'static str, &'static str)> {
         .clone()
 }
 
-/// The hardware pixel format `codec` produces with `kind`, if it supports it.
 fn hw_format(codec: *const ffi::AVCodec, kind: ffi::AVHWDeviceType) -> Option<ffi::AVPixelFormat> {
     (0..)
         .map(|i| unsafe { ffi::avcodec_get_hw_config(codec, i) })
@@ -147,17 +123,12 @@ fn hw_format(codec: *const ffi::AVCodec, kind: ffi::AVHWDeviceType) -> Option<ff
         .map(|config| config.pix_fmt)
 }
 
-/// A decoder set up for hardware decoding.
 #[derive(Debug, Clone, Copy)]
 pub struct HwDecoder {
     pub name: &'static str,
-    /// Frames in this format live on the GPU and must be transferred.
     pub format: ffi::AVPixelFormat,
 }
 
-/// Picks hardware frames when the decoder offers them, otherwise the
-/// software format, so an unsupported stream decodes in software instead of
-/// failing.
 unsafe extern "C" fn get_format(context: *mut ffi::AVCodecContext, formats: *const ffi::AVPixelFormat) -> ffi::AVPixelFormat {
     let wanted = (*context).opaque as isize as i32;
     let mut software = ffi::AVPixelFormat::AV_PIX_FMT_NONE;
@@ -179,8 +150,6 @@ unsafe extern "C" fn get_format(context: *mut ffi::AVCodecContext, formats: *con
     software
 }
 
-/// Sets `context` up for the chosen accelerator before it is opened.
-/// Returns `None` (leaving it a software decoder) when nothing applies.
 pub fn attach(context: &mut ffmpeg::codec::context::Context, codec: *const ffi::AVCodec) -> Option<HwDecoder> {
     let names: Vec<&'static str> = match choice() {
         DecoderChoice::Software => return None,
@@ -202,8 +171,6 @@ pub fn attach(context: &mut ffmpeg::codec::context::Context, codec: *const ffi::
     None
 }
 
-/// Copies a hardware frame into system memory (NV12, or P010 for 10-bit),
-/// keeping its timestamps and color description.
 pub fn download(frame: &ffmpeg::frame::Video) -> Result<ffmpeg::frame::Video, ffmpeg::Error> {
     let mut software = ffmpeg::frame::Video::empty();
     unsafe {

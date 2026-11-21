@@ -47,8 +47,6 @@ impl Repository {
         })
     }
 
-    /// Removes a media record; the file in the media folder is left alone,
-    /// since services may still point at it.
     pub fn delete_media(&self, id: i64) -> Result<bool> {
         Ok(self.conn.execute("DELETE FROM media WHERE id = ?1", params![id]).context("delete media")? > 0)
     }
@@ -61,7 +59,6 @@ impl Repository {
         Ok(())
     }
 
-    /// Points every library media record at `old` to `new`.
     pub fn relink_media(&self, old: &str, new: &str) -> Result<usize> {
         Ok(self.conn.execute("UPDATE media SET path = ?2 WHERE path = ?1", params![old, new]).context("relink media")?)
     }

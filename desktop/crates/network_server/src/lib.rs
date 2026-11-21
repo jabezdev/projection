@@ -1,10 +1,3 @@
-//! Remote control: the engine's commands and events over a WebSocket, plus
-//! the phone remote's page, on one port. With LAN access off it listens on
-//! this computer only; with it on, other devices must pair first (a code on
-//! the operator screen, then a token), and the remote is advertised as
-//! `palto.local`. Clients on this computer need no pairing unless they are
-//! web pages from another site.
-
 pub mod http;
 pub mod mdns;
 pub mod osc;
@@ -25,22 +18,16 @@ use tokio_tungstenite::tungstenite::Message;
 use pairing::Pairing;
 use throttle::Throttle;
 
-/// Delivers a client command to the engine, or explains why it was refused.
 pub type CommandSink = Arc<dyn Fn(EngineCommand) -> Result<(), String> + Send + Sync>;
 pub type SnapshotProvider = Arc<dyn Fn() -> EngineSnapshot + Send + Sync>;
 
-/// Commands a client may send per second, and in one burst.
 const COMMANDS_PER_SECOND: f64 = 15.0;
 const COMMAND_BURST: f64 = 30.0;
-/// How often a paired device's connection re-checks that it is still paired.
 const RECHECK: Duration = Duration::from_secs(2);
-/// After a failed bind, try again this often (the port may free up).
 const REBIND: Duration = Duration::from_secs(5);
 
-/// Where to listen. Changing it rebinds at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Listen {
-    /// All interfaces when true, else this computer only.
     pub lan: bool,
     pub port: u16,
 }
@@ -56,7 +43,6 @@ impl Listen {
 pub struct ServerStatus {
     pub listening: Option<SocketAddr>,
     pub error: Option<String>,
-    /// Open connections from other devices.
     pub remote_clients: usize,
 }
 
@@ -95,7 +81,6 @@ impl RemoteServer {
         Self { listen, commands, events, snapshot, pairing, status: Arc::default(), shutdown }
     }
 
-    /// Where the server listens and why it cannot, for the operator screen.
     pub fn status(&self) -> Arc<Mutex<ServerStatus>> {
         self.status.clone()
     }
@@ -160,16 +145,11 @@ impl RemoteServer {
     }
 }
 
-/// Who a connection belongs to.
 enum Client {
-    /// A program on this computer.
     Local,
-    /// A paired device, by id.
     Device(String),
 }
 
-/// A page from another site may not drive the outputs just because the
-/// browser runs on this computer.
 fn local_origin(origin: Option<&str>) -> bool {
     let Some(origin) = origin else { return true };
     let host = origin.split("://").nth(1).unwrap_or("").split('/').next().unwrap_or("");
@@ -254,8 +234,6 @@ async fn connection(socket: tokio_tungstenite::WebSocketStream<TcpStream>, clien
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        // Every domain event is complete state, so a fresh
-                        // snapshot fully replaces what was skipped.
                         warn!("WebSocket client lagged by {skipped} events; resynchronizing");
                         for event in sync() {
                             sink.send(Message::Text(serde_json::to_string(&event)?.into())).await?;
@@ -264,8 +242,6 @@ async fn connection(socket: tokio_tungstenite::WebSocketStream<TcpStream>, clien
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
-            // Other devices lose access when LAN access is turned off or
-            // their pairing is removed.
             changed = listen.changed(), if matches!(client, Client::Device(_)) => {
                 if changed.is_err() || !listen.borrow().lan {
                     break;
@@ -284,7 +260,6 @@ async fn connection(socket: tokio_tungstenite::WebSocketStream<TcpStream>, clien
     Ok(())
 }
 
-/// `text` as a QR code in SVG, dark on light, for the operator screen.
 pub fn qr_svg(text: &str) -> Option<String> {
     let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
     Some(code.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).quiet_zone(true).build())

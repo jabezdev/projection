@@ -15,11 +15,9 @@ pub enum Mode {
 pub enum BackgroundKind {
     Image,
     Video,
-    /// A built-in animated background: the path is `shader:<preset>`.
     Shader,
 }
 
-/// The `shader:` prefix of shader background paths.
 pub const SHADER_PREFIX: &str = "shader:";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -44,14 +42,11 @@ pub struct ProgramState {
     pub display: DisplayMode,
     pub mode: Mode,
 
-    /// Active item within a session playlist (mixed media).
     pub active_item_id: Option<i64>,
     pub next_item_id: Option<i64>,
 
-    /// Optional internal position within the active item (line/slide/page/etc.).
     pub active_step_index: Option<u32>,
 
-    /// Resolved final text being rendered.
     pub active_text: String,
 
     pub background: Option<Background>,
@@ -76,11 +71,8 @@ pub struct EngineSnapshot {
     pub program_state: ProgramState,
     pub version: u64,
 
-    /// Loaded project (Phase 2). When absent, navigation commands are no-ops.
     pub project: Option<ProjectModel>,
 
-    /// Foreground media transport. Revised independently of `version` so
-    /// position reports never resend the project or program.
     #[serde(default)]
     pub playback: Option<PlaybackState>,
     #[serde(default)]

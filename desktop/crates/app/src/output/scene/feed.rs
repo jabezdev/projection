@@ -11,15 +11,12 @@ use render_engine::{
 
 use super::*;
 
-/// Rebuilds both scenes whenever the engine or the output style changes.
 #[derive(Clone)]
 pub struct SceneFeed {
     pub(super) refresh: Sender<()>,
 }
 
 impl SceneFeed {
-    /// `config` reads the current output style; `apply` receives the scenes
-    /// that changed and the media they and the neighboring cues need.
     pub fn start(
         snapshot: Arc<RwLock<EngineSnapshot>>,
         config: impl Fn() -> OutputConfig + Send + 'static,
@@ -45,7 +42,6 @@ pub(super) fn run(
 ) {
     let mut last: Option<(MainScene, ConfidenceScene, MediaPlan)> = None;
     while requests.recv().is_ok() {
-        // Bursts of changes produce one rebuild.
         while requests.try_recv().is_ok() {}
         let config = config();
         let (main, confidence, plan) = {

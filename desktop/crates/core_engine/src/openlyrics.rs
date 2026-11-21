@@ -1,10 +1,3 @@
-//! OpenLyrics (https://docs.openlyrics.org) import: one XML song becomes a
-//! `magi.song.v1` document. Each `<verse>` becomes a part and each of its
-//! `<lines>` a slide; `<br/>` is a line break. Chords, comments and formatting
-//! tags keep only their text. The `verseOrder` property becomes the
-//! arrangement (document order when it is missing). Only the first language
-//! present is imported.
-
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
@@ -13,7 +6,6 @@ use crate::song::SONG_FORMAT;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportedSong {
     pub title: String,
-    /// A `magi.song.v1` document, serialized as stored in the library.
     pub document: String,
 }
 
@@ -22,7 +14,6 @@ struct Verse {
     slides: Vec<String>,
 }
 
-/// Parses one OpenLyrics document.
 pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
     let mut reader = Reader::from_str(xml);
     let mut path: Vec<String> = Vec::new();
@@ -30,8 +21,6 @@ pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
     let mut verse_order = String::new();
     let mut verses: Vec<Verse> = Vec::new();
     let mut language: Option<String> = None;
-    // Text collects inside <title>, <verseOrder> and <lines>; skipping counts
-    // nested elements whose text is dropped (comments, other languages).
     let mut text = String::new();
     let mut skip_depth = 0usize;
     let mut saw_song = false;
@@ -70,8 +59,6 @@ pub fn parse(xml: &str) -> anyhow::Result<ImportedSong> {
                     text.push('\n');
                 }
             }
-            // Only <br/> breaks a line; the file's own line breaks and
-            // indentation are insignificant whitespace.
             Event::Text(content) if skip_depth == 0 => push_text(&mut text, &content.xml10_content()),
             Event::CData(content) if skip_depth == 0 => push_text(&mut text, &content.xml10_content()),
             Event::GeneralRef(reference) if skip_depth == 0 => {
@@ -124,7 +111,6 @@ fn in_lines(path: &[String]) -> bool {
     path.iter().any(|n| n == "lines")
 }
 
-/// Appends text with every whitespace run collapsed to one space.
 fn push_text(text: &mut String, content: &str) {
     for (index, word) in content.split(char::is_whitespace).enumerate() {
         if index > 0 && !text.ends_with([' ', '\n']) {
@@ -134,13 +120,10 @@ fn push_text(text: &mut String, content: &str) {
     }
 }
 
-/// One line per `<br/>`, trimmed. Empty lines are dropped: a blank line
-/// inside a slide would split it in two.
 fn clean(text: &str) -> String {
     text.split('\n').map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
 }
 
-/// Part type and number from an OpenLyrics verse name such as `v1`, `c`, `p2` or `b1a`.
 fn part_kind(name: &str) -> (&'static str, Option<u32>) {
     let mut chars = name.chars();
     let kind = match chars.next().map(|c| c.to_ascii_lowercase()) {
@@ -163,7 +146,6 @@ fn document(verses: &[Verse], verse_order: &str) -> serde_json::Value {
         .enumerate()
         .map(|(index, verse)| {
             let (kind, number) = part_kind(&verse.name);
-            // Numbers stay as written unless two parts would share a label.
             let mut number = number.unwrap_or(1);
             while used.contains(&(kind, number)) {
                 number += 1;

@@ -1,13 +1,8 @@
-//! Per-frame timings of uploading and drawing, summed per reporting window
-//! and logged by the app with the decoding stages. Recording is a few atomic
-//! adds per frame, so it is always on.
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::OutputRole;
 
-/// Count, total and worst time of one stage since the last [`Stage::take`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StageStats {
     pub count: u64,
@@ -68,12 +63,8 @@ impl Default for Stage {
     }
 }
 
-/// Writing a video frame to its texture (and converting YUV), on the pump.
 pub static UPLOAD: Stage = Stage::new();
-/// Per output: laying out and encoding a frame on its thread.
 static DRAW: [Stage; 2] = [Stage::new(), Stage::new()];
-/// Per output: from submitting a frame until the GPU finished it, which
-/// includes waiting behind other work queued on the GPU.
 static GPU: [Stage; 2] = [Stage::new(), Stage::new()];
 
 fn index(role: OutputRole) -> usize {
@@ -91,16 +82,13 @@ pub(crate) fn gpu(role: OutputRole) -> &'static Stage {
     &GPU[index(role)]
 }
 
-/// One window of render timings.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderTimings {
     pub upload: StageStats,
-    /// Projection, then confidence.
     pub draw: [StageStats; 2],
     pub gpu: [StageStats; 2],
 }
 
-/// The timings since the last call.
 pub fn take() -> RenderTimings {
     RenderTimings {
         upload: UPLOAD.take(),

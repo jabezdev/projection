@@ -67,7 +67,6 @@ impl Repository {
         }
         Ok(())
     }
-    /// Deletes a library song. Services keep their own copies.
     pub fn delete_song(&self, id: i64) -> Result<bool> {
         Ok(self.conn.execute("DELETE FROM songs WHERE id = ?1", params![id]).context("delete song")? > 0)
     }

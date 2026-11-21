@@ -12,7 +12,7 @@ fn ambient_sessions_loop_silently_and_close_on_request() {
     let engine = media_engine::MediaEngine::with_audio(None);
     let before = media_engine::active_decoders();
     engine.set_ambient(std::slice::from_ref(&path), &[]);
-    engine.set_ambient(std::slice::from_ref(&path), &[]); // unchanged: no reopen
+    engine.set_ambient(std::slice::from_ref(&path), &[]);
     let deadline = Instant::now() + Duration::from_secs(2);
     while media_engine::active_decoders() < before + 1 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
@@ -28,7 +28,6 @@ fn ambient_sessions_loop_silently_and_close_on_request() {
         }
         std::thread::sleep(Duration::from_millis(4));
     }
-    // The 2 s clip loops on a timeline that keeps increasing.
     assert!(shown.last().is_some_and(|&pts| pts > 2_200_000), "{:?}", shown.last());
     assert!(shown.windows(2).all(|w| w[1] > w[0]));
     engine.set_ambient(&[], &[]);
@@ -54,7 +53,6 @@ fn a_prepared_ambient_loop_waits_on_its_first_frame_until_shown() {
     let still = engine.ambient_frame(&path, now_us()).map(|f| f.pts_us).or(first);
     assert_eq!(still, first, "a prepared loop does not advance");
 
-    // Shown: the same session plays on, no reopen.
     engine.set_ambient(std::slice::from_ref(&path), &[]);
     assert_eq!(media_engine::active_decoders(), before + 1);
     std::thread::sleep(Duration::from_millis(500));
@@ -80,7 +78,6 @@ fn a_cue_uses_the_session_prepared_for_its_file() {
     std::thread::sleep(Duration::from_millis(300));
     assert!(session.current_frame(now_us()).is_some());
 
-    // Preparing another file never touches the foreground.
     engine.prepare(Some(path));
     wait_for_decoders(before + 2);
     engine.prepare(None);

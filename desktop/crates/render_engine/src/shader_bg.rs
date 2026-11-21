@@ -1,12 +1,3 @@
-//! Built-in animated backgrounds. Each active preset renders into its own
-//! shared frame on the frame pump, like a decoded video, so both outputs and
-//! the previews sample one texture and no output does extra work.
-//!
-//! Hard limits keep them from taking over the GPU: a fixed render size
-//! (scaled up when drawn), a frame rate cap, never more than one frame in
-//! flight, and a fall back to a still frame when the GPU keeps falling
-//! behind. With animation off a preset renders once, as a still.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -16,16 +7,11 @@ use crate::frame::SharedFrame;
 use crate::paint::{css_color, Rgba};
 use crate::Gpu;
 
-/// Render size; outputs scale it to fill. Smooth gradients lose nothing.
 pub const SHADER_SIZE: (u32, u32) = (960, 540);
-/// Frame rate cap.
 const FRAME_INTERVAL: Duration = Duration::from_millis(33);
-/// A preset falls back to a still when more than half its frames in this
-/// window were due while the previous one was still on the GPU.
 const BUDGET_WINDOW: Duration = Duration::from_secs(5);
 const PRESETS: [&str; 3] = ["gradient", "aurora", "bokeh"];
 
-/// A preset and its parameters, carried in `VideoKey::Shader`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShaderSpec {
     pub preset: String,
@@ -36,7 +22,6 @@ pub struct ShaderSpec {
 }
 
 impl ShaderSpec {
-    /// `preset|#colorA|#colorB|speed|animate`.
     pub fn encode(preset: &str, color_a: &str, color_b: &str, speed: f32, animate: bool) -> String {
         format!("{preset}|{color_a}|{color_b}|{speed}|{}", if animate { 1 } else { 0 })
     }
@@ -71,7 +56,6 @@ struct State {
     next_due: Instant,
     rendered: bool,
     frozen: bool,
-    /// Cleared when the GPU finishes the last submitted frame.
     in_flight: Arc<AtomicBool>,
     window: (Instant, u32, u32),
 }
@@ -130,13 +114,10 @@ impl ShaderBackgrounds {
         Self { pipeline, uniforms, group, states: HashMap::new() }
     }
 
-    /// Forgets presets no longer shown.
     pub fn retain(&mut self, keys: &[&String]) {
         self.states.retain(|key, _| keys.contains(&key));
     }
 
-    /// Renders `key` into `frame` when a frame is due and the GPU has room.
-    /// Returns whether work was submitted.
     pub fn tick(&mut self, gpu: &Gpu, key: &str, frame: &SharedFrame, now: Instant) -> bool {
         let Some(spec) = ShaderSpec::parse(key) else { return false };
         let state = self.states.entry(key.to_string()).or_insert_with(|| State {

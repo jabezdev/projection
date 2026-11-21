@@ -1,5 +1,3 @@
-
-
 use crate::Gpu;
 
 use super::*;
@@ -30,7 +28,6 @@ fn scales_a_full_size_frame_into_a_small_surface() {
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
-        // A white source frame.
         let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -49,7 +46,6 @@ fn scales_a_full_size_frame_into_a_small_surface() {
     gpu.queue.submit(Some(encoder.finish()));
     let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
     assert!(pollster::block_on(scope.pop()).is_none(), "the scale pass is valid");
-    // A second size reuses nothing stale.
     let _ = scaler.source(&gpu.device, (1280, 720));
     assert_eq!(scaler.source.as_ref().map(|(t, ..)| (t.width(), t.height())), Some((1280, 720)));
 }

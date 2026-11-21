@@ -1,4 +1,3 @@
-
 use core_engine::song::Song;
 use protocol::{
     DisplayMode, OutputConfig, PlaybackState, ProgramState, ProjectModel, SessionItemKind,
@@ -9,7 +8,6 @@ use render_engine::{
 
 use super::*;
 
-/// A short song in the confidence style, for the output settings dialog.
 pub fn confidence_sample_scene(config: &OutputConfig) -> ConfidenceScene {
     let group = |key: &str, code: &str, color: &str, lines: &[&str]| ConfidenceGroup {
         key: key.into(),
@@ -33,7 +31,6 @@ pub fn confidence_sample_scene(config: &OutputConfig) -> ConfidenceScene {
     }
 }
 
-/// Teleprompter groups: one per song part occurrence, one per other item.
 pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, ConfidenceGroup)> {
     let mut groups = Vec::new();
     for item in project.map(|p| p.session.items.as_slice()).unwrap_or_default() {
@@ -45,7 +42,6 @@ pub fn confidence_groups(project: Option<&ProjectModel>) -> Vec<(i64, usize, Con
             SessionItemKind::Audio { .. } => ("audio", &Vec::new()),
             SessionItemKind::Presentation { .. } => ("presentation", &Vec::new()),
             SessionItemKind::Capture { .. } => ("capture", &Vec::new()),
-            // Headings group the operator's list; the stage does not need them.
             SessionItemKind::Section {} => continue,
         };
         if kind != "text" {

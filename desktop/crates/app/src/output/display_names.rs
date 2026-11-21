@@ -1,21 +1,9 @@
-//! Human names for the connected displays.
-//!
-//! Tauri names a monitor by its system device: `\\.\DISPLAY1` on Windows (a
-//! GDI path that Windows renumbers when displays are replugged), the
-//! connector (`HDMI-A-1`) on Linux. On Windows the display configuration API
-//! gives the monitor's own name from its EDID ("BenQ GW2480"), how it is
-//! connected and a device path that stays the same across renumbering.
-
 use std::collections::HashMap;
 
-/// What the system says about one display, keyed by Tauri's monitor name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DisplayName {
-    /// The monitor's model name; empty when it reports none.
     pub friendly: String,
-    /// "HDMI", "DisplayPort", "Built-in" and so on, when known.
     pub connector: Option<&'static str>,
-    /// Stable identity of the physical monitor and port.
     pub device: Option<String>,
 }
 
@@ -35,7 +23,6 @@ pub fn display_names() -> HashMap<String, DisplayName> {
     HashMap::new()
 }
 
-/// The display's current refresh rate in Hz (`\\.\DISPLAY2`), when known.
 #[cfg(windows)]
 pub fn refresh_rate(system_name: &str) -> Option<u32> {
     use windows_sys::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_CURRENT_SETTINGS};
@@ -44,7 +31,6 @@ pub fn refresh_rate(system_name: &str) -> Option<u32> {
     unsafe {
         let mut mode: DEVMODEW = std::mem::zeroed();
         mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
-        // 0 and 1 mean "the hardware default", not a rate.
         (EnumDisplaySettingsW(name.as_ptr(), ENUM_CURRENT_SETTINGS, &mut mode) != 0 && mode.dmDisplayFrequency > 1).then_some(mode.dmDisplayFrequency)
     }
 }
@@ -54,14 +40,11 @@ pub fn refresh_rate(_system_name: &str) -> Option<u32> {
     None
 }
 
-/// The display's number in Windows' own naming (`\\.\DISPLAY2` → 2).
 pub fn system_number(system_name: &str) -> Option<u32> {
     let digits: String = system_name.chars().rev().take_while(char::is_ascii_digit).collect::<Vec<_>>().into_iter().rev().collect();
     system_name.to_ascii_uppercase().contains("DISPLAY").then(|| digits.parse().ok()).flatten()
 }
 
-/// What the operator sees for a display: its model name, else something
-/// readable made from the system name.
 pub fn readable_name(system_name: Option<&str>, info: Option<&DisplayName>) -> String {
     if let Some(info) = info {
         if !info.friendly.trim().is_empty() {
@@ -81,8 +64,6 @@ pub fn readable_name(system_name: Option<&str>, info: Option<&DisplayName>) -> S
     }
 }
 
-/// A display's shape as people name it: 1920×1080 is "16:9", 1366×768 is
-/// "16:9" too (not 683:384), 3440×1440 is "21:9".
 pub fn aspect_label(width: u32, height: u32) -> String {
     if width == 0 || height == 0 {
         return String::new();
@@ -99,7 +80,6 @@ pub fn aspect_label(width: u32, height: u32) -> String {
         ("3:4", 3.0 / 4.0),
     ];
     let ratio = width as f64 / height as f64;
-    // Ultrawide panels are sold as 21:9 but range from 2.33 to 2.40.
     let tolerance = |name: &str| if name == "21:9" { 0.03 } else { 0.012 };
     if let Some((name, _)) = COMMON.iter().find(|(name, value)| (ratio / value - 1.0).abs() <= tolerance(name)) {
         return (*name).to_string();
@@ -139,12 +119,8 @@ mod win {
         })
     }
 
-    /// Active display paths, each mapped from its GDI name. A cloned
-    /// (duplicated) display has several targets on one source; their names
-    /// are joined.
     pub fn query() -> Result<HashMap<String, DisplayName>, u32> {
         let mut paths = Vec::new();
-        // The topology can change between sizing and querying; retry then.
         for _ in 0..3 {
             let (mut path_count, mut mode_count) = (0u32, 0u32);
             let status = unsafe { GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count) };

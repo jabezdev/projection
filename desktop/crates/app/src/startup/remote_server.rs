@@ -12,8 +12,6 @@ use super::Channels;
 use crate::settings::AppConfig;
 use crate::{input, remote};
 
-/// Starts the WebSocket and phone remote server and the OSC listener. Both
-/// follow Settings → Remote while running.
 pub(super) fn start(app: &tauri::App, channels: &Channels, config: &RwLock<AppConfig>, dir: &Path) {
     let saved = config.read().expect("config lock poisoned").clone();
     let pairing = Arc::new(Pairing::load(dir.join(pairing::FILENAME)));

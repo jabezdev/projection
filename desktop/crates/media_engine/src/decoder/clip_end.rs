@@ -1,12 +1,9 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-
-
 use super::*;
 
 impl Worker {
-    /// The clip's end (or the file's): drain decoders, then loop or finish.
     pub(super) fn end_of_clip(&mut self) -> anyhow::Result<()> {
         if let Some(audio) = &mut self.audio {
             let _ = audio.decoder.send_eof();
@@ -14,11 +11,9 @@ impl Worker {
         if self.audio.is_some() {
             self.receive_audio()?;
             if !self.clip.looping {
-                // No more audio: the session clock continues on wall time.
                 self.audio.as_ref().unwrap().out.drained.store(true, Ordering::Release);
             }
         }
-        // Decode every stashed packet before flushing the video decoder.
         while !self.video_stash.is_empty() {
             if self.shared.interrupted() {
                 return Ok(());
@@ -46,8 +41,6 @@ impl Worker {
         }
     }
 
-    /// Continues at the clip start on a timeline one loop later. Audio is not
-    /// flushed, so it plays straight through the wrap.
     pub(super) fn wrap(&mut self) -> anyhow::Result<()> {
         let start = self.clip.start_us;
         let content_end = self.content_end_us.max(start + 1);
@@ -57,7 +50,6 @@ impl Worker {
         }
         .max(1);
         let next_offset = if self.shared.finished.load(Ordering::Acquire) {
-            // Resuming from a finished clip: continue after its end.
             self.shared.end_timeline_us.load(Ordering::Acquire) - start
         } else {
             self.timeline_offset_us + loop_len
@@ -65,12 +57,10 @@ impl Worker {
         self.seek_media(start)?;
         self.timeline_offset_us = next_offset;
         if self.capturing_head {
-            // The whole clip fit in the head.
             self.capturing_head = false;
             self.head_complete = !self.head.is_empty();
         }
         if self.head_complete {
-            // Show the prepared start at once; the decoder skips past it.
             for (media_us, frame) in &self.head {
                 self.pending_frames.push_back(frame.retimed(self.epoch, media_us + next_offset));
             }

@@ -1,12 +1,8 @@
-
 use cosmic_text::FontSystem;
 
 use super::*;
 
 impl Fonts {
-    /// Kerning lost between words: cosmic-text shapes each word on its own,
-    /// so pairs with a space (`T` then space, space then `A`) never apply.
-    /// The difference, in em, between shaping `before after` whole and in pieces.
     pub(super) fn space_kerning(&self, system: &mut FontSystem, id: cosmic_text::fontdb::ID, weight: cosmic_text::fontdb::Weight, before: char, after: char) -> f32 {
         if let Some(kern) = self.space_kerning.lock().expect("kerning poisoned").get(&(id, before, after)) {
             return *kern;
@@ -28,8 +24,6 @@ impl Fonts {
     }
 }
 
-/// Applies kerning around the spaces of one left-to-right line in place,
-/// keeping its alignment. Returns the change in width.
 pub(super) fn kern_spaces(fonts: &Fonts, system: &mut FontSystem, paragraph: &str, glyphs: &mut [cosmic_text::LayoutGlyph], size: f32, align: TextAlign) -> f32 {
     if glyphs.iter().any(|g| g.level.is_rtl()) {
         return 0.0;

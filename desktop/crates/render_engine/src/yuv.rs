@@ -1,22 +1,12 @@
-//! YUV video frames: their planes upload as they were decoded (about 40% of
-//! the bytes of RGBA, with no CPU conversion) and one GPU pass converts them
-//! into the frame's shared RGBA texture, scaling them down when they are
-//! larger than it.
-
 use crate::Gpu;
 
-/// How a YUV frame's planes are laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YuvLayout {
-    /// Y, U and V planes; chroma at half width and height.
     I420,
-    /// Y plane and one interleaved UV plane.
     Nv12,
-    /// Not YUV: one BGRA plane, only swizzled and scaled (screen captures).
     Bgra,
 }
 
-/// The matrix a frame was encoded with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YuvMatrix {
     Bt601,
@@ -24,14 +14,11 @@ pub enum YuvMatrix {
     Bt2020,
 }
 
-/// A YUV frame's pixels: each plane's bytes (from its first row on) and
-/// bytes per row. I420 uses all three; NV12 the first two.
 #[derive(Debug, Clone, Copy)]
 pub struct YuvPixels<'a> {
     pub layout: YuvLayout,
     pub planes: [(&'a [u8], usize); 3],
     pub matrix: YuvMatrix,
-    /// Full (0–255) rather than limited (16–235) range.
     pub full_range: bool,
 }
 
@@ -45,7 +32,6 @@ struct Uniforms {
     flags: [f32; 2],
 }
 
-/// Rows mapping normalized (Y, U, V) to gamma-encoded R, G and B.
 fn conversion(matrix: YuvMatrix, full_range: bool) -> [[f32; 4]; 3] {
     let (kr, kb) = match matrix {
         YuvMatrix::Bt601 => (0.299, 0.114),
@@ -53,7 +39,6 @@ fn conversion(matrix: YuvMatrix, full_range: bool) -> [[f32; 4]; 3] {
         YuvMatrix::Bt2020 => (0.2627, 0.0593),
     };
     let kg = 1.0 - kr - kb;
-    // Y' = ys * (Y - yo), C' = cs * (C - 0.5).
     let (ys, yo, cs) = if full_range { (1.0, 0.0, 1.0) } else { (255.0 / 219.0, 16.0 / 255.0, 255.0 / 224.0) };
     let rv = 2.0 * (1.0 - kr);
     let bu = 2.0 * (1.0 - kb);
@@ -63,7 +48,6 @@ fn conversion(matrix: YuvMatrix, full_range: bool) -> [[f32; 4]; 3] {
     [row(0.0, rv), row(gu, gv), row(bu, 0.0)]
 }
 
-/// The conversion pipeline, shared by every video.
 pub(crate) struct YuvPipeline {
     layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
@@ -137,13 +121,11 @@ impl YuvPipeline {
 }
 
 impl Gpu {
-    /// Created on the first YUV frame.
     pub(crate) fn yuv(&self) -> &YuvPipeline {
         self.yuv.get_or_init(|| YuvPipeline::new(&self.device))
     }
 }
 
-/// One video's plane textures, recreated when its size or layout changes.
 pub(crate) struct YuvPlanes {
     key: (YuvLayout, u32, u32),
     textures: Vec<wgpu::Texture>,
@@ -191,7 +173,6 @@ impl YuvPlanes {
             mapped_at_creation: false,
         });
         let pipeline = gpu.yuv();
-        // NV12 has no V plane and BGRA no chroma; the shader ignores them then.
         let u_view = views.get(1).unwrap_or(&views[0]);
         let v_view = views.get(2).unwrap_or(u_view);
         let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -208,9 +189,6 @@ impl YuvPlanes {
         Self { key: (layout, width, height), textures, uniforms, group, last: None }
     }
 
-    /// Uploads the planes and converts them into the top-left `out` pixels
-    /// of `target`. Returns false (uploading nothing) when a plane is too
-    /// short for its size.
     pub(crate) fn convert(
         slot: &mut Option<YuvPlanes>,
         gpu: &Gpu,
@@ -222,7 +200,6 @@ impl YuvPlanes {
         let (width, height) = size;
         let (cw, ch) = chroma_size(width, height);
         let planes: &[(u32, u32, u32)] = match pixels.layout {
-            // (width, height, bytes per pixel) of each plane.
             YuvLayout::I420 => &[(width, height, 1), (cw, ch, 1), (cw, ch, 1)],
             YuvLayout::Nv12 => &[(width, height, 1), (cw, ch, 2)],
             YuvLayout::Bgra => &[(width, height, 4)],
@@ -293,11 +270,9 @@ mod tests {
         let close = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01);
         assert!(close(apply(rows, [16.0 / 255.0, 0.5, 0.5]), [0.0, 0.0, 0.0]));
         assert!(close(apply(rows, [235.0 / 255.0, 0.5, 0.5]), [1.0, 1.0, 1.0]));
-        // BT.709 limited-range red is Y 63, Cb 102, Cr 240.
         assert!(close(apply(rows, [63.0 / 255.0, 102.0 / 255.0, 240.0 / 255.0]), [1.0, 0.0, 0.0]));
         let full = conversion(YuvMatrix::Bt601, true);
         assert!(close(apply(full, [1.0, 0.5, 0.5]), [1.0, 1.0, 1.0]));
-        // BT.601 full-range green is Y 150, Cb 44, Cr 21.
         assert!(close(apply(full, [150.0 / 255.0, 44.0 / 255.0, 21.0 / 255.0]), [0.0, 1.0, 0.0]));
     }
 
@@ -323,7 +298,6 @@ mod tests {
         }
     }
 
-    /// A solid red frame with padded rows (BT.709 limited range, or BGRx).
     fn red(layout: YuvLayout, (width, height): (u32, u32)) -> Frame {
         let (cw, ch) = chroma_size(width, height);
         let plane = |w: u32, h: u32, value: &[u8]| {

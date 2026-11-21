@@ -3,12 +3,9 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-
 use super::*;
 
 impl RenderEngine {
-    /// Starts rendering still previews of every output's scene, delivered to
-    /// `sink` once each new scene settles.
     pub fn start_previews(&self, sink: SnapshotSink) -> anyhow::Result<()> {
         let aspects = self.aspects.lock().expect("aspects poisoned").clone();
         let sizes = self.sizes.lock().expect("sizes poisoned").iter()
@@ -25,15 +22,10 @@ impl RenderEngine {
         Ok(())
     }
 
-    /// Reports when a shown output waits for new media and when it shows it.
-    /// Set once.
     pub fn on_status(&self, sink: StatusSink) {
         let _ = self.resources.status.set(sink);
     }
 
-    /// Starts a live monitor of `spec.role` presenting into `spec.target`,
-    /// parked until [`RenderEngine::set_monitor`] gives it a size. Call on the
-    /// thread that owns the window, like [`RenderEngine::start`].
     pub fn add_monitor(&self, spec: MonitorSpec) -> anyhow::Result<()> {
         let role = spec.role;
         let surface = self
@@ -51,7 +43,6 @@ impl RenderEngine {
         Ok(())
     }
 
-    /// Shows `role`'s monitor at `size` physical pixels, or parks it.
     pub fn set_monitor(&self, role: OutputRole, size: Option<(u32, u32)>) {
         if let Some(monitor) = self.monitors.lock().expect("monitors poisoned").get(&role) {
             monitor.set_surface(size);
@@ -62,7 +53,6 @@ impl RenderEngine {
         self.monitors.lock().expect("monitors poisoned").contains_key(&role)
     }
 
-    /// `role`'s letterboxed content size.
     pub(super) fn content_size(&self, role: OutputRole) -> (u32, u32) {
         let size = self.sizes.lock().expect("sizes poisoned").get(&role).copied().unwrap_or((1920, 1080));
         let aspect = self.aspects.lock().expect("aspects poisoned").get(&role).copied();
@@ -70,8 +60,6 @@ impl RenderEngine {
         (width, height)
     }
 
-    /// Previews a scene that no output shows: a style sample of the
-    /// projection (main scene) or the confidence screen.
     pub fn preview_style(&self, scene: Scene) {
         let target = match scene {
             Scene::Main(_) => PreviewTarget::Style,
@@ -86,8 +74,6 @@ impl RenderEngine {
         &self.gpu
     }
 
-    /// Replaces what `role` shows. Textures no current scene uses are
-    /// released (outputs keep their own until fades end).
     pub fn set_scene(&self, role: OutputRole, scene: Scene) {
         let mut scenes = self.scenes.lock().expect("scenes poisoned");
         scenes.insert(role, scene.clone());
@@ -104,8 +90,6 @@ impl RenderEngine {
         }
     }
 
-    /// Loads `images` ahead of their cues (the next and previous slides), so
-    /// they appear without a decode delay. Replaces the previous set.
     pub fn preload(&self, images: &[String]) {
         let wanted: HashSet<String> = images.iter().cloned().collect();
         let mut preloads = self.preloads.lock().expect("preloads poisoned");
@@ -121,7 +105,6 @@ impl RenderEngine {
         self.retain_media(&scenes);
     }
 
-    /// Keeps the textures the scenes use plus the preloaded stills.
     pub(super) fn retain_media(&self, scenes: &HashMap<OutputRole, Scene>) {
         let (mut videos, mut images) = (HashSet::new(), self.preloads.lock().expect("preloads poisoned").clone());
         for scene in scenes.values() {
@@ -136,7 +119,6 @@ impl RenderEngine {
     }
 }
 
-/// Media a scene draws.
 pub(super) fn scene_sources(scene: &Scene) -> Vec<MediaSource> {
     match scene {
         Scene::Main(main) => main

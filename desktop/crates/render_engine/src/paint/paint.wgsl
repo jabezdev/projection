@@ -1,5 +1,4 @@
 struct Globals {
-    // xy: target size in pixels.
     size: vec4<f32>,
 }
 
@@ -8,16 +7,10 @@ struct Globals {
 @group(1) @binding(0) var source: texture_2d<f32>;
 
 struct Instance {
-    // Local rectangle (x, y, w, h) in pixels, before the transform.
     @location(0) rect: vec4<f32>,
-    // Texture coordinates (u0, v0, u1, v1).
     @location(1) uv: vec4<f32>,
-    // Straight-alpha color, multiplied into the result.
     @location(2) color: vec4<f32>,
-    // Transform: origin (x, y) in pixels, then cos and sin of the rotation.
     @location(3) transform: vec4<f32>,
-    // x: 0 solid, 1 texture, 2 coverage mask, 3 distance field (y: spread,
-    // zw: the distance band over which coverage falls from 1 to 0).
     @location(4) kind: vec4<f32>,
 }
 
@@ -55,7 +48,6 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     if (in.kind.x < 2.5) {
         return vec4<f32>(in.color.rgb, in.color.a * texel.r);
     }
-    // Signed distance in pixels, positive outside the glyph.
     let distance = (texel.r - 0.5) * 2.0 * in.kind.y;
     let coverage = 1.0 - smoothstep(in.kind.z, in.kind.w, distance);
     return vec4<f32>(in.color.rgb, in.color.a * coverage);

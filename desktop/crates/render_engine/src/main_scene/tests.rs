@@ -1,11 +1,9 @@
-
 use crate::scene::{LyricStyle, Vertical};
 
 use super::*;
 
 #[test]
 fn geometry_matches_the_parity_reference_at_1080p() {
-    // Values from the parity references in tools/parity.
     let g = LyricGeometry::new(&LyricStyle::default(), (1920, 1080));
     let close = |a: f32, b: f32| (a - b).abs() < 0.01;
     assert!(close(g.area.x, 96.0) && close(g.area.y, 108.0) && close(g.area.w, 1728.0) && close(g.area.h, 864.0), "{:?}", g.area);

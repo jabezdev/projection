@@ -1,4 +1,3 @@
-
 use crate::text::{AtlasFull, Fonts, TextLayout};
 
 use super::*;
@@ -36,8 +35,6 @@ impl Painter {
                     let (sin, cos) = angle.sin_cos();
                     let transform = [x.round(), y.round(), cos, sin];
                     if !effects.is_empty() {
-                        // Effects are one batch under the fill, so a glyph's
-                        // outline never covers its neighbor.
                         self.effect_instances(queue, fonts, layout, effects, transform, &mut instances)?;
                         push_batch(&mut batches, Binding::Sdf, scissor, start..instances.len() as u32);
                     }
@@ -69,7 +66,6 @@ impl Painter {
             if end == start {
                 continue;
             }
-            // Solid fills ignore the texture, so they join any batch.
             match batches.last_mut() {
                 Some(last) if last.scissor == scissor && binding.is_none_or(|b| b == last.binding) && last.range.end == start => {
                     last.range.end = end;
@@ -79,7 +75,6 @@ impl Painter {
         }
         Ok((instances, batches))
     }
-    /// Shadow, glow and outline instances for every glyph, in that order.
     pub(super) fn effect_instances(&mut self, queue: &wgpu::Queue, fonts: &Fonts, layout: &TextLayout, effects: &TextEffects, transform: [f32; 4], instances: &mut Vec<Instance>) -> Result<(), AtlasFull> {
         let spread = effects.spread();
         let atlas_size = self.sdf.size();
@@ -89,7 +84,6 @@ impl Painter {
                 glyphs.push(([(glyph.x + g.left) as f32, (glyph.y - g.top) as f32, g.width as f32, g.height as f32], g));
             }
         }
-        // (color, offset, edge band): coverage falls from 1 to 0 across the band.
         let mut layers = Vec::new();
         if let Some((color, dx, dy, blur)) = effects.shadow {
             let soft = blur.max(0.7);
@@ -119,8 +113,6 @@ impl Painter {
     }
 }
 
-/// Extends the last batch when it draws from the same texture with the same
-/// clip and ends where `range` starts; otherwise starts a new one.
 pub(super) fn push_batch(batches: &mut Vec<Batch>, binding: Binding, scissor: Option<[u32; 4]>, range: std::ops::Range<u32>) {
     if range.is_empty() {
         return;

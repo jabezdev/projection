@@ -1,6 +1,3 @@
-//! Offscreen rendering of a scene, for tests and the parity check. Uses the
-//! same renderers and painter as the windows.
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -43,8 +40,6 @@ impl Capture {
         self.renderer.set_scene(scene, &self.resources.media, now);
     }
 
-    /// Renders one still frame of every shader background the scene uses
-    /// (outputs get theirs from the frame pump, which captures do not run).
     pub fn render_shaders(&self) {
         let mut shaders = crate::shader_bg::ShaderBackgrounds::new(&self.resources.gpu.device);
         for (key, frame) in self.resources.media.videos() {
@@ -54,13 +49,10 @@ impl Capture {
         }
     }
 
-    /// Whether a transition or loading media is still in progress at `now`.
     pub fn busy(&self, now: Instant) -> bool {
         !self.renderer.activity(now).settled
     }
 
-    /// Advances time from `start` until fades end and media has loaded (up to
-    /// `limit` of scene time), then renders. Returns the frame and its time.
     pub fn settle(&mut self, size: (u32, u32), start: Instant, limit: Duration) -> (Vec<u8>, Instant) {
         let mut now = start;
         loop {
@@ -68,21 +60,17 @@ impl Capture {
             if !self.busy(now) || now - start >= limit {
                 return (self.render(size, now), now);
             }
-            // Let image loads progress in real time while scene time advances.
             std::thread::sleep(Duration::from_millis(5));
             now += Duration::from_millis(50);
         }
     }
 
-    /// Renders the scene at `now` and reads it back as tightly packed RGBA.
     pub fn render(&mut self, size: (u32, u32), now: Instant) -> Vec<u8> {
         let list = self.renderer.frame(&self.resources.fonts, size, now);
         paint_to_rgba(&self.resources.gpu, &mut self.painter, &self.resources.fonts, &list, size, FORMAT)
     }
 }
 
-/// Paints `list` offscreen in `format` (the painter's) and reads it back as
-/// tightly packed RGBA.
 pub(crate) fn paint_to_rgba(
     gpu: &Gpu,
     painter: &mut Painter,
@@ -142,7 +130,6 @@ pub(crate) fn paint_to_rgba(
     }
 }
 
-/// Reads the top-left `size` pixels of an RGBA texture (for tests).
 #[cfg(test)]
 pub(crate) fn read_texture(gpu: &Gpu, texture: &wgpu::Texture, size: (u32, u32)) -> Vec<u8> {
     let (width, height) = size;
@@ -172,7 +159,6 @@ pub(crate) fn read_texture(gpu: &Gpu, texture: &wgpu::Texture, size: (u32, u32))
 }
 
 impl OutputRole {
-    /// The role whose renderer draws `scene`.
     pub fn for_scene(scene: &Scene) -> Self {
         match scene {
             Scene::Main(_) => OutputRole::Projection,

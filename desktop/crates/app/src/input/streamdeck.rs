@@ -1,10 +1,3 @@
-//! Elgato Stream Decks: every connected deck is read on its own thread, and
-//! decks plugged in later are found within a few seconds. A key press (not
-//! its release) becomes an input trigger numbered from the top-left key.
-//!
-//! On Linux the hidraw devices need a udev rule giving the user access
-//! (see README.md); without it no deck is listed.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -18,7 +11,6 @@ use crate::input::{self, InputState};
 const RESCAN: Duration = Duration::from_secs(3);
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// Keys that went from up to down between two state reports.
 pub fn pressed(previous: &[bool], current: &[bool]) -> Vec<u8> {
     current.iter().enumerate().filter(|&(i, &down)| down && !previous.get(i).copied().unwrap_or(false)).map(|(i, _)| i as u8).collect()
 }
@@ -29,7 +21,6 @@ pub fn start(app: tauri::AppHandle) -> anyhow::Result<()> {
 }
 
 fn run(app: tauri::AppHandle) {
-    // Serial number → product name, for decks with a reader running.
     let connected: Arc<Mutex<HashMap<String, String>>> = Arc::default();
     let mut api = None;
     let mut warned = false;
@@ -79,7 +70,6 @@ fn run(app: tauri::AppHandle) {
     }
 }
 
-/// Reads key changes until the deck is unplugged.
 fn read(app: &tauri::AppHandle, deck: &StreamDeck) {
     let mut keys: Vec<bool> = Vec::new();
     loop {

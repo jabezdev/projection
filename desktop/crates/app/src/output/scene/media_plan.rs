@@ -1,4 +1,3 @@
-
 use protocol::{
     CaptureSource, OutputConfig, PlaybackState, ProgramState, ProjectModel,
     SessionItem, SessionItemKind,
@@ -9,8 +8,6 @@ use render_engine::{
 
 use super::*;
 
-/// Ambient videos the scene needs decoded: a song's background video, and
-/// the logo video while the logo is up.
 pub fn ambient_videos(scene: &MainScene) -> Vec<String> {
     let mut paths = Vec::new();
     if let Some(MediaLayer { source: MediaSource::Video(VideoKey::Ambient(path)), .. }) = &scene.background {
@@ -24,24 +21,15 @@ pub fn ambient_videos(scene: &MainScene) -> Vec<String> {
     paths
 }
 
-/// What the outputs need decoded or loaded besides the scenes themselves:
-/// ambient loops that play now, and what to prepare for the cues on either
-/// side of the current one so they appear without a decode delay.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MediaPlan {
     pub ambient: Vec<String>,
-    /// Ambient loops opened paused on their first frame: neighboring song
-    /// background videos and the logo video.
     pub prepared_ambient: Vec<String>,
-    /// The next (or else previous) video or audio item, opened paused.
     pub foreground: Option<String>,
-    /// Stills of neighboring items, slides either side, the logo image.
     pub images: Vec<String>,
-    /// Screens or windows being captured for the current item.
     pub captures: Vec<CaptureSource>,
 }
 
-/// Plans `main`'s media and what the neighboring cues need.
 pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramState, project: Option<&ProjectModel>, playback: Option<&PlaybackState>) -> MediaPlan {
     let mut plan = MediaPlan { ambient: ambient_videos(main), ..Default::default() };
     let add = |list: &mut Vec<String>, path: &str| {
@@ -62,7 +50,6 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
             plan.captures.push(source.clone());
         }
     }
-    // A presentation's slides either side of the current one.
     if let Some(SessionItemKind::Presentation { slides, .. }) = current.map(|i| &items[i].kind) {
         let step = program.active_step_index.unwrap_or(0) as usize;
         for index in [step.wrapping_sub(1), step + 1] {
@@ -71,7 +58,6 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
             }
         }
     }
-    // Neighbours skip section headings, which never go on air.
     let cueable = |item: &&SessionItem| item.kind.is_cueable();
     let neighbors = match current {
         Some(i) => vec![items.iter().skip(i + 1).find(cueable), items.iter().take(i).rev().find(cueable)],
@@ -82,7 +68,6 @@ pub fn media_plan(config: &OutputConfig, main: &MainScene, program: &ProgramStat
             SessionItemKind::Image { path } => add(&mut plan.images, path),
             SessionItemKind::Presentation { path, slides } => add(&mut plan.images, slides.first().unwrap_or(path)),
             SessionItemKind::Video { path, .. } | SessionItemKind::Audio { path, .. } => {
-                // The next item wins; the current session needs no preparing.
                 if plan.foreground.is_none() && playback.is_none_or(|p| p.path != *path) {
                     plan.foreground = Some(path.clone());
                 }

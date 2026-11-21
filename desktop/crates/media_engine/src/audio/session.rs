@@ -2,32 +2,23 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-
 use crate::clock::{audio_position, Anchor, AudioTiming, AudioTimingCell};
 use crate::ring::SampleRing;
 
-
-/// Seconds of audio buffered ahead of the device.
 pub(super) const RING_SECONDS: f64 = 1.0;
 
-/// One session's interleaved f32 samples at the device rate and channel count.
 pub struct SessionAudio {
     pub ring: SampleRing,
     pub channels: u16,
     pub device_rate: u32,
     running: AtomicBool,
     gain: AtomicU32,
-    /// Set by the decoder when no more samples will come (end of clip).
     pub drained: AtomicBool,
     anchor: Mutex<Anchor>,
     timing: AudioTimingCell,
-    // Consumer-side counters.
     frames_since_flush: AtomicU64,
     epoch_seen: AtomicU64,
     pub underruns: AtomicU64,
-    /// Whether the session was ever routed to the device. Until then no
-    /// consumer can acknowledge a flush, so the producer clears the ring
-    /// itself; the lock keeps `attach` from installing it meanwhile.
     pub(super) attached: Mutex<bool>,
 }
 
@@ -58,7 +49,6 @@ impl SessionAudio {
         self.gain.store(gain.clamp(0.0, 1.0).to_bits(), Ordering::Release);
     }
 
-    /// Producer: discards queued audio and anchors the clock at `position_us`.
     pub fn restart(&self, position_us: i64, rate: f64) {
         let epoch = {
             let attached = self.attached.lock().expect("audio attached poisoned");
@@ -66,7 +56,6 @@ impl SessionAudio {
                 drop(attached);
                 self.ring.flush(Duration::from_millis(250))
             } else {
-                // No consumer has seen this ring (a session prepared ahead).
                 self.ring.flush_unconsumed()
             }
         };
@@ -74,14 +63,11 @@ impl SessionAudio {
         *self.anchor.lock().expect("audio anchor poisoned") = Anchor { epoch, position_us, rate };
     }
 
-    /// Timeline position being heard at `now_us`.
     pub fn position(&self, now_us: i64) -> i64 {
         let anchor = *self.anchor.lock().expect("audio anchor poisoned");
         audio_position(anchor, self.timing.get(), self.device_rate, now_us)
     }
 
-    /// Device callback: fills `out` (interleaved, device channel count) whose
-    /// first frame is heard at `heard_at_us`. Never blocks or allocates.
     pub fn render(&self, out: &mut [f32], heard_at_us: i64) {
         self.ring.service_flush();
         let epoch = self.ring.epoch();

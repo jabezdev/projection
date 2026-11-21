@@ -6,23 +6,15 @@ use std::time::Duration;
 use anyhow::Context;
 use crossbeam::channel::{bounded, RecvTimeoutError, Sender};
 
-
 use super::*;
 
-/// The device format sessions must produce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeviceFormat {
     pub rate: u32,
     pub channels: u16,
 }
 
-/// Exactly one output stream on the system default device, open for the
-/// application's lifetime. Idle, it plays silence. If the device fails (for
-/// example, it is unplugged), the stream is reopened on whatever the default
-/// device is then.
 pub struct AudioOutput {
-    /// The format sessions produce. It never changes: a replacement device
-    /// with another format is fed through a converter.
     pub format: DeviceFormat,
     slot: Arc<Mutex<Option<Arc<SessionAudio>>>>,
     stop: Sender<()>,
@@ -33,17 +25,14 @@ pub struct AudioOutput {
 pub(super) static OPENED_OUTPUTS: AtomicU64 = AtomicU64::new(0);
 pub(super) static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 
-/// How many audio outputs this process has opened (should be one).
 pub fn opened_outputs() -> u64 {
     OPENED_OUTPUTS.load(Ordering::Relaxed)
 }
 
-/// How many times a failed device stream has been reopened.
 pub fn audio_recoveries() -> u64 {
     RECOVERIES.load(Ordering::Relaxed)
 }
 
-/// How often a failed device is retried.
 pub(super) const RECOVERY_POLL: Duration = Duration::from_millis(500);
 
 pub(super) type Slot = Arc<Mutex<Option<Arc<SessionAudio>>>>;
@@ -53,8 +42,6 @@ impl AudioOutput {
         Self::supervise(build_stream)
     }
 
-    /// Opens a stream with `build` and keeps one open until dropped. `build`
-    /// receives the session format to convert from once one is established.
     pub(super) fn supervise<S>(
         mut build: impl FnMut(Slot, Arc<AtomicBool>, Option<DeviceFormat>) -> anyhow::Result<(S, DeviceFormat)> + Send + 'static,
     ) -> anyhow::Result<Self> {
@@ -85,7 +72,6 @@ impl AudioOutput {
                     if !failed.load(Ordering::Acquire) {
                         continue;
                     }
-                    // Release the failed stream before opening its replacement.
                     stream = None;
                     failed.store(false, Ordering::Release);
                     match build(slot.clone(), failed.clone(), Some(format)) {
@@ -113,13 +99,11 @@ impl AudioOutput {
         Ok(Self { format, slot, stop, thread: Some(thread), failed })
     }
 
-    /// Routes `audio` to the device, replacing any previous session.
     pub fn attach(&self, audio: Arc<SessionAudio>) {
         *audio.attached.lock().expect("audio attached poisoned") = true;
         *self.slot.lock().expect("audio slot poisoned") = Some(audio);
     }
 
-    /// Stops feeding `audio` if it is the attached session.
     pub fn detach(&self, audio: &Arc<SessionAudio>) {
         let mut slot = self.slot.lock().expect("audio slot poisoned");
         if slot.as_ref().is_some_and(|current| Arc::ptr_eq(current, audio)) {
@@ -127,7 +111,6 @@ impl AudioOutput {
         }
     }
 
-    /// The device stream failed and has not been reopened yet.
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
     }
@@ -142,8 +125,6 @@ impl Drop for AudioOutput {
     }
 }
 
-/// Opens the default device. Returns the stream and the session format:
-/// `session` if given (converting when the device differs), else the device's.
 pub(super) fn build_stream(slot: Slot, failed: Arc<AtomicBool>, session: Option<DeviceFormat>) -> anyhow::Result<(cpal::Stream, DeviceFormat)> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let device = cpal::default_host().default_output_device().context("No audio output device")?;
@@ -155,9 +136,7 @@ pub(super) fn build_stream(slot: Slot, failed: Arc<AtomicBool>, session: Option<
         log::warn!("Audio device format {device_format:?} differs from {session:?}; converting");
     }
     let on_error = move |e: cpal::Error| match e.kind() {
-        // The stream keeps playing; only a glitch or lower priority results.
         cpal::ErrorKind::Xrun | cpal::ErrorKind::RealtimeDenied => log::debug!("Audio output: {e}"),
-        // Includes a rerouted default device: reopening reads its new format.
         _ => {
             log::error!("Audio output error: {e}");
             failed.store(true, Ordering::Release);

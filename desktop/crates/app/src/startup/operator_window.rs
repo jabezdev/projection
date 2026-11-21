@@ -8,8 +8,6 @@ use super::Channels;
 use crate::settings::{save_config, AppConfig};
 use crate::shutdown_native;
 
-/// Outputs have no close button of their own, so closing the operator window
-/// saves the configuration and ends the whole application.
 pub(super) fn exit_app_on_close(app: &tauri::App, channels: &Channels, config: Arc<RwLock<AppConfig>>, config_path: PathBuf) {
     let Some(window) = app.get_webview_window("main") else {
         log::error!("The operator window is missing");

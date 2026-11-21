@@ -1,12 +1,9 @@
-
-
 use crate::scene::ConfidenceStyle;
 
 use super::*;
 
 #[test]
 fn metrics_match_the_parity_reference_at_1080p() {
-    // Values from the parity references in tools/parity.
     let m = Metrics::new((1920, 1080), &ConfidenceStyle::default());
     assert!((m.scroll_top() - 116.2).abs() < 0.05);
     assert!((m.tape_left() - 250.6).abs() < 0.05);

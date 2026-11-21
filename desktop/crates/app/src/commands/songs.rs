@@ -5,7 +5,6 @@ use protocol::{SongHeader, SongModel};
 
 use crate::AppState;
 
-
 #[tauri::command]
 pub fn list_songs(state: tauri::State<AppState>) -> Result<Vec<SongHeader>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -29,7 +28,6 @@ pub fn update_song(state: tauri::State<AppState>, song: SongModel) -> Result<(),
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.update_song(&song).map_err(|e| e.to_string())
 }
-/// Deletes a library song; services keep their own copies of it.
 #[tauri::command]
 pub fn delete_song(state: tauri::State<AppState>, id: i64) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -39,7 +37,6 @@ pub fn delete_song(state: tauri::State<AppState>, id: i64) -> Result<(), String>
 #[derive(serde::Serialize)]
 pub struct SongImport { imported: Vec<SongHeader>, failed: Vec<String> }
 
-/// Asks for OpenLyrics XML files and adds each as a library song.
 #[tauri::command]
 pub async fn import_openlyrics(app: tauri::AppHandle) -> Result<SongImport, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();

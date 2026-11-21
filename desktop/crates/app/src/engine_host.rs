@@ -1,6 +1,3 @@
-//! Runs the engine on its own thread behind one bounded input queue shared by
-//! the operator UI, WebSocket clients and media backends.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -11,14 +8,10 @@ use tokio::sync::broadcast;
 use core_engine::{coalesce, Assets, Engine, EngineInput, MediaBackend, Ports, ProjectStore};
 use protocol::{EngineCommand, EngineEvent, EngineSnapshot, PlaybackReport};
 
-/// Room for bursts of input; a full queue means the engine is stalled.
 const QUEUE_CAPACITY: usize = 1024;
-/// Inputs applied before publishing, so continuous input cannot delay cues.
 const MAX_BATCH: usize = 64;
-/// Wake periodically to observe shutdown.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-/// Cloneable sender for everything the engine consumes.
 #[derive(Clone)]
 pub struct EngineHandle {
     inputs: Sender<EngineInput>,
@@ -30,7 +23,6 @@ impl EngineHandle {
         (Self { inputs }, receiver)
     }
 
-    /// Queues an operator or remote command; the caller learns if it was dropped.
     pub fn command(&self, command: EngineCommand) -> Result<(), String> {
         match self.inputs.try_send(EngineInput::Command(command)) {
             Ok(()) => Ok(()),
@@ -39,7 +31,6 @@ impl EngineHandle {
         }
     }
 
-    /// Queues a backend report. Dropping one is harmless: the next supersedes it.
     pub fn report(&self, report: PlaybackReport) {
         let _ = self.inputs.try_send(EngineInput::Report(report));
     }

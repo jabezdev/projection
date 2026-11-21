@@ -1,6 +1,3 @@
-//! Connects the native media engine to the engine (directives in, reports
-//! out) and to the renderer (the frame due now for each video).
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -13,13 +10,10 @@ use render_engine::{FramePixels, PixelFrame, VideoFrames, VideoKey, YuvLayout, Y
 
 use crate::engine_host::EngineHandle;
 
-/// Reports are sent on phase changes and at least this often while a
-/// session exists; the UI timeline needs no more.
 const REPORT_INTERVAL: Duration = Duration::from_millis(200);
 const REPORT_POLL: Duration = Duration::from_millis(50);
 const TELEMETRY_INTERVAL: Duration = Duration::from_secs(5);
 
-/// The engine's session and seek generation the backend is serving.
 #[derive(Clone, Copy)]
 struct Tracked {
     session_id: u64,
@@ -47,23 +41,18 @@ impl NativeMedia {
         Ok(Arc::new(Self { engine, tracked, running, reporter: Mutex::new(Some(reporter)) }))
     }
 
-    /// Decoded video and live captures, for the renderer's frame pump.
     pub fn frames(self: &Arc<Self>, captures: Arc<crate::capture::Captures>) -> Arc<dyn VideoFrames> {
         Arc::new(MediaFrames(self.engine.clone(), captures))
     }
 
-    /// Keeps exactly these muted looping videos open: `playing` ones play,
-    /// `prepared` ones wait on their first frame.
     pub fn set_ambient(&self, playing: &[String], prepared: &[String]) {
         self.engine.set_ambient(playing, prepared);
     }
 
-    /// Opens the next foreground media paused, so its cue starts at once.
     pub fn prepare(&self, path: Option<&str>) {
         self.engine.prepare(path);
     }
 
-    /// Stops reporting and closes the session (and its decoder).
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
         if let Some(thread) = self.reporter.lock().expect("reporter poisoned").take() {
@@ -129,8 +118,6 @@ fn report_loop(engine: &MediaEngine, tracked: &Mutex<Option<Tracked>>, running: 
     }
 }
 
-/// Logs the per-frame stage timings of the last window, when anything was
-/// decoded or drawn. `tools/e2e/profile.ts` reads these lines.
 fn log_profile() {
     let [decode, transfer, convert] = media_engine::profile::take();
     let render = render_engine::profile::take();
@@ -143,8 +130,6 @@ fn log_profile() {
     }
 }
 
-/// The engine's `MediaBackend` while outputs are native. Which outputs show
-/// a session's frames is decided by the scene feed, not here.
 pub struct NativeMediaBackend {
     pub media: Arc<NativeMedia>,
 }
@@ -254,7 +239,6 @@ impl VideoFrames for MediaFrames {
         let frame = match key {
             VideoKey::Session(id) => self.0.session(*id)?.current_frame(now_us()),
             VideoKey::Ambient(path) => self.0.ambient_frame(path, now_us()),
-            // Rendered by the frame pump, never decoded.
             VideoKey::Shader(_) => None,
             VideoKey::Capture(id) => return self.1.frame(id),
         };

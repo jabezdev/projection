@@ -7,11 +7,9 @@ use protocol::ProjectModel;
 use crate::{now_ms, AppState};
 use crate::system::backup;
 
-
 #[derive(serde::Serialize)]
 pub struct MissingMedia { path: String, title: Option<String>, services: Vec<String> }
 
-/// Media the library or a service uses whose file is gone.
 #[tauri::command]
 pub fn list_missing_media(state: tauri::State<AppState>, output: tauri::State<crate::settings::OutputState>) -> Result<Vec<MissingMedia>, String> {
     let logo = output.config.lock().map(|c| c.logo_path.clone()).unwrap_or_default();
@@ -23,9 +21,6 @@ pub fn list_missing_media(state: tauri::State<AppState>, output: tauri::State<cr
 #[derive(serde::Serialize)]
 pub struct Relinked { found: usize, missing: usize }
 
-/// Asks for a folder, finds missing media there by file name and points the
-/// library, every service, library songs and the logo at the found files.
-/// `None` when cancelled.
 #[tauri::command]
 pub async fn relink_media(app: tauri::AppHandle) -> Result<Option<Relinked>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -61,7 +56,6 @@ pub(super) fn relink_everywhere(app: &tauri::AppHandle, map: &std::collections::
             }
             let mut project: ProjectModel = serde_json::from_value(value)?;
             if Some(project.id) == loaded {
-                // The engine owns the loaded service; it saves and re-resolves media.
                 state.send(EngineCommand::SaveProject { project }).map_err(anyhow::Error::msg)?;
             } else {
                 db.save_project(&mut project, now_ms())?;

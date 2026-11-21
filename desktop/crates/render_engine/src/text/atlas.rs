@@ -6,22 +6,18 @@ use cosmic_text::{
 
 use super::*;
 
-/// Where a rasterized glyph lives in the atlas and how it sits on the pen.
 #[derive(Debug, Clone, Copy)]
 pub struct AtlasGlyph {
-    /// Texel rectangle in the atlas.
     pub x: u32,
     pub y: u32,
     pub width: u32,
     pub height: u32,
-    /// Offset of the image's top-left from the pen position (y down).
     pub left: i32,
     pub top: i32,
 }
 
 pub(super) const ATLAS_SIZE: u32 = 2048;
 
-/// A single-channel coverage atlas owned by one output.
 pub struct GlyphAtlas {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -52,9 +48,6 @@ impl GlyphAtlas {
         }
     }
 
-    /// The atlas entry for `key`, rasterizing on first use. `None` for glyphs
-    /// with no pixels (spaces). Returns `Err` when the atlas is full; the
-    /// caller clears it and draws the frame again.
     pub fn glyph(&mut self, fonts: &Fonts, queue: &wgpu::Queue, key: CacheKey) -> Result<Option<AtlasGlyph>, AtlasFull> {
         if let Some(entry) = self.glyphs.get(&key) {
             return Ok(*entry);
@@ -67,11 +60,9 @@ impl GlyphAtlas {
         let (width, height) = (image.placement.width, image.placement.height);
         let coverage: Vec<u8> = match image.content {
             SwashContent::Mask => image.data,
-            // Color glyphs (emoji) keep their shape; color is not supported.
             SwashContent::Color => image.data.chunks_exact(4).map(|p| p[3]).collect(),
             SwashContent::SubpixelMask => image.data.chunks_exact(4).map(|p| p[1]).collect(),
         };
-        // One texel of padding keeps linear sampling from bleeding neighbors.
         let allocation = self
             .allocator
             .allocate(etagere::size2(width as i32 + 2, height as i32 + 2))

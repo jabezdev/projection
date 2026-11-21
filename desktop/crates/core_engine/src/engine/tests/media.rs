@@ -4,7 +4,6 @@ fn video_item(id: i64, path: &str, options: VideoOptions) -> SessionItem {
     SessionItem { song: None, background: None, id, title: None, kind: SessionItemKind::Video { path: path.into(), options } }
 }
 
-/// Song(a, b; song.jpg) → Video → Text(c)
 fn video_setup() -> Harness {
     let mut h = setup();
     {
@@ -56,7 +55,6 @@ fn a_foreground_video_never_becomes_the_next_song_background() {
     h.send(EngineCommand::GoToItem { item_id: 20 });
     assert_eq!(h.engine.snapshot().program_state.background.as_ref().map(|b| b.path.as_str()), Some("clip.mp4"));
     h.send(EngineCommand::GoToItem { item_id: 30 });
-    // Item 30 has no background of its own: the intentional song background returns.
     assert_eq!(h.engine.snapshot().program_state.background.as_ref().map(|b| b.path.as_str()), Some("song.jpg"));
 }
 
@@ -109,7 +107,6 @@ fn reports_from_earlier_sessions_or_seek_generations_are_ignored() {
     let events = h.report(report(&h, PlaybackPhase::Playing, 3_250));
     let p = h.playback();
     assert_eq!((p.phase, p.position_ms, p.position_at_ms, p.duration_ms), (PlaybackPhase::Playing, 3_250, 5_000, Some(10_000)));
-    // Position reports revise playback only, never the project/program version.
     assert!(matches!(events.as_slice(), [EngineEvent::PlaybackChanged { .. }]));
 }
 
@@ -166,7 +163,6 @@ fn logo_suspends_foreground_media_and_live_resumes_it() {
     let session_id = h.playback().session_id;
     h.take_directives();
 
-    // Black and Clear leave transport running.
     h.send(EngineCommand::SetDisplay { display: DisplayMode::Black });
     h.send(EngineCommand::SetDisplay { display: DisplayMode::Clear });
     assert!(h.take_directives().is_empty());
@@ -204,7 +200,6 @@ fn video_cued_under_logo_waits_for_live() {
     assert_eq!(h.take_directives(), vec![MediaDirective::Play { session_id }]);
 }
 
-/// Song(a, b; song.jpg) → Audio → Text(c)
 fn audio_setup() -> Harness {
     let mut h = setup();
     {

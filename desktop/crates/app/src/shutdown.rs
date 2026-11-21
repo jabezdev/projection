@@ -12,8 +12,6 @@ use crate::system::recovery;
 
 const PENDING_SAVES_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Writes pending saves, then stops presentation before the decoders it reads
-/// from. Safe to call more than once.
 pub(crate) fn shutdown_native<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(store) = app.try_state::<Storage>() {
         if !store.flush(PENDING_SAVES_TIMEOUT) {

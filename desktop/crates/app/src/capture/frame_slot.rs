@@ -4,11 +4,8 @@ use std::time::{Duration, Instant};
 
 use render_engine::{FramePixels, PixelFrame};
 
-
-/// Frames reach the outputs at most this often; screens rarely need more.
 pub(super) const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(33);
 
-/// One captured frame, BGRA (or BGRx) rows.
 pub struct CaptureFrame {
     pub(super) id: u64,
     pub(super) width: u32,
@@ -30,7 +27,6 @@ impl PixelFrame for CaptureFrame {
 }
 
 pub(super) fn next_frame_id() -> u64 {
-    // Far from decoder ids, which count up from 1.
     static NEXT: AtomicU64 = AtomicU64::new(1 << 62);
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
@@ -42,12 +38,10 @@ pub(super) struct Slot {
     pub(super) lost: Option<String>,
 }
 
-/// Where a running capture puts its frames; the renderer takes the newest.
 #[derive(Clone, Default)]
 pub struct FrameSlot(Arc<Mutex<Slot>>);
 
 impl FrameSlot {
-    /// Publishes a frame of `width`×`height` BGRA pixels with `stride` bytes per row.
     pub fn publish(&self, width: u32, height: u32, stride: usize, data: Vec<u8>) {
         if width == 0 || height == 0 || data.len() < stride * (height as usize - 1) + width as usize * 4 {
             return;
@@ -56,7 +50,6 @@ impl FrameSlot {
         self.0.lock().expect("capture slot poisoned").latest = Some(frame);
     }
 
-    /// The source is gone: show black (in its last size) instead of its last picture.
     pub fn lose(&self, reason: String) {
         let mut slot = self.0.lock().expect("capture slot poisoned");
         if slot.lost.is_some() {
@@ -73,9 +66,6 @@ impl FrameSlot {
         self.0.lock().expect("capture slot poisoned").lost.clone()
     }
 
-    /// The frame to show now: the newest, but no more often than
-    /// [`MIN_FRAME_INTERVAL`] (the previous one meanwhile), so nothing newer
-    /// is ever held back for long.
     pub(super) fn frame(&self, now: Instant) -> Option<Arc<CaptureFrame>> {
         let mut slot = self.0.lock().expect("capture slot poisoned");
         let latest = slot.latest.clone()?;

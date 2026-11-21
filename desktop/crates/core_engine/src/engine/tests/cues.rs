@@ -10,7 +10,6 @@ fn navigation_passes_over_section_headings() {
         items.insert(2, section(15));
         items.insert(4, section(25));
     }
-    // Heading, Text(a, b), Heading, Image, Heading, Text(c)
     h.load();
     assert_eq!(selection(&h.engine), (Some(10), Some(0), "a"), "a service never opens on a heading");
     assert_eq!(h.engine.snapshot().program_state.next_item_id, Some(20));
@@ -140,7 +139,6 @@ fn next_walks_steps_then_items_and_applies_media() {
     h.send(EngineCommand::Next);
     assert_eq!(selection(&h.engine), (Some(30), Some(0), "c"));
 
-    // At the very end, Next is a no-op and emits nothing.
     let events = h.send(EngineCommand::Next);
     assert!(events.is_empty());
 }

@@ -1,11 +1,7 @@
 use std::time::Duration;
 
-
 use crate::Gpu;
 
-
-/// A non-sRGB, opaque, vsynced configuration for `surface`, and the format
-/// its views are drawn in (blending on sRGB-encoded values, as in browsers).
 pub(crate) fn surface_config(
     gpu: &Gpu,
     surface: &wgpu::Surface<'_>,
@@ -37,9 +33,6 @@ pub(crate) fn surface_config(
     Ok((config, view_format))
 }
 
-/// Applies `config`, retrying briefly: wgpu refuses a configure while another
-/// thread submits work (the frame pump, another output, the previews or a
-/// monitor), reporting it only as an error. Returns whether it applied.
 pub(crate) fn configure_surface(gpu: &Gpu, surface: &wgpu::Surface<'_>, config: &wgpu::SurfaceConfiguration, label: &str) -> bool {
     const ATTEMPTS: u32 = 5;
     for attempt in 1..=ATTEMPTS {
@@ -56,12 +49,8 @@ pub(crate) fn configure_surface(gpu: &Gpu, surface: &wgpu::Surface<'_>, config: 
     false
 }
 
-/// A 60 Hz refresh, in milliseconds.
 pub(super) const REFRESH_MS: f64 = 1000.0 / 60.0;
 
-/// Refreshes missed by an interval between back-to-back frames: none up to
-/// 1.5 refreshes (vsync jitter), else the whole refreshes skipped. Assumes a
-/// 60 Hz or faster display; on a slower one every frame counts, as it should.
 pub(super) fn dropped_refreshes(interval_ms: f64) -> u64 {
     if interval_ms <= REFRESH_MS * 1.5 {
         return 0;
@@ -80,7 +69,6 @@ mod dropped_tests {
         assert_eq!(dropped_refreshes(22.0), 0);
         assert_eq!(dropped_refreshes(33.3), 1);
         assert_eq!(dropped_refreshes(50.0), 2);
-        // A 75 Hz display's single miss still counts.
         assert_eq!(dropped_refreshes(26.7), 1);
     }
 }

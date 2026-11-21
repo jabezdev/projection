@@ -66,7 +66,6 @@ impl Repository {
         if let Some(json) = model_json {
             let mut model: ProjectModel =
                 serde_json::from_str(&json).context("decode project model_json")?;
-            // Keep columns authoritative for basic metadata.
             model.id = id;
             model.name = name;
             Ok(model)
@@ -97,7 +96,6 @@ impl Repository {
         Ok(())
     }
 
-    /// Deletes a service. Returns whether it existed.
     pub fn delete_project(&self, id: i64) -> Result<bool> {
         Ok(self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id]).context("delete project")? > 0)
     }

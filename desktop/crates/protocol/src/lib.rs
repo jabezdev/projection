@@ -1,4 +1,3 @@
-
 mod input;
 mod output_config;
 mod commands;

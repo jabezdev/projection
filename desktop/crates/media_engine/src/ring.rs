@@ -1,7 +1,3 @@
-//! Single-producer, single-consumer sample ring. The audio callback is the only
-//! consumer and never blocks or allocates; the decoder thread is the only
-//! producer.
-
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -9,23 +5,19 @@ use std::time::{Duration, Instant};
 pub struct SampleRing {
     buffer: Box<[UnsafeCell<f32>]>,
     mask: usize,
-    /// Total samples ever written / read; indices wrap through `mask`.
     write: AtomicUsize,
     read: AtomicUsize,
-    /// Flush handshake: the producer bumps `flush_requested`; the consumer
-    /// discards everything unread and copies it to `flush_done`.
     flush_requested: AtomicU64,
     flush_done: AtomicU64,
 }
 
-// Safety: each slot is written only by the producer while it is outside the
+// SAFETY: each slot is written only by the producer while it is outside the
 // readable range and read only by the consumer while inside it; the atomics
 // order those accesses.
 unsafe impl Sync for SampleRing {}
 unsafe impl Send for SampleRing {}
 
 impl SampleRing {
-    /// Capacity is rounded up to a power of two.
     pub fn new(capacity: usize) -> Self {
         let capacity = capacity.next_power_of_two();
         Self {
@@ -50,7 +42,6 @@ impl SampleRing {
         self.len() == 0
     }
 
-    /// Producer: appends as many samples as fit; returns how many were written.
     pub fn push(&self, samples: &[f32]) -> usize {
         let write = self.write.load(Ordering::Relaxed);
         let read = self.read.load(Ordering::Acquire);
@@ -63,7 +54,6 @@ impl SampleRing {
         count
     }
 
-    /// Consumer: fills `out` from the ring; returns how many samples were read.
     pub fn pop(&self, out: &mut [f32]) -> usize {
         self.service_flush();
         let read = self.read.load(Ordering::Relaxed);
@@ -76,8 +66,6 @@ impl SampleRing {
         count
     }
 
-    /// Consumer: honors a pending flush without reading. Called by every
-    /// consumer pass, including paused ones that output silence.
     pub fn service_flush(&self) {
         let requested = self.flush_requested.load(Ordering::Acquire);
         if requested != self.flush_done.load(Ordering::Relaxed) {
@@ -86,18 +74,12 @@ impl SampleRing {
         }
     }
 
-    /// Producer: discards unread samples when no consumer has ever read this
-    /// ring, so there is nothing to wait for. Returns the new flush epoch.
     pub fn flush_unconsumed(&self) -> u64 {
         let ticket = self.flush_requested.fetch_add(1, Ordering::AcqRel) + 1;
         self.service_flush();
         ticket
     }
 
-    /// Producer: discards unread samples. Waits for the consumer to acknowledge
-    /// so no stale sample can follow; if no consumer is running (no audio
-    /// device), the producer clears the ring itself after `timeout`.
-    /// Returns the flush epoch the consumer reports from now on.
     pub fn flush(&self, timeout: Duration) -> u64 {
         let ticket = self.flush_requested.fetch_add(1, Ordering::AcqRel) + 1;
         let deadline = Instant::now() + timeout;
@@ -112,7 +94,6 @@ impl SampleRing {
         ticket
     }
 
-    /// Consumer: the flush epoch of the samples it is reading.
     pub fn epoch(&self) -> u64 {
         self.flush_done.load(Ordering::Acquire)
     }
@@ -154,7 +135,6 @@ mod tests {
             let ring = ring.clone();
             std::thread::spawn(move || {
                 let mut out = [0.0; 4];
-                // A paused consumer still services flushes.
                 for _ in 0..200 {
                     ring.service_flush();
                     std::thread::sleep(Duration::from_millis(1));

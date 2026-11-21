@@ -1,6 +1,4 @@
-
 use tauri::{Emitter, Manager};
-
 
 use crate::output::display_names::{display_names, readable_name};
 use crate::output::NativeOutputs;
@@ -8,14 +6,11 @@ use crate::system::awake;
 
 use super::*;
 
-/// The size previews draw at: the window's, letterboxed to the aspect.
 pub fn content_size(window: &tauri::Window, size: tauri::PhysicalSize<u32>) -> serde_json::Value {
     let aspect = window.app_handle().try_state::<OutputRoutes>().and_then(|routes| routes.values.lock().ok()?.get(window.label())?.aspect);
     let [_, _, width, height] = render_engine::fit_aspect((size.width, size.height), aspect);
     serde_json::json!({ "label": window.label(), "width": width, "height": height })
 }
-/// Shows `output` on its display as a borderless window, or hides it, and
-/// keeps the displays awake while any output is shown.
 pub(super) fn present_output(app: &tauri::AppHandle, output: &str) -> Result<(), String> {
     let placed = place_output(app, output);
     if let Some(awake) = app.try_state::<awake::KeepAwake>() {
@@ -32,8 +27,6 @@ pub(super) fn place_output(app: &tauri::AppHandle, output: &str) -> Result<(), S
     let names = display_names();
     let (route, index) = resolve_route(app, &*routes.values.lock().map_err(|e| e.to_string())?, output, &monitors, &names);
     let outputs = app.state::<NativeOutputs>();
-    // A disconnected saved display keeps its output hidden rather than
-    // unexpectedly covering another screen.
     let target = index.and_then(|i| monitors.get(i)).filter(|_| routes.is_shown(output));
     let Some(target) = target else {
         outputs.set_shown(role, false);
@@ -60,8 +53,6 @@ pub(super) fn place_output(app: &tauri::AppHandle, output: &str) -> Result<(), S
     }
     Ok(())
 }
-/// Records where an output went. A display below 60 Hz caps the output's
-/// motion at its own rate, which no rendering change can lift.
 pub(super) fn log_placement(output: &str, target: &tauri::Monitor, names: &Names, fullscreen: bool) {
     let system = target.name().map(String::as_str);
     let name = readable_name(system, system.and_then(|n| names.get(n)));

@@ -1,19 +1,12 @@
-//! Decoded video frames and the bounded queue between a decoder and the
-//! renderer. Frames are chosen by presentation time, not by arrival.
-
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-/// How a frame's pixels are laid out in [`VideoFrame::data`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameFormat {
-    /// One plane of 8-bit RGBA, for sources with transparency.
     Rgba,
-    /// 8-bit Y, U and V planes, chroma at half width and height.
     I420,
-    /// 8-bit Y plane and one interleaved UV plane (hardware decoders' output).
     Nv12,
 }
 
@@ -27,7 +20,6 @@ impl FrameFormat {
     }
 }
 
-/// The YUV to RGB matrix a frame was encoded with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YuvMatrix {
     Bt601,
@@ -35,18 +27,13 @@ pub enum YuvMatrix {
     Bt2020,
 }
 
-/// Where one plane starts in [`VideoFrame::data`] and its bytes per row.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Plane {
     pub offset: usize,
     pub stride: usize,
 }
 
-/// One decoded frame, RGBA or YUV. YUV frames keep their decoded size (up
-/// to 4K); the renderer converts and scales them on the GPU. `pts_us` is on
-/// the session timeline, which keeps increasing across loops.
 pub struct VideoFrame {
-    /// Unique per decoded frame, so the renderer uploads each frame once.
     pub id: u64,
     pub epoch: u64,
     pub pts_us: i64,
@@ -54,11 +41,8 @@ pub struct VideoFrame {
     pub height: u32,
     pub format: FrameFormat,
     pub matrix: YuvMatrix,
-    /// Full (0–255) rather than limited (16–235) YUV range.
     pub full_range: bool,
-    /// The first `format.planes()` entries are used.
     pub planes: [Plane; 3],
-    /// Shared so the loop point can show the same pixels again.
     pub data: Arc<[u8]>,
 }
 
@@ -68,14 +52,11 @@ impl VideoFrame {
         NEXT.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Plane `index`'s bytes (from its start to the end of the data) and its
-    /// bytes per row.
     pub fn plane(&self, index: usize) -> (&[u8], usize) {
         let plane = self.planes[index];
         (&self.data[plane.offset..], plane.stride)
     }
 
-    /// The same pixels at another time, as a new frame.
     pub fn retimed(&self, epoch: u64, pts_us: i64) -> VideoFrame {
         VideoFrame {
             id: Self::next_id(),
@@ -108,7 +89,6 @@ impl std::fmt::Debug for VideoFrame {
 pub struct FrameStats {
     pub queued: u64,
     pub presented: u64,
-    /// Frames whose time passed before they were ever selected.
     pub dropped_late: u64,
 }
 
@@ -135,9 +115,6 @@ impl FrameQueue {
     }
 
     #[cfg(test)]
-    /// Producer: waits for space. Returns `false` without queuing when `abort`
-    /// becomes true (a seek or close arrived) or the frame belongs to an
-    /// earlier epoch.
     pub fn push(&self, frame: VideoFrame, abort: impl Fn() -> bool) -> bool {
         let mut state = self.state.lock().expect("frame queue poisoned");
         loop {
@@ -153,18 +130,12 @@ impl FrameQueue {
         }
     }
 
-    /// Producer: queues without waiting. When full, first drops frames that
-    /// `select(position_us)` would pass over anyway, so a renderer that
-    /// stops polling cannot hold decoding (and the audio behind it) back.
-    /// Hands the frame back if still full; silently drops frames from an
-    /// earlier epoch.
     pub fn try_push(&self, frame: VideoFrame, position_us: i64) -> Result<(), VideoFrame> {
         let mut state = self.state.lock().expect("frame queue poisoned");
         if frame.epoch != state.epoch {
             return Ok(());
         }
         if state.frames.len() >= self.capacity {
-            // Keep the latest due frame queued for the renderer to present.
             while state.frames.get(1).is_some_and(|next| next.pts_us <= position_us) {
                 state.frames.pop_front();
                 state.stats.dropped_late += 1;
@@ -178,7 +149,6 @@ impl FrameQueue {
         Ok(())
     }
 
-    /// Producer: waits up to `timeout` for the renderer to free a slot.
     pub fn wait_for_space(&self, timeout: Duration) {
         let state = self.state.lock().expect("frame queue poisoned");
         if state.frames.len() >= self.capacity {
@@ -186,9 +156,6 @@ impl FrameQueue {
         }
     }
 
-    /// Renderer: the latest frame due at `position_us`. Frames passed over are
-    /// counted as late drops. The first frame of a new epoch is shown at once,
-    /// so a paused seek displays its target frame.
     pub fn select(&self, position_us: i64) -> Option<Arc<VideoFrame>> {
         let mut state = self.state.lock().expect("frame queue poisoned");
         let epoch = state.epoch;
@@ -210,8 +177,6 @@ impl FrameQueue {
         state.current.clone()
     }
 
-    /// Starts a new epoch: discards queued frames but keeps showing the
-    /// current one until a frame of the new epoch arrives.
     pub fn flush(&self, epoch: u64) {
         let mut state = self.state.lock().expect("frame queue poisoned");
         state.frames.clear();
@@ -219,7 +184,6 @@ impl FrameQueue {
         self.space.notify_all();
     }
 
-    /// Releases everything, including the displayed frame.
     pub fn clear(&self) {
         let mut state = self.state.lock().expect("frame queue poisoned");
         state.frames.clear();
@@ -231,7 +195,6 @@ impl FrameQueue {
         self.space.notify_all();
     }
 
-    /// Presentation time of the last queued frame, or the current one.
     pub fn last_pts(&self) -> Option<i64> {
         let state = self.state.lock().expect("frame queue poisoned");
         state.frames.back().or(state.current.as_ref()).map(|f| f.pts_us)
@@ -286,7 +249,6 @@ mod tests {
         queue.flush(1);
         assert!(!queue.push(frame(0, 40_000), || false), "frames from before the seek are refused");
         assert_eq!(pts(queue.select(60_000_000)), Some(0), "no black gap while the seek decodes");
-        // The target frame may be slightly after the paused clock; it still shows.
         queue.push(frame(1, 60_016_000), || false);
         assert_eq!(pts(queue.select(60_000_000)), Some(60_016_000));
     }
@@ -298,7 +260,6 @@ mod tests {
             queue.try_push(frame(0, t), 0).unwrap();
         }
         assert!(queue.try_push(frame(0, 120_000), 0).is_err(), "nothing is late yet");
-        // The clock reached 90 ms without a select: 0 and 40 ms will never show.
         queue.try_push(frame(0, 120_000), 90_000).unwrap();
         assert_eq!(pts(queue.select(90_000)), Some(80_000), "the due frame is kept");
         let stats = queue.stats();

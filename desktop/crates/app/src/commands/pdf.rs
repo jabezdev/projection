@@ -1,15 +1,11 @@
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-
-
 use super::*;
 
-/// The PDF chosen for import, read back by `read_chosen_pdf`.
 #[derive(Default)]
 pub struct ChosenPdf(std::sync::Mutex<Option<std::path::PathBuf>>);
 
-/// Asks for a PDF to import as slides; returns its file name.
 #[tauri::command]
 pub async fn choose_pdf(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -21,7 +17,6 @@ pub async fn choose_pdf(app: tauri::AppHandle) -> Result<Option<String>, String>
     Ok(Some(name))
 }
 
-/// The chosen PDF's bytes, for the operator UI to render.
 #[tauri::command]
 pub async fn read_chosen_pdf(app: tauri::AppHandle) -> Result<tauri::ipc::Response, String> {
     let path = app.state::<ChosenPdf>().0.lock().map_err(|e| e.to_string())?.clone().ok_or("No PDF was chosen")?;
@@ -30,8 +25,6 @@ pub async fn read_chosen_pdf(app: tauri::AppHandle) -> Result<tauri::ipc::Respon
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// Saves one rendered slide (PNG bytes as the request body, its file name in
-/// the `x-slide-name` header) into the media folder; returns its path.
 #[tauri::command]
 pub async fn save_slide_image(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<String, String> {
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("Send the slide as raw bytes".into()) };

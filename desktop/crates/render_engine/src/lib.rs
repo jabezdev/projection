@@ -1,10 +1,3 @@
-//! Native output rendering: one GPU device shared by every output surface.
-//!
-//! Each output presents on its own thread so a slow, occluded or minimized
-//! surface cannot stall another output. Video frames upload once into shared
-//! textures that every output samples; no output owns a decoder. Outputs draw
-//! scenes (see [`scene`]) with their own painter and glyph atlas.
-
 mod engine;
 mod frame_pump;
 mod gpu;
@@ -24,8 +17,6 @@ mod shader_bg;
 mod test_source;
 pub mod text;
 mod yuv;
-
-
 
 pub use capture::Capture;
 pub use frame::{FramePixels, PixelFrame, SharedFrame, VideoFrames, VideoKey};

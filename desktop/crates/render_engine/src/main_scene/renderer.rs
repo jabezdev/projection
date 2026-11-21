@@ -42,7 +42,6 @@ impl MainRenderer {
             let logo = scene.logo.clone().map(|source| MediaLayer { source, cover: false });
             self.logo.set(logo.as_ref(), media, now, fade);
         } else {
-            // The logo composition unmounts at once when leaving Logo.
             self.logo.clear();
         }
         let text = if scene.display == Display::Live { scene.text.as_str() } else { "" };
@@ -50,8 +49,6 @@ impl MainRenderer {
         self.scene = scene;
     }
 
-    /// Whether drawing now would differ from the last frame, given the video
-    /// generations it showed.
     pub fn activity(&self, now: Instant) -> Activity {
         let lyrics = self.lyrics.running(now);
         self.background
@@ -91,7 +88,6 @@ impl MainRenderer {
             let (x, y) = (rect.x + geometry.border + geometry.padding_x, rect.y + geometry.border + geometry.padding_y);
             let transition = self.scene.transition;
             if transition.kind == TransitionKind::Slide {
-                // Texts slide within the box; the box and border stay.
                 let inner = Rect::new(rect.x + geometry.border, rect.y + geometry.border, rect.w - 2.0 * geometry.border, rect.h - 2.0 * geometry.border);
                 list.set_clip(Some(inner));
                 for (laid, progress, incoming) in &layouts {
@@ -111,7 +107,6 @@ impl MainRenderer {
             if self.scene.logo.is_some() {
                 self.logo.draw(&mut list, geometry.area, now);
             } else {
-                // No logo configured: show "MAGI" in the root font.
                 let cq = w / 100.0;
                 let laid = match &self.logo_text {
                     Some((width, laid)) if *width == size.0 => laid.clone(),

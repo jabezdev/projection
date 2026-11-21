@@ -1,8 +1,3 @@
-//! Remote access settings and status: LAN access, the pairing code and
-//! paired devices, the `palto.local` name, and OSC. The servers themselves
-//! are in `network_server`; this keeps their settings in `app-config.json`
-//! and applies changes without a restart.
-
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime};
@@ -44,7 +39,6 @@ impl RemoteState {
         self.advertiser.set(None);
     }
 
-    /// Applies saved settings to the servers and the name advertisement.
     pub fn apply(&self, config: &AppConfig) {
         self.listen.send_replace(listen(config));
         self.osc.send_replace(osc_listen(config));
@@ -52,9 +46,6 @@ impl RemoteState {
     }
 }
 
-/// `/palto/<action>` (an input action such as `next`, `black` or
-/// `play_pause`) performs it; a release (0 or false) is ignored, so
-/// buttons that send press and release act once.
 pub fn osc_action(address: &str, args: &[OscArg]) -> Option<InputAction> {
     let name = address.strip_prefix("/palto/")?;
     if args.first().is_some_and(OscArg::is_release) {
@@ -82,7 +73,6 @@ pub struct OscInfo {
     allowed: Vec<String>,
     listening: bool,
     error: Option<String>,
-    /// Sender, address, milliseconds ago, refused.
     last: Option<(String, String, u64, bool)>,
 }
 
@@ -93,11 +83,8 @@ pub struct RemoteStatus {
     listening: bool,
     error: Option<String>,
     remote_clients: usize,
-    /// `http://palto.local:<port>/`.
     name_url: String,
-    /// The same page by address, private networks first.
     address_urls: Vec<String>,
-    /// QR code of the first address URL.
     qr_svg: Option<String>,
     pairing_code: Option<String>,
     pairing_seconds_left: u64,
@@ -163,14 +150,11 @@ fn check_port(port: u16, what: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Saves and applies the remote settings at once; connections from other
-/// devices close when LAN access is turned off.
 #[tauri::command]
 pub fn set_remote_settings(remote: tauri::State<RemoteState>, config: tauri::State<ConfigStore>, settings: RemoteSettings) -> Result<(), String> {
     check_port(settings.port, "remote")?;
     check_port(settings.osc_port, "OSC")?;
     if settings.osc_enabled && settings.osc_port == settings.port {
-        // TCP and UDP could share it, but one number for two things confuses setups.
         return Err("Use different ports for the remote and OSC".into());
     }
     let mut allowed = Vec::new();
@@ -190,7 +174,6 @@ pub fn set_remote_settings(remote: tauri::State<RemoteState>, config: tauri::Sta
     Ok(())
 }
 
-/// Shows a pairing code for a few minutes; returns it.
 #[tauri::command]
 pub fn start_pairing(remote: tauri::State<RemoteState>) -> String {
     remote.pairing.start(Instant::now())
@@ -201,7 +184,6 @@ pub fn stop_pairing(remote: tauri::State<RemoteState>) {
     remote.pairing.stop();
 }
 
-/// Forgets a device; its open connection closes within a few seconds.
 #[tauri::command]
 pub fn remove_remote_device(remote: tauri::State<RemoteState>, id: String) -> Result<(), String> {
     remote.pairing.remove(&id)

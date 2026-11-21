@@ -1,10 +1,3 @@
-//! The input layer: keyboard bindings (forwarded by the operator UI), MIDI
-//! controllers and Stream Decks all trigger the same actions, which become
-//! engine commands here. Bindings live in `input-bindings.json`.
-//!
-//! While the bindings editor is learning, the next MIDI or Stream Deck
-//! trigger is reported to the UI (`input:learned`) instead of acting.
-
 pub mod midi;
 pub mod streamdeck;
 
@@ -19,14 +12,12 @@ use crate::settings::{load_or_set_aside, write_atomic};
 use crate::AppState;
 
 pub const FILENAME: &str = "input-bindings.json";
-/// Learning ends on its own if nothing is pressed.
 const LEARN_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct InputState {
     bindings: RwLock<InputBindings>,
     path: PathBuf,
     learning: Mutex<Option<Instant>>,
-    /// Connected devices by kind, for the bindings editor.
     devices: Mutex<InputDevices>,
 }
 
@@ -37,8 +28,6 @@ pub struct InputDevices {
 }
 
 impl InputState {
-    /// Loads the saved bindings; a missing file gives the default map, an
-    /// unreadable one is set aside (reported by the caller).
     pub fn load(dir: &std::path::Path, now_ms: i64) -> (Self, Option<PathBuf>) {
         let path = dir.join(FILENAME);
         let loaded = load_or_set_aside::<InputBindings>(&path, now_ms);
@@ -53,7 +42,6 @@ impl InputState {
     }
 }
 
-/// The engine commands for `action`, given what is on air now.
 pub fn commands(action: InputAction, display: DisplayMode, playing: Option<bool>) -> Vec<EngineCommand> {
     let toggle = |mode: DisplayMode| EngineCommand::SetDisplay { display: if display == mode { DisplayMode::Live } else { mode } };
     match action {
@@ -74,7 +62,6 @@ pub fn commands(action: InputAction, display: DisplayMode, playing: Option<bool>
     }
 }
 
-/// Performs `action` on the engine.
 pub fn perform(app: &tauri::AppHandle, action: InputAction) -> Result<(), String> {
     let state = app.state::<AppState>();
     let (display, playing) = {
@@ -87,8 +74,6 @@ pub fn perform(app: &tauri::AppHandle, action: InputAction) -> Result<(), String
     Ok(())
 }
 
-/// A trigger from a MIDI controller or Stream Deck: learned while the
-/// editor listens, otherwise performed if bound.
 pub fn triggered(app: &tauri::AppHandle, trigger: InputTrigger) {
     let input = app.state::<InputState>();
     let learning = input.learning.lock().ok().and_then(|mut learning| learning.take_if(|since| since.elapsed() < LEARN_TIMEOUT).map(|_| ()));
@@ -121,19 +106,16 @@ pub fn set_input_bindings(app: tauri::AppHandle, input: tauri::State<InputState>
     app.emit("input:bindings", bindings).map_err(|e| e.to_string())
 }
 
-/// Restores the default keyboard map (MIDI and Stream Deck bindings are removed).
 #[tauri::command]
 pub fn reset_input_bindings(app: tauri::AppHandle, input: tauri::State<InputState>) -> Result<(), String> {
     set_input_bindings(app, input, InputBindings::default())
 }
 
-/// Keyboard bindings are matched in the operator UI, which sends the action.
 #[tauri::command]
 pub fn trigger_action(app: tauri::AppHandle, action: InputAction) -> Result<(), String> {
     perform(&app, action)
 }
 
-/// Starts or stops listening for the next MIDI or Stream Deck trigger.
 #[tauri::command]
 pub fn learn_input(input: tauri::State<InputState>, learning: bool) -> Result<(), String> {
     *input.learning.lock().map_err(|e| e.to_string())? = learning.then(Instant::now);

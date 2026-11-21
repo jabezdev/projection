@@ -1,8 +1,3 @@
-//! Test aid (`MAGI_TEST_CAPTURE=1`): a capture method that shows a moving
-//! pattern, so routing, fit and the lost-source fallback can be checked on
-//! the real outputs without a screen to share. A source whose id ends in
-//! `:lose` stops after two seconds, like a closed window.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -50,7 +45,6 @@ impl Backend for TestPattern {
                 if lose && started.elapsed() > Duration::from_secs(2) {
                     return slot.lose("The test window closed".into());
                 }
-                // Orange with a white bar sweeping across (BGRA).
                 let bar = (started.elapsed().as_millis() as u32 / 8) % width;
                 let mut data = vec![0u8; (width * height * 4) as usize];
                 for (i, pixel) in data.chunks_exact_mut(4).enumerate() {

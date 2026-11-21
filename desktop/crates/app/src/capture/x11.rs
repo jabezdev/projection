@@ -1,8 +1,3 @@
-//! X11 capture: whole monitors (RandR) and single windows (Composite, so a
-//! covered window still captures), read with GetImage about 30 times a
-//! second. Simple and dependable but heavier than the portal; it only sees
-//! X11 windows.
-
 use std::time::{Duration, Instant};
 
 use protocol::{CaptureKind, CaptureSource};
@@ -27,7 +22,6 @@ fn text_property(conn: &RustConnection, window: Window, property: u32, kind: u32
     (!reply.value.is_empty()).then(|| String::from_utf8_lossy(&reply.value).into_owned())
 }
 
-/// A window's title and program (`WM_CLASS` class).
 fn window_names(conn: &RustConnection, window: Window) -> (String, String) {
     let utf8 = atom(conn, "UTF8_STRING").unwrap_or(AtomEnum::STRING.into());
     let net_name = atom(conn, "_NET_WM_NAME").ok();
@@ -47,9 +41,7 @@ fn windows(conn: &RustConnection, root: Window) -> anyhow::Result<Vec<Window>> {
     Ok(reply.value32().map(|v| v.collect()).unwrap_or_default())
 }
 
-/// What a source id names, found again on this display.
 enum Target {
-    /// Root-window rectangle of a monitor.
     Monitor { x: i16, y: i16, width: u16, height: u16 },
     Window(Window),
 }
@@ -146,7 +138,6 @@ fn capture(conn: &RustConnection, root: Window, target: Target, slot: &FrameSlot
                     Err(_) => anyhow::bail!("The window was closed"),
                 };
                 let size = (geometry.width, geometry.height);
-                // The window's off-screen picture, renamed whenever it resizes.
                 if pixmap.is_none_or(|(_, s)| s != size) {
                     if let Some((old, _)) = pixmap.take() {
                         let _ = conn.free_pixmap(old);
@@ -160,7 +151,6 @@ fn capture(conn: &RustConnection, root: Window, target: Target, slot: &FrameSlot
         };
         let image = conn.get_image(ImageFormat::Z_PIXMAP, drawable, x, y, width, height, !0)?.reply();
         match image {
-            // 24- and 32-bit visuals arrive as BGRx rows.
             Ok(image) if image.depth >= 24 => slot.publish(width as u32, height as u32, width as usize * 4, image.data),
             Ok(image) => anyhow::bail!("Unsupported color depth {}", image.depth),
             Err(_) if matches!(target, Target::Window(_)) => anyhow::bail!("The window was closed"),

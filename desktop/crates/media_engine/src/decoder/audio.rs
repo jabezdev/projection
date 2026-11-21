@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use ffmpeg_next as ffmpeg;
 
-
 use super::*;
 
 impl Worker {
@@ -25,8 +24,6 @@ impl Worker {
             return Ok(());
         };
         let out = audio.out.clone();
-        // Resampling to `device_rate / rate` and playing at `device_rate` runs
-        // `rate` times faster; the pitch follows the speed.
         let output_rate = (out.device_rate as f64 / rate).round() as u32;
         let key = (decoded.format(), decoded.rate(), decoded.channels());
         if audio.resampler.as_ref().is_none_or(|(_, k)| *k != key) {
@@ -54,17 +51,14 @@ impl Worker {
         audio.resampler.as_mut().unwrap().0.run(decoded, &mut converted)?;
         let channels = out.channels as usize;
         let frames = converted.samples();
-        // Packed f32: one plane of interleaved samples, aligned by FFmpeg's allocator.
         let data = converted.data(0);
         let all: &[f32] = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, frames * channels) };
 
-        // Output frame k carries media time start + k / output_rate.
         let us_per_frame = 1e6 / output_rate as f64;
         let skip = (((self.audio_discard_before_us - start_us) as f64 / us_per_frame).ceil().max(0.0) as usize).min(frames);
         let keep = match self.clip.end_us {
             Some(end) => {
                 let until = (((end - start_us) as f64 / us_per_frame).floor().max(0.0) as usize).min(frames);
-                // With video, the video stream decides where the clip ends.
                 if until < frames && self.video.is_none() {
                     self.clip_end_reached = true;
                 }
@@ -86,7 +80,6 @@ impl Worker {
             let written = out.ring.push(pending);
             pending = &pending[written..];
             if !pending.is_empty() {
-                // Keep video moving while audio waits for the device.
                 self.drain_video()?;
                 std::thread::sleep(Duration::from_millis(5));
             }

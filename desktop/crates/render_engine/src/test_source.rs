@@ -3,9 +3,6 @@ use std::time::Instant;
 
 use crate::{FramePixels, PixelFrame, VideoFrames, VideoKey};
 
-/// Synthetic 30 fps frames for checking outputs without media. A sweeping bar
-/// and binary frame counter make shared-frame identity visible: every output
-/// must show the same bar position and counter.
 pub struct TestPatternSource {
     start: Instant,
     size: (u32, u32),
@@ -37,7 +34,6 @@ impl TestPatternSource {
 }
 
 impl VideoFrames for TestPatternSource {
-    /// The same pattern for every video.
     fn frame(&self, _key: &VideoKey) -> Option<Arc<dyn PixelFrame>> {
         let index = (self.start.elapsed().as_secs_f64() * 30.0) as u64 + 1;
         let mut latest = self.latest.lock().ok()?;
@@ -65,7 +61,6 @@ fn draw_pattern(pixels: &mut [u8], width: u32, height: u32, index: u64) {
             pixels[i..i + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
         }
     }
-    // 16-bit frame counter: lit blocks along the top edge.
     let block = w / 20;
     for bit in 0..16 {
         let lit = (index >> (15 - bit)) & 1 == 1;

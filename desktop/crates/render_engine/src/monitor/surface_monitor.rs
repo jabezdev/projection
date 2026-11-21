@@ -64,7 +64,6 @@ impl Monitor {
                         self.config.width = width;
                         self.config.height = height;
                     }
-                    // A remapped window may have lost its swapchain.
                     self.configured = false;
                     shown = size;
                     dirty = true;
@@ -118,7 +117,6 @@ impl Monitor {
     }
 }
 
-/// The output's content size, capped to [`MAX_RENDER_WIDTH`].
 pub(super) fn layout_size((width, height): (u32, u32)) -> (u32, u32) {
     let (width, height) = (width.max(1), height.max(1));
     if width <= MAX_RENDER_WIDTH {
@@ -127,7 +125,6 @@ pub(super) fn layout_size((width, height): (u32, u32)) -> (u32, u32) {
     (MAX_RENDER_WIDTH, (u64::from(height) * u64::from(MAX_RENDER_WIDTH) / u64::from(width)).max(1) as u32)
 }
 
-/// Taps per axis for a `scale`:1 reduction; each bilinear tap covers 2×2.
 pub(super) fn taps(scale: f32) -> u32 {
     ((scale / 2.0).ceil() as u32).clamp(1, 4)
 }

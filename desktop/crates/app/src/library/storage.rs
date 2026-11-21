@@ -1,9 +1,3 @@
-//! Saves projects on a worker thread, so a slow disk never delays a cue.
-//!
-//! The engine applies an edit as soon as it arrives; the worker writes saves
-//! in arrival order and reports failures as engine errors. Loads wait for
-//! queued saves, so a load never reads a project older than the last edit.
-
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -13,7 +7,6 @@ use tokio::sync::broadcast;
 use core_engine::ProjectStore;
 use protocol::{EngineEvent, ProjectModel};
 
-/// Where saves are written: the database in the app, a fake in tests.
 pub trait ProjectWriter: Send + 'static {
     fn load(&self, project_id: i64) -> anyhow::Result<ProjectModel>;
     fn save(&self, project: &mut ProjectModel) -> anyhow::Result<()>;
@@ -46,8 +39,6 @@ impl<W: ProjectWriter + Sync> StorageWorker<W> {
         Ok(Self { writer, saves, queued })
     }
 
-    /// Waits until every queued save is written, up to `timeout`. Returns
-    /// false if saves were still pending.
     pub fn flush(&self, timeout: Duration) -> bool {
         let count = self.queued.count.lock().expect("storage queue poisoned");
         let (count, _) = self
@@ -59,7 +50,6 @@ impl<W: ProjectWriter + Sync> StorageWorker<W> {
     }
 }
 
-/// Loads may wait this long for earlier saves before reading anyway.
 const LOAD_WAIT: Duration = Duration::from_secs(10);
 
 impl<W: ProjectWriter + Sync> ProjectStore for StorageWorker<W> {
@@ -96,7 +86,6 @@ fn finish(queued: &Queued, saves: usize) {
 
 fn run<W: ProjectWriter>(writer: &W, saves: &Receiver<ProjectModel>, queued: &Queued, events: &broadcast::Sender<EngineEvent>) {
     while let Ok(first) = saves.recv() {
-        // A burst of edits to one project needs only its last state written.
         let mut batch = vec![first];
         batch.extend(saves.try_iter());
         let count = batch.len();

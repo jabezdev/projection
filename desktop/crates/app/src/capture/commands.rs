@@ -14,9 +14,7 @@ pub struct CaptureMethod {
 
 #[derive(Serialize)]
 pub struct CaptureMethods {
-    /// The method in use.
     current: Option<&'static str>,
-    /// The saved choice; empty for automatic.
     choice: String,
     methods: Vec<CaptureMethod>,
 }
@@ -30,7 +28,6 @@ pub fn get_capture_methods(captures: tauri::State<'_, Arc<Captures>>) -> Capture
     }
 }
 
-/// Saves the capture method (empty for automatic); captures restart with it.
 #[tauri::command]
 pub fn set_capture_method(captures: tauri::State<'_, Arc<Captures>>, config: tauri::State<'_, crate::settings::ConfigStore>, name: String) -> Result<(), String> {
     if !name.is_empty() && !captures.backends.iter().any(|b| b.name() == name) {
@@ -41,7 +38,6 @@ pub fn set_capture_method(captures: tauri::State<'_, Arc<Captures>>, config: tau
     Ok(())
 }
 
-/// Screens and windows the current method can capture.
 #[tauri::command]
 pub async fn list_capture_sources(captures: tauri::State<'_, Arc<Captures>>) -> Result<Vec<CaptureSource>, String> {
     let backend = captures.backend().ok_or("No screen capture method is available on this computer")?;
@@ -50,14 +46,12 @@ pub async fn list_capture_sources(captures: tauri::State<'_, Arc<Captures>>) -> 
         .map_err(|e| e.to_string())?
 }
 
-/// Lets the system dialog pick a screen or window (portal methods); `None` when cancelled.
 #[tauri::command]
 pub async fn pick_capture_source(captures: tauri::State<'_, Arc<Captures>>, kind: CaptureKind) -> Result<Option<CaptureSource>, String> {
     let backend = captures.backend().ok_or("No screen capture method is available on this computer")?;
     tauri::async_runtime::spawn_blocking(move || backend.pick(kind).map_err(|e| format!("{e:#}"))).await.map_err(|e| e.to_string())?
 }
 
-/// Captures running for the current cue, with any problem.
 #[tauri::command]
 pub fn get_capture_status(captures: tauri::State<'_, Arc<Captures>>) -> Vec<CaptureStatus> {
     captures.status()

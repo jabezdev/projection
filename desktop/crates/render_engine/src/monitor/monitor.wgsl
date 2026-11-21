@@ -1,8 +1,4 @@
-// Scales an output's full-size frame down into a live monitor in the
-// operator window. Each pixel averages taps × taps bilinear samples spread
-// over its footprint, so text and borders stay smooth at a quarter size.
 struct Params {
-    // xy: one monitor pixel in source UV units; z: taps per axis.
     footprint: vec4<f32>,
 }
 
@@ -15,7 +11,6 @@ struct VsOut {
     @location(0) uv: vec2<f32>,
 }
 
-// One oversized triangle covering the viewport; no vertex buffer.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VsOut {
     let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));

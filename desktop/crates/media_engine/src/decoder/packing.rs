@@ -11,7 +11,6 @@ pub(super) fn has_alpha(format: ffmpeg::format::Pixel) -> bool {
     !descriptor.is_null() && unsafe { (*descriptor).flags } & ffmpeg::ffi::AV_PIX_FMT_FLAG_ALPHA as u64 != 0
 }
 
-/// The matrix a frame declares, else the usual one for its size.
 pub(super) fn yuv_matrix(frame: &ffmpeg::frame::Video) -> YuvMatrix {
     use ffmpeg::color::Space;
     match frame.color_space() {
@@ -23,7 +22,6 @@ pub(super) fn yuv_matrix(frame: &ffmpeg::frame::Video) -> YuvMatrix {
     }
 }
 
-/// Copies the first `count` planes of `frame` into one shared buffer.
 pub(super) fn copy_planes(frame: &ffmpeg::frame::Video, count: usize) -> ([Plane; 3], Arc<[u8]>) {
     let mut planes = [Plane::default(); 3];
     let mut total = 0;
@@ -42,9 +40,6 @@ pub(super) fn copy_planes(frame: &ffmpeg::frame::Video, count: usize) -> ([Plane
     (planes, unsafe { data.assume_init() })
 }
 
-/// Packs `source` for upload: 8-bit 4:2:0 YUV as decoded when it fits
-/// [`MAX_YUV_FRAME`], sources with transparency as RGBA, anything else
-/// converted (and if needed scaled down) to 4:2:0 YUV.
 pub(super) fn pack(video: &mut VideoStream, source: &ffmpeg::frame::Video) -> anyhow::Result<Packed> {
     use ffmpeg::format::Pixel;
     let (width, height) = (source.width(), source.height());
@@ -85,13 +80,11 @@ pub(super) fn pack(video: &mut VideoStream, source: &ffmpeg::frame::Video) -> an
     let mut converted = ffmpeg::frame::Video::empty();
     video.scaler.as_mut().unwrap().0.run(source, &mut converted)?;
     let (planes, data) = copy_planes(&converted, format.planes());
-    // The scaler maps full-range "J" formats to limited range; other inputs keep theirs.
     let jpeg_format = matches!(source.format(), Pixel::YUVJ420P | Pixel::YUVJ422P | Pixel::YUVJ444P | Pixel::YUVJ440P | Pixel::YUVJ411P);
     let full_range = alpha || (declared_full && !jpeg_format);
     Ok(Packed { width: out_width, height: out_height, format, matrix, full_range, planes, data })
 }
 
-/// Largest size within `max` with the same aspect ratio, never upscaled, even.
 pub fn fit_within(width: u32, height: u32, max: (u32, u32)) -> (u32, u32) {
     let scale = (max.0 as f64 / width as f64).min(max.1 as f64 / height as f64).min(1.0);
     let even = |v: f64| ((v.round() as u32) & !1).max(2);

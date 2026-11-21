@@ -1,13 +1,8 @@
-// Built-in animated backgrounds. Colors are sRGB-encoded values, as in the
-// rest of the outputs; keep each preset calm and cheap (a few dozen ALU ops
-// per pixel at 960x540).
-
 struct Uniforms {
     color_a: vec4<f32>,
     color_b: vec4<f32>,
     resolution: vec2<f32>,
     time: f32,
-    // 0 gradient, 1 aurora, 2 bokeh.
     preset: u32,
 }
 
@@ -15,7 +10,6 @@ struct Uniforms {
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
-    // One triangle covering the target.
     let x = f32((index << 1u) & 2u) * 2.0 - 1.0;
     let y = f32(index & 2u) * 2.0 - 1.0;
     return vec4<f32>(x, y, 0.0, 1.0);
@@ -36,7 +30,6 @@ fn noise(p: vec2<f32>) -> f32 {
     return mix(mix(a, b, s.x), mix(c, d, s.x), s.y);
 }
 
-/// A slowly turning two-color gradient with a soft vignette.
 fn gradient(uv: vec2<f32>, t: f32) -> vec3<f32> {
     let angle = t * 0.05;
     let dir = vec2<f32>(cos(angle), sin(angle));
@@ -47,7 +40,6 @@ fn gradient(uv: vec2<f32>, t: f32) -> vec3<f32> {
     return mix(u.color_a.rgb, u.color_b.rgb, k) * vignette;
 }
 
-/// Soft flowing bands of the second color over a dark first color.
 fn aurora(uv: vec2<f32>, t: f32) -> vec3<f32> {
     var color = u.color_a.rgb * (0.35 + 0.25 * uv.y);
     for (var i = 0; i < 3; i = i + 1) {
@@ -62,7 +54,6 @@ fn aurora(uv: vec2<f32>, t: f32) -> vec3<f32> {
     return min(color, vec3<f32>(1.0));
 }
 
-/// Out-of-focus lights drifting upward.
 fn bokeh(uv: vec2<f32>, t: f32) -> vec3<f32> {
     let aspect = u.resolution.x / u.resolution.y;
     var color = mix(u.color_a.rgb * 0.25, u.color_a.rgb * 0.6, uv.y);
@@ -73,7 +64,6 @@ fn bokeh(uv: vec2<f32>, t: f32) -> vec3<f32> {
         let drift = vec2<f32>(0.0, t * (0.03 + 0.02 * fl));
         let q = p * scale + drift * scale;
         let cell = floor(q);
-        // The light in this cell and its neighbors (lights spill across edges).
         for (var dy = -1; dy <= 1; dy = dy + 1) {
             for (var dx = -1; dx <= 1; dx = dx + 1) {
                 let c = cell + vec2<f32>(f32(dx), f32(dy));
@@ -96,7 +86,6 @@ fn bokeh(uv: vec2<f32>, t: f32) -> vec3<f32> {
 
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    // Origin at the bottom, so "up" in the presets is up on screen.
     let uv = vec2<f32>(position.x / u.resolution.x, 1.0 - position.y / u.resolution.y);
     var color: vec3<f32>;
     if (u.preset == 1u) {

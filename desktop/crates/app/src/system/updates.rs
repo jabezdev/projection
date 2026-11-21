@@ -1,12 +1,3 @@
-//! Updates from GitHub Releases (roadmap phase 11). A new version downloads
-//! in the background and is verified against the public key in
-//! `tauri.conf.json`; the operator installs it from Settings → System after
-//! reading its notes, never while the outputs are shown. Installers are kept
-//! in `updates/` (the newest few) so an earlier version can be reinstalled.
-//!
-//! Only the Windows build is published, so other platforms report updates as
-//! unavailable.
-
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -17,11 +8,8 @@ use tauri_plugin_updater::UpdaterExt;
 
 use crate::output::displays::OutputRoutes;
 
-/// Where releases announce themselves; each release also carries its own
-/// manifest, used to fetch the running version's installer for rollback.
 const RELEASES: &str = "https://github.com/jabezdev/projection/releases";
 pub const FOLDER: &str = "updates";
-/// Installers kept for rollback.
 const KEEP: usize = 3;
 const FIRST_CHECK: Duration = Duration::from_secs(120);
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -49,9 +37,7 @@ pub struct UpdateStatus {
     current_version: &'static str,
     #[serde(flatten)]
     state: UpdateState,
-    /// Saved installers of other versions, newest first.
     earlier: Vec<String>,
-    /// False while the outputs are shown.
     can_install: bool,
 }
 
@@ -59,12 +45,10 @@ fn installer_name(version: &str) -> String {
     format!("PALTO_{version}_x64-setup.exe")
 }
 
-/// `0.MINOR.BUILD` as numbers, for ordering saved installers.
 fn version_key(version: &str) -> Vec<u64> {
     version.split('.').map(|part| part.parse().unwrap_or(0)).collect()
 }
 
-/// Versions with a saved installer, newest first.
 fn saved_versions(dir: &Path) -> Vec<String> {
     let mut versions: Vec<String> = std::fs::read_dir(dir)
         .into_iter()
@@ -75,7 +59,6 @@ fn saved_versions(dir: &Path) -> Vec<String> {
     versions
 }
 
-/// Keeps the newest [`KEEP`] installers.
 fn prune(dir: &Path) {
     for version in saved_versions(dir).into_iter().skip(KEEP) {
         let _ = std::fs::remove_file(dir.join(installer_name(&version)));
@@ -108,14 +91,11 @@ fn updater(app: &tauri::AppHandle, manifest: &str) -> Result<tauri_plugin_update
         .endpoints(vec![manifest.parse().map_err(|e| format!("{e}"))?])
         .map_err(|e| e.to_string())?
         .timeout(Duration::from_secs(60))
-        // Saves and the crash-recovery marker are written before the installer takes over.
         .on_before_exit(move || crate::shutdown_native(&handle))
         .build()
         .map_err(|e| e.to_string())
 }
 
-/// Checks for a newer release and downloads it. Does nothing while a check
-/// or download is already running or an update is ready.
 pub async fn check(app: tauri::AppHandle) -> Result<(), String> {
     let updates = app.state::<Updates>();
     match updates.state() {
@@ -147,7 +127,6 @@ async fn download_latest(app: &tauri::AppHandle) -> Result<(), String> {
         .download(
             |chunk, total| {
                 received += chunk as u64;
-                // Coarse steps keep the event rate low.
                 if received % (4 << 20) < chunk as u64 {
                     progress.state::<Updates>().set(&progress, UpdateState::Downloading { version: version.clone(), received, total });
                 }
@@ -166,8 +145,6 @@ async fn download_latest(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Saves the running version's installer (from its own release) so the
-/// operator can return to it after updating. Best effort.
 async fn keep_current_installer(app: &tauri::AppHandle) {
     let updates = app.state::<Updates>();
     let current = env!("CARGO_PKG_VERSION");
@@ -194,7 +171,6 @@ async fn keep_current_installer(app: &tauri::AppHandle) {
     }
 }
 
-/// Checks shortly after start and then every few hours (Windows only).
 pub fn start_background_checks(app: &tauri::AppHandle) {
     if !cfg!(windows) {
         return;
@@ -225,8 +201,6 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<(), String> {
     check(app).await
 }
 
-/// Installs the downloaded update: PALTO closes, the installer runs and
-/// starts the new version.
 #[tauri::command]
 pub fn install_update(app: tauri::AppHandle, updates: tauri::State<Updates>) -> Result<(), String> {
     if outputs_shown(&app) {
@@ -235,12 +209,9 @@ pub fn install_update(app: tauri::AppHandle, updates: tauri::State<Updates>) -> 
     let update = updates.ready.lock().map_err(|e| e.to_string())?.clone().ok_or("No update is ready")?;
     let bytes = std::fs::read(updates.dir.join(installer_name(&update.version))).map_err(|e| format!("Reading the downloaded update: {e}"))?;
     log::info!("Installing PALTO {}", update.version);
-    // Verifies the signature again, runs the installer and exits.
     update.install(bytes).map_err(|e| format!("Installing: {e}"))
 }
 
-/// Runs a saved installer of an earlier version; its own screens confirm
-/// replacing the newer version.
 #[tauri::command]
 pub fn reinstall_version(app: tauri::AppHandle, updates: tauri::State<Updates>, version: String) -> Result<(), String> {
     if outputs_shown(&app) {

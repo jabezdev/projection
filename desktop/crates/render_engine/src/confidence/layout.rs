@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-
 use crate::paint::Rgba;
 use crate::scene::{ConfidenceGroup, ConfidenceStyle};
 use crate::text::{layout, Fonts, TextAlign, TextLayout, TextStyle};
@@ -11,7 +10,6 @@ use super::*;
 pub(super) struct Row {
     pub(super) group: usize,
     pub(super) line: usize,
-    /// Offset from the top of the scroll content.
     pub(super) top: f32,
     pub(super) height: f32,
     pub(super) code: Arc<TextLayout>,
@@ -32,13 +30,10 @@ pub(super) struct Card {
     pub(super) color: Rgba,
 }
 
-/// What a layout is built from: groups, lyric size, style and output size.
 pub(super) type LayoutKey = (Vec<ConfidenceGroup>, f32, ConfidenceStyle, (u32, u32));
 
-/// Everything shaped for one scene at one output size.
 pub(super) struct Layout {
     pub(super) size: (u32, u32),
-    /// What it was built from.
     pub(super) groups: Vec<ConfidenceGroup>,
     pub(super) scale: f32,
     pub(super) style: ConfidenceStyle,
@@ -49,8 +44,6 @@ pub(super) struct Layout {
     pub(super) waiting: Option<Arc<TextLayout>>,
 }
 
-/// Shaped text by content, kept across rebuilds so an edit reshapes only
-/// what changed. Valid for one output width, lyric size and style.
 #[derive(Default)]
 pub(super) struct TextCache {
     pub(super) metrics: Option<(u32, u32, ConfidenceStyle)>,
@@ -112,7 +105,6 @@ pub(super) fn build_layout(fonts: &Fonts, cache: &Mutex<TextCache>, groups: &[Co
     Layout { size, groups: groups.to_vec(), scale, style: style.clone(), rows, sections, content_height: top, cards, waiting }
 }
 
-/// One line of `text`, cut with an ellipsis to fit `width`.
 pub(super) fn ellipsize(fonts: &Fonts, text: &str, style: &TextStyle, width: f32) -> TextLayout {
     let full = layout(fonts, text, style, None);
     if full.width <= width {

@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-
-
-/// Lucide (https://lucide.dev, ISC license) as a font, and its icon names
-/// with their code points; see `assets/lucide/`.
 pub(super) const ICON_FONT: &[u8] = include_bytes!("../../assets/lucide/lucide.ttf");
 pub(super) const ICON_FAMILY: &str = "lucide";
 pub(super) const ICON_NAMES: &str = include_str!("../../assets/lucide/names.txt");
@@ -21,8 +17,6 @@ pub(super) fn icon_char(name: &str) -> Option<char> {
     icons.get(name).copied()
 }
 
-/// Replaces `:name:` icon codes with the icon's character and returns the
-/// byte ranges of those characters, to be shaped with the icon font.
 pub fn expand_icons(text: &str) -> (String, Vec<std::ops::Range<usize>>) {
     if !text.contains(':') {
         return (text.to_string(), Vec::new());

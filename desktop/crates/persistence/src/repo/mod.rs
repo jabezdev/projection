@@ -86,8 +86,6 @@ impl Repository {
 }
 
 impl Repository {
-    /// Writes a consistent copy of the whole database to `path` (which must
-    /// not exist), safe while the app keeps using this connection.
     pub fn backup_to(&self, path: &Path) -> Result<()> {
         let path = path.to_str().ok_or_else(|| anyhow!("backup path is not valid UTF-8"))?;
         self.conn.execute("VACUUM INTO ?1", params![path]).context("copy database")?;

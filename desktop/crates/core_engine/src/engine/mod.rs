@@ -1,12 +1,3 @@
-//! The authoritative engine state machine.
-//!
-//! `Engine` turns `EngineCommand`s and media backend reports into state changes
-//! and `EngineEvent`s. It knows nothing about windows, GPUs, decoders or
-//! databases: background files are checked through [`Assets`], playback goes
-//! through [`MediaBackend`] and project storage through [`ProjectStore`], so
-//! the whole command surface can be unit-tested with fakes. Outputs draw from
-//! the published state.
-
 use protocol::{
     Background, EngineCommand, EngineEvent, EngineSnapshot, MediaDirective, PlaybackPhase, PlaybackReport, ProjectModel, SessionId,
 };
@@ -24,13 +15,10 @@ use navigation::navigation_target;
 use selection::{next_cueable, previous_cueable};
 use session::{seek, transport_directive};
 
-/// Checks a background before the program switches to it, so a missing file
-/// is reported and the previous background stays on air.
 pub trait Assets {
     fn check_background(&self, background: &Background) -> anyhow::Result<()>;
 }
 
-/// Whatever plays foreground media. Failures come back as `PlaybackReport`s.
 pub trait MediaBackend {
     fn send(&mut self, directive: MediaDirective);
 }
@@ -40,16 +28,13 @@ pub trait ProjectStore {
     fn save_project(&self, project: &mut ProjectModel) -> anyhow::Result<()>;
 }
 
-/// The engine's adapters for one call.
 pub struct Ports<'a> {
     pub assets: &'a dyn Assets,
     pub media: &'a mut dyn MediaBackend,
     pub store: &'a dyn ProjectStore,
-    /// Wall-clock time used to stamp playback positions.
     pub now_ms: i64,
 }
 
-/// Everything the engine consumes, in arrival order.
 #[derive(Debug, Clone)]
 pub enum EngineInput {
     Command(EngineCommand),
@@ -58,11 +43,8 @@ pub enum EngineInput {
 
 pub struct Engine {
     state: EngineSnapshot,
-    /// The last intentional song background; a foreground image or video
-    /// never becomes one.
     song_background: Option<Background>,
     next_session_id: SessionId,
-    /// Cued video and audio start playing at once; otherwise they wait paused.
     autoplay: bool,
 }
 
@@ -77,8 +59,6 @@ impl Engine {
         Self::with_session_seed(1)
     }
 
-    /// Session ids start at `seed`; seeding from the clock keeps ids from a
-    /// previous run from matching new sessions.
     pub fn with_session_seed(seed: SessionId) -> Self {
         Self { state: EngineSnapshot::default(), song_background: None, next_session_id: seed, autoplay: true }
     }
@@ -94,15 +74,10 @@ impl Engine {
         }
     }
 
-    /// Applies one command. Emits `ProjectChanged`/`ProgramChanged` only when
-    /// that domain actually changed (both share one version bump),
-    /// `PlaybackChanged` when transport changed, then any errors.
     pub fn handle(&mut self, cmd: EngineCommand, ports: &mut Ports) -> Vec<EngineEvent> {
         self.observe(ports, |engine, ports, errors| engine.apply(cmd.normalize(), ports, errors))
     }
 
-    /// Applies a backend report. Reports for an earlier session or an earlier
-    /// seek generation are stale and change nothing.
     pub fn handle_report(&mut self, report: PlaybackReport, ports: &mut Ports) -> Vec<EngineEvent> {
         self.observe(ports, |engine, ports, _| {
             let Some(playback) = engine.state.playback.as_mut() else { return false };

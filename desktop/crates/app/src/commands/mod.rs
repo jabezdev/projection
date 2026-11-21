@@ -1,10 +1,3 @@
-//! Operator UI commands: engine control, the song and service library, and
-//! media files. Output and display commands live in `displays`, settings in
-//! `settings`.
-
-
-
-
 mod media;
 use crate::output::displays;
 use crate::system::updates;

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-
 use crate::confidence::ConfidenceRenderer;
 use crate::main_scene::MainRenderer;
 use crate::media::MediaTextures;
@@ -11,8 +10,6 @@ use crate::text::Fonts;
 
 use super::*;
 
-/// The scene an output draws: the projection shows the main scene, the
-/// confidence output the teleprompter.
 pub(crate) enum Renderer {
     Main(MainRenderer),
     Confidence(ConfidenceRenderer),

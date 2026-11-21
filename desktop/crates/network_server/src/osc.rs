@@ -1,8 +1,3 @@
-//! OSC over UDP, for Bitfocus Companion, TouchOSC and similar controllers.
-//! Messages go to the input layer (`/palto/<action>`). It listens on this
-//! computer only unless LAN access is on; other computers must be on the
-//! allowed list, since OSC has no pairing of its own.
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -13,10 +8,8 @@ use tokio::sync::watch;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OscListen {
     pub enabled: bool,
-    /// Listen on all interfaces (LAN access is on).
     pub lan: bool,
     pub port: u16,
-    /// Other computers allowed to send; this computer always is.
     pub allowed: Vec<IpAddr>,
 }
 
@@ -29,8 +22,6 @@ pub enum OscArg {
 }
 
 impl OscArg {
-    /// Whether the argument means "released" (0, 0.0 or false), as faders
-    /// and buttons on TouchOSC-style surfaces send on release.
     pub fn is_release(&self) -> bool {
         matches!(self, OscArg::Int(0) | OscArg::Bool(false)) || matches!(self, OscArg::Float(f) if *f == 0.0)
     }
@@ -40,15 +31,11 @@ impl OscArg {
 pub struct OscStatus {
     pub listening: Option<SocketAddr>,
     pub error: Option<String>,
-    /// The last message received: sender, address, when, and whether it was
-    /// refused (a sender not on the allowed list).
     pub last: Option<(IpAddr, String, SystemTime, bool)>,
 }
 
-/// Receives each allowed message's address and arguments.
 pub type OscSink = Arc<dyn Fn(&str, &[OscArg]) + Send + Sync>;
 
-/// A string padded with NULs to a multiple of four bytes.
 fn read_string(data: &[u8], at: &mut usize) -> Option<String> {
     let rest = data.get(*at..)?;
     let end = rest.iter().position(|&b| b == 0)?;
@@ -63,20 +50,22 @@ fn read_u32(data: &[u8], at: &mut usize) -> Option<u32> {
     Some(u32::from_be_bytes(bytes.try_into().ok()?))
 }
 
-/// The messages in one packet (bundles are unpacked; their time tags are
-/// ignored, everything acts at once). Malformed parts are skipped.
 pub fn parse(packet: &[u8]) -> Vec<(String, Vec<OscArg>)> {
     let mut messages = Vec::new();
     parse_into(packet, &mut messages, 0);
     messages
 }
 
+const BUNDLE_TAG: &[u8] = b"#bundle\0";
+const TIME_TAG_LEN: usize = 8;
+const MAX_BUNDLE_NESTING: usize = 4;
+
 fn parse_into(packet: &[u8], messages: &mut Vec<(String, Vec<OscArg>)>, depth: usize) {
-    if depth > 4 {
+    if depth > MAX_BUNDLE_NESTING {
         return;
     }
-    if packet.starts_with(b"#bundle\0") {
-        let mut at = 16; // "#bundle\0" and the time tag
+    if packet.starts_with(BUNDLE_TAG) {
+        let mut at = BUNDLE_TAG.len() + TIME_TAG_LEN;
         while let Some(size) = read_u32(packet, &mut at) {
             let Some(element) = packet.get(at..at + size as usize) else { return };
             parse_into(element, messages, depth + 1);
@@ -105,7 +94,6 @@ fn parse_into(packet: &[u8], messages: &mut Vec<(String, Vec<OscArg>)>, depth: u
     messages.push((address, args));
 }
 
-/// Listens while enabled, rebinding when the settings change.
 pub async fn run(mut config: watch::Receiver<OscListen>, sink: OscSink, status: Arc<Mutex<OscStatus>>, mut shutdown: watch::Receiver<bool>) {
     loop {
         let current = config.borrow_and_update().clone();

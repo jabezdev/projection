@@ -1,11 +1,3 @@
-//! Keeps the displays awake while any output is shown, so a long stretch
-//! without input never blanks the projector, starts a screensaver or sleeps.
-//!
-//! Windows: `SetThreadExecutionState`, which belongs to the calling thread, so
-//! one thread owns it for the app's lifetime. Linux: the session's
-//! `org.freedesktop.ScreenSaver` idle inhibitor (honored by hypridle, GNOME
-//! and KDE), released when outputs are hidden.
-
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 
@@ -27,7 +19,6 @@ impl KeepAwake {
         Ok(Self { requests: Mutex::new(requests), held: Mutex::new(false) })
     }
 
-    /// Holds or releases the displays; repeated calls with the same value do nothing.
     pub fn set(&self, awake: bool) {
         let Ok(mut held) = self.held.lock() else { return };
         if *held == awake {
@@ -67,7 +58,6 @@ mod platform {
     const SERVICE: &str = "org.freedesktop.ScreenSaver";
     const PATH: &str = "/org/freedesktop/ScreenSaver";
 
-    /// The inhibit cookie lives as long as the D-Bus connection that took it.
     #[derive(Default)]
     pub struct Inhibitor {
         held: Option<(gio::DBusConnection, u32)>,

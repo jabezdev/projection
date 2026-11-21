@@ -10,13 +10,10 @@ use crate::hwaccel::{self, HwDecoder};
 
 use super::*;
 
-/// Software decoders use up to this many threads each.
 pub(super) fn decode_threads() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get()).min(4)
 }
 
-/// Opens stream `index`'s decoder, with the chosen hardware accelerator
-/// when `hardware` and one applies; falls back to software if that fails.
 pub(super) fn open_video(input: &ffmpeg::format::context::Input, index: usize, hardware: bool) -> anyhow::Result<(ffmpeg::decoder::Video, Option<HwDecoder>)> {
     let stream = input.stream(index).context("Missing video stream")?;
     let context = || ffmpeg::codec::context::Context::from_parameters(stream.parameters());
@@ -120,7 +117,6 @@ impl Worker {
                 self.fall_back_to_software(&reason)?;
             }
             if self.shared.finished.load(Ordering::Acquire) {
-                // Idle at the end of the clip, presenting what is left.
                 self.drain_video()?;
                 match self.controls.recv_timeout(Duration::from_millis(20)) {
                     Ok(control) => {
@@ -134,7 +130,6 @@ impl Worker {
                 continue;
             }
             if self.shared.interrupted() {
-                // A control is on its way; wait for it rather than decode stale data.
                 std::thread::sleep(Duration::from_millis(1));
                 continue;
             }
@@ -168,7 +163,6 @@ impl Worker {
                     self.forget_head();
                 }
                 self.clip = clip;
-                // Turning looping on at the end resumes from the clip start.
                 if was_finished && clip.looping {
                     self.wrap()?;
                 }
@@ -180,7 +174,6 @@ impl Worker {
         Ok(flow)
     }
 
-    /// Flushes everything queued and decodes from `position_us` again.
     pub(super) fn restart(&mut self, epoch: u64, position_us: i64, rate: f64) -> anyhow::Result<()> {
         self.epoch = epoch;
         self.pending_frames.clear();
@@ -205,7 +198,6 @@ impl Worker {
 
     pub(super) fn seek_media(&mut self, position_us: i64) -> anyhow::Result<()> {
         let target = position_us + self.origin_us;
-        // Land on the keyframe at or before the target, then decode forward.
         if position_us > 0 {
             self.input.seek(target, ..target).context("Seeking")?;
         } else {

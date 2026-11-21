@@ -1,6 +1,3 @@
-//! Output windows: projection and confidence are plain OS windows with no
-//! webview, presented by `render_engine` from one shared GPU device.
-
 pub mod display_names;
 pub mod displays;
 pub mod media;
@@ -14,7 +11,6 @@ use std::time::Duration;
 use render_engine::{MonitorSpec, OutputRole, OutputSpec, PreviewTarget, RenderEngine, Scene, Snapshot, TestPatternSource, VideoFrames};
 use tauri::{Emitter, Manager, Runtime, Window};
 
-/// Must run before Tauri initializes the windowing toolkit.
 pub fn prepare_platform() {
     // GTK commits its own buffers to a native Wayland window's surface, which
     // collides with GPU presentation (Wayland protocol error 71). Present
@@ -26,7 +22,6 @@ pub fn prepare_platform() {
     }
 }
 
-/// Managed state for the native renderer. `None` after shutdown.
 pub struct NativeOutputs(Mutex<Option<RenderEngine>>);
 
 impl NativeOutputs {
@@ -38,7 +33,6 @@ impl NativeOutputs {
         }
     }
 
-    /// Linux only: GTK asks for a frame after it discards the window's contents.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub fn redraw(&self, role: OutputRole) {
         if let Ok(guard) = self.0.lock() {
@@ -72,7 +66,6 @@ impl NativeOutputs {
         }
     }
 
-    /// Loads stills for the neighboring cues ahead of time.
     pub fn preload(&self, images: &[String]) {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {
@@ -81,7 +74,6 @@ impl NativeOutputs {
         }
     }
 
-    /// Renders `scene` as the style preview, delivered like output previews.
     pub fn preview_style(&self, scene: Scene) {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {
@@ -90,7 +82,6 @@ impl NativeOutputs {
         }
     }
 
-    /// Starts `spec.role`'s live monitor. Main thread only.
     pub fn add_monitor(&self, spec: MonitorSpec) -> anyhow::Result<()> {
         let guard = self.0.lock().map_err(|_| anyhow::anyhow!("native outputs poisoned"))?;
         guard.as_ref().ok_or_else(|| anyhow::anyhow!("Native outputs have shut down"))?.add_monitor(spec)
@@ -104,7 +95,6 @@ impl NativeOutputs {
         }
     }
 
-    /// Joins every presentation thread so no surface outlives its window.
     pub fn shutdown(&self) {
         let engine = self.0.lock().ok().and_then(|mut guard| guard.take());
         if let Some(mut engine) = engine {
@@ -114,12 +104,10 @@ impl NativeOutputs {
     }
 }
 
-/// The latest preview still of each target, served to the operator UI.
 #[derive(Default)]
 pub struct PreviewStore(Mutex<HashMap<&'static str, (u64, Snapshot)>>);
 
 impl PreviewStore {
-    /// The JPEG for `label`, if one has been rendered.
     pub fn jpeg(&self, label: &str) -> Option<Vec<u8>> {
         self.0.lock().ok()?.get(label).map(|(_, snapshot)| snapshot.jpeg.clone())
     }
@@ -132,10 +120,6 @@ impl PreviewStore {
     }
 }
 
-/// GTK paints its theme background over the window on every expose, map and
-/// focus change (focus restyles the window), hiding the GPU frame until the
-/// next one. Outputs paint everything themselves, so GTK only asks for a
-/// redraw.
 #[cfg(target_os = "linux")]
 fn keep_gtk_from_painting<R: Runtime>(window: &Window<R>, role: OutputRole, handle: tauri::AppHandle<R>) -> anyhow::Result<()> {
     use gtk::prelude::WidgetExt;
@@ -147,13 +131,10 @@ fn keep_gtk_from_painting<R: Runtime>(window: &Window<R>, role: OutputRole, hand
         }
         gtk::glib::Propagation::Stop
     });
-    // Repaint the already-realized window under the new rules.
     gtk_window.queue_draw();
     Ok(())
 }
 
-/// XWayland window managers (Hyprland) can miss a fullscreen request made
-/// while the window maps, so it is repeated once the window is mapped.
 #[cfg(target_os = "linux")]
 pub fn refullscreen_on_map<R: Runtime>(window: &Window<R>, wants_fullscreen: impl Fn() -> bool + 'static) -> anyhow::Result<()> {
     use gtk::prelude::{GtkWindowExt, WidgetExtManual};
@@ -174,8 +155,6 @@ pub fn role_for_label(label: &str) -> Option<OutputRole> {
     }
 }
 
-/// Output windows start hidden and borderless; the operator shows them.
-/// They stay off the taskbar so the operator window is the app's only entry.
 pub fn build_output_window<R: Runtime, M: Manager<R>>(manager: &M, label: &str, title: &str, (width, height): (u32, u32)) -> tauri::Result<Window<R>> {
     tauri::window::WindowBuilder::new(manager, label)
         .title(title)
@@ -187,17 +166,12 @@ pub fn build_output_window<R: Runtime, M: Manager<R>>(manager: &M, label: &str, 
         .build()
 }
 
-/// Starts presentation into both windows and wires resize and close handling.
-/// Must be called on the main thread (surface creation reads window handles).
-/// `MAGI_TEST_PATTERN=1` replaces media frames with a synthetic pattern.
 pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: Arc<dyn VideoFrames>) -> anyhow::Result<()> {
     let frames: Arc<dyn VideoFrames> = if std::env::var("MAGI_TEST_PATTERN").as_deref() == Ok("1") {
         Arc::new(TestPatternSource::new(960, 540))
     } else {
         frames
     };
-    // Debug aid for the isolation gate: stall confidence presentation and
-    // confirm projection keeps its cadence.
     let stall = std::env::var("MAGI_CONFIDENCE_STALL_MS")
         .ok()
         .and_then(|ms| ms.parse().ok())
@@ -220,8 +194,6 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
         });
     }
     let engine = RenderEngine::start(specs, frames)?;
-    // Previews only announce a new still; the UI fetches the bytes, so no
-    // image travels through the event channel.
     app.manage(PreviewStore::default());
     app.manage(monitor_window::Monitors::default());
     let handle = app.handle().clone();
@@ -232,7 +204,6 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
         let event = serde_json::json!({ "target": target.label(), "revision": revision, "width": width, "height": height });
         let _ = handle.emit_to("main", "output:preview", event);
     }))?;
-    // The operator UI marks a cue as pending until its output shows it.
     let handle = app.handle().clone();
     engine.on_status(Box::new(move |role, loading| {
         let _ = handle.emit_to("main", "output:status", serde_json::json!({ "target": role.label(), "loading": loading }));
@@ -251,8 +222,6 @@ pub fn start<R: Runtime>(app: &tauri::App<R>, windows: [&Window<R>; 2], frames: 
             tauri::WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 handle.state::<NativeOutputs>().resize(role, new_inner_size.width, new_inner_size.height);
             }
-            // An output's surface must not outlive its window; outputs close
-            // only with the application.
             tauri::WindowEvent::CloseRequested { api, .. } => api.prevent_close(),
             _ => {}
         });

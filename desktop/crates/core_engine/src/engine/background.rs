@@ -5,12 +5,8 @@ use protocol::{
 use super::*;
 
 impl Engine {
-    /// What fills the screen behind the text for `item`. Non-visual items show
-    /// the intentional song background, never a previous foreground video.
     pub(super) fn item_background(&self, item: &SessionItem) -> Option<Background> {
         match &item.kind {
-            // A capture is drawn over the song background by the scene feed,
-            // on the screens it is routed to.
             SessionItemKind::Text { .. } | SessionItemKind::Audio { .. } | SessionItemKind::Capture { .. } | SessionItemKind::Section {} => self.song_background.clone(),
             SessionItemKind::Image { path } => Some(Background { kind: BackgroundKind::Image, path: path.clone() }),
             SessionItemKind::Video { path, .. } => Some(Background { kind: BackgroundKind::Video, path: path.clone() }),
@@ -21,7 +17,6 @@ impl Engine {
         }
     }
 
-    /// The program background only changes if its file checks out.
     pub(super) fn show_background(
         &mut self,
         background: Option<Background>,

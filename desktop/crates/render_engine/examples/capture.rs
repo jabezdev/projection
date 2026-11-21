@@ -1,6 +1,3 @@
-//! Renders a named scene offscreen to a PNG, for comparison with the parity
-//! references (`capture <scene> <width> <height> <out.png>`).
-
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -9,19 +6,16 @@ use render_engine::{
     Shadow, ShaderSpec, Stroke, TextAlign, VideoKey, Vertical,
 };
 
-/// A deterministic gradient: red across, green down, blue fixed.
 fn gradient(width: u32, height: u32) -> Vec<u8> {
     (0..height).flat_map(|y| (0..width).flat_map(move |x| [(x * 255 / width) as u8, (y * 255 / height) as u8, 160, 255])).collect()
 }
 
-/// The gradient as a PNG in the temporary folder, for image backgrounds and logos.
 fn gradient_png() -> String {
     let path: PathBuf = std::env::temp_dir().join("magi-parity-gradient.png");
     image::save_buffer(&path, &gradient(320, 180), 320, 180, image::ColorType::Rgba8).expect("write gradient");
     path.to_string_lossy().into_owned()
 }
 
-/// One still video frame, standing in for a decoder.
 struct StillFrame(Vec<u8>);
 
 impl PixelFrame for StillFrame {
@@ -127,7 +121,6 @@ fn main() -> anyhow::Result<()> {
     let size = (width.parse()?, height.parse()?);
     let scene = scene(name);
     let mut capture = Capture::new(OutputRole::for_scene(&scene))?;
-    // Video scenes show one still frame, uploaded as the frame pump would.
     if name.ends_with("-video") {
         capture.media().video(&VIDEO).upload(capture.gpu(), &StillFrame(gradient(640, 360)));
         capture.gpu().queue.submit(None);

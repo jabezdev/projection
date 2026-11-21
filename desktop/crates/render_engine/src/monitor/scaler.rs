@@ -1,10 +1,7 @@
-
-
 use crate::Gpu;
 
 use super::*;
 
-/// The offscreen frame at layout size and the pass that scales it down.
 pub(super) struct Scaler {
     pub(super) pipeline: wgpu::RenderPipeline,
     pub(super) layout: wgpu::BindGroupLayout,
@@ -82,7 +79,6 @@ impl Scaler {
         Self { pipeline, layout, params, sampler, source: None }
     }
 
-    /// The offscreen view to paint into, recreated when the size changes.
     pub(super) fn source(&mut self, device: &wgpu::Device, (width, height): (u32, u32)) -> wgpu::TextureView {
         let current = self.source.as_ref().is_some_and(|(texture, ..)| (texture.width(), texture.height()) == (width, height));
         if !current {
@@ -111,7 +107,6 @@ impl Scaler {
         self.source.as_ref().expect("monitor source").1.clone()
     }
 
-    /// Scales the source into `area` of `target`; the rest is black.
     pub(super) fn draw(&self, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, area: [u32; 4]) {
         let Some((texture, _, group)) = &self.source else { return };
         let (w, h) = (area[2].max(1) as f32, area[3].max(1) as f32);

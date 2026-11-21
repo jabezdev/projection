@@ -5,17 +5,14 @@ use std::time::{Duration, Instant};
 
 use media_engine::{now_us, Clip, MediaSession, Phase, SessionAudio, SessionOptions};
 
-
 pub(super) const DEVICE_RATE: u32 = 48_000;
 pub(super) const CHANNELS: u16 = 2;
 
-/// Tests share process-wide decoder counters, so they run one at a time.
 pub(super) fn serial() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// (audio+video 30 fps 4 s, video-only 25 fps 2 s), or None without FFmpeg.
 pub(super) fn fixtures() -> Option<&'static (PathBuf, PathBuf)> {
     static FIXTURES: OnceLock<Option<(PathBuf, PathBuf)>> = OnceLock::new();
     FIXTURES
@@ -52,7 +49,6 @@ pub(super) fn fixtures() -> Option<&'static (PathBuf, PathBuf)> {
         .as_ref()
 }
 
-/// Consumes a session's audio like a device with 10 ms blocks and 20 ms latency.
 pub(super) struct FakeDevice {
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -96,7 +92,6 @@ pub(super) fn whole() -> Clip {
     Clip { start_us: 0, end_us: None, looping: false }
 }
 
-/// Opens with a fake device attached, as the engine does.
 pub(super) fn open(path: &PathBuf, options: SessionOptions) -> (MediaSession, Arc<SessionAudio>, FakeDevice) {
     let audio = Arc::new(SessionAudio::new(DEVICE_RATE, CHANNELS));
     let device = FakeDevice::start(audio.clone());
@@ -108,13 +103,11 @@ pub(super) fn wait_for(session: &MediaSession, phase: Phase, timeout: Duration) 
     let deadline = Instant::now() + timeout;
     while session.status(now_us()).phase != phase {
         assert!(Instant::now() < deadline, "timed out waiting for {phase:?}: {:?}", session.status(now_us()));
-        // The renderer keeps selecting frames, which drains the queue.
         session.current_frame(now_us());
         std::thread::sleep(Duration::from_millis(5));
     }
 }
 
-/// Plays for `duration` while selecting frames the way the renderer does.
 pub(super) fn run_for(session: &MediaSession, duration: Duration) -> Vec<i64> {
     let deadline = Instant::now() + duration;
     let mut shown = Vec::new();
@@ -136,7 +129,6 @@ pub(super) fn wait_for_decoders(count: usize) {
     }
 }
 
-/// A 3 s audio-only MP3, or None without FFmpeg.
 pub(super) fn audio_fixture() -> Option<&'static PathBuf> {
     static FIXTURE: OnceLock<Option<PathBuf>> = OnceLock::new();
     FIXTURE

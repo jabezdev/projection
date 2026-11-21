@@ -12,9 +12,7 @@ mod media;
 
 #[derive(Default)]
 struct FakeAssets {
-    /// Backgrounds accepted, in order.
     backgrounds: RefCell<Vec<String>>,
-    /// Paths that fail to load.
     broken: Vec<String>,
 }
 
@@ -114,13 +112,11 @@ impl Harness {
     fn playback(&self) -> &PlaybackState {
         self.engine.snapshot().playback.as_ref().expect("a cued media session")
     }
-    /// Directives sent since the last call.
     fn take_directives(&mut self) -> Vec<MediaDirective> {
         std::mem::take(&mut self.media.directives)
     }
 }
 
-/// Text(a, b) → Image → Text(c)
 fn setup() -> Harness {
     let project = ProjectModel {
         id: 1,

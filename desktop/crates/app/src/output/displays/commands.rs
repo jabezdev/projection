@@ -1,7 +1,5 @@
-
 use serde::Serialize;
 use tauri::{Emitter, Manager};
-
 
 use crate::output::display_names::{aspect_label, display_names, readable_name, system_number};
 use crate::output::NativeOutputs;
@@ -12,25 +10,18 @@ use super::*;
 
 #[derive(Serialize)]
 pub struct OutputDisplay { monitor: Option<usize>, shown: bool, fullscreen: bool, size: Option<(u32, u32)>, aspect: Option<(u32, u32)> }
-/// A connected display as the operator sees it.
 #[derive(Serialize)]
 pub struct MonitorInfo {
-    /// Identifies this entry of this list; a choice made from an older list
-    /// is refused.
     pub(super) key: String,
-    /// The monitor's model name ("BenQ GW2480"), else "Display 2".
     pub(super) name: String,
-    /// "HDMI", "DisplayPort", "Built-in"…, when the system reports it.
     pub(super) connector: Option<&'static str>,
     pub(super) width: u32,
     pub(super) height: u32,
-    /// "16:9", "16:10"…
     pub(super) aspect: String,
-    /// The operator window is on this display.
     pub(super) operator: bool,
 }
 #[derive(Serialize)]
-pub struct OutputDisplays { monitors: Vec<MonitorInfo>, /// Any output is shown.
+pub struct OutputDisplays { monitors: Vec<MonitorInfo>,
     shown: bool, outputs: std::collections::BTreeMap<String, OutputDisplay> }
 pub(super) fn monitor_key(index: usize, monitor: &tauri::Monitor) -> String {
     format!("{index}|{}|{}x{}", monitor.name().map(String::as_str).unwrap_or(""), monitor.size().width, monitor.size().height)
@@ -39,7 +30,6 @@ pub(super) fn monitor_infos(monitors: &[tauri::Monitor], names: &Names, operator
     let readable: Vec<String> = monitors.iter().map(|m| readable_name(m.name().map(String::as_str), m.name().and_then(|n| names.get(n)))).collect();
     monitors.iter().enumerate().map(|(index, monitor)| {
         let mut name = readable[index].clone();
-        // Two identical projectors: tell them apart by Windows' number.
         if readable.iter().filter(|other| **other == name).count() > 1 {
             let number = monitor.name().and_then(|n| system_number(n)).unwrap_or(index as u32 + 1);
             name = format!("{name} (Display {number})");
@@ -70,7 +60,6 @@ pub fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRout
     let window = app.get_webview_window("main").ok_or("Control window unavailable")?;
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     let target = monitors.get(monitor).ok_or("Display is no longer connected")?;
-    // The list may have changed since the operator chose from it.
     if key != monitor_key(monitor, target) {
         return Err("The connected displays changed. Choose the display again.".into());
     }
@@ -83,8 +72,6 @@ pub fn set_output_display(app: tauri::AppHandle, routes: tauri::State<OutputRout
     present_output(&app, &output)?;
     get_output_displays(app, routes)
 }
-/// Test aid (`PALTO_SHOW_OUTPUTS=1`): shows the outputs at startup, as the
-/// operator's screen switches would, so soak runs need no click.
 pub fn show_outputs_if_requested(app: &tauri::AppHandle) {
     if std::env::var("PALTO_SHOW_OUTPUTS").as_deref() != Ok("1") { return; }
     let routes = app.state::<OutputRoutes>();
@@ -94,7 +81,6 @@ pub fn show_outputs_if_requested(app: &tauri::AppHandle) {
     }
     let _ = app.emit("output:shown", routes.any_shown());
 }
-/// Shows or hides one output on its display.
 #[tauri::command]
 pub fn set_output_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes>, output: String, shown: bool) -> Result<OutputDisplays, String> {
     if !OUTPUTS.iter().any(|(name, _)| *name == output) { return Err("Unknown output".into()); }
@@ -105,17 +91,11 @@ pub fn set_output_shown(app: tauri::AppHandle, routes: tauri::State<OutputRoutes
     get_output_displays(app, routes)
 }
 
-/// The latest native preview still of an output ("projection", "confidence")
-/// or of the style sample ("style"), as JPEG bytes.
 #[tauri::command]
 pub fn get_output_preview(previews: tauri::State<crate::output::PreviewStore>, target: String) -> Result<tauri::ipc::Response, String> {
     previews.jpeg(&target).map(tauri::ipc::Response::new).ok_or_else(|| format!("No {target} preview yet"))
 }
 
-/// Shows the live monitor of `target` ("projection", "confidence") at `rect`
-/// (physical pixels in the operator webview), or hides it with `None`.
-/// Resolves false when live monitors are unavailable; the UI then keeps its
-/// still previews.
 #[tauri::command]
 pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Option<monitor_window::Rect>) -> Result<bool, String> {
     let role = crate::output::role_for_label(&target).ok_or_else(|| format!("Unknown output {target}"))?;
@@ -130,7 +110,6 @@ pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Opt
     received.await.map_err(|e| e.to_string())
 }
 
-/// Renders the settings dialog's samples of both screens in `config` natively.
 #[tauri::command]
 pub fn preview_output_style(outputs: tauri::State<NativeOutputs>, config: protocol::OutputConfig) -> Result<(), String> {
     config.validate()?;
@@ -139,7 +118,6 @@ pub fn preview_output_style(outputs: tauri::State<NativeOutputs>, config: protoc
     Ok(())
 }
 
-/// Current output dimensions for matching operator preview aspect ratios.
 #[tauri::command]
 pub fn get_output_sizes(app: tauri::AppHandle) -> serde_json::Value {
     let mut sizes = serde_json::Map::new();

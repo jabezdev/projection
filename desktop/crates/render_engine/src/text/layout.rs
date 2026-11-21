@@ -1,4 +1,3 @@
-
 use cosmic_text::{
     Align, Attrs, AttrsList, CacheKey, Family, FontSystem, Hinting, ShapeLine, Shaping, Style,
     Weight, Wrap,
@@ -14,17 +13,13 @@ pub enum TextAlign {
     Right,
 }
 
-/// Everything that changes where glyphs go. Pixel values are physical.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     pub family: String,
     pub size: f32,
     pub weight: u16,
     pub italic: bool,
-    /// Line box height in pixels (CSS `line-height` times the size); zero or
-    /// less means CSS `normal`, the font's own ascent plus descent.
     pub line_height: f32,
-    /// Added after every glyph, like CSS `letter-spacing`.
     pub letter_spacing: f32,
     pub align: TextAlign,
 }
@@ -46,23 +41,18 @@ impl TextStyle {
 #[derive(Debug, Clone, Copy)]
 pub struct PlacedGlyph {
     pub key: CacheKey,
-    /// Pen position in pixels relative to the layout's top-left corner.
     pub x: i32,
     pub y: i32,
 }
 
-/// Laid-out text. Lines are CSS line boxes; glyphs carry rasterization keys.
 #[derive(Debug, Clone, Default)]
 pub struct TextLayout {
     pub glyphs: Vec<PlacedGlyph>,
-    /// Width of the widest line, in pixels.
     pub width: f32,
     pub height: f32,
     pub lines: usize,
 }
 
-/// Lays out `text` in `width` pixels (`None` for no wrapping). Newlines start
-/// paragraphs; long words break anywhere (CSS `overflow-wrap: anywhere`).
 pub fn layout(fonts: &Fonts, text: &str, style: &TextStyle, width: Option<f32>) -> TextLayout {
     fonts.with(|system| {
         let family = fonts.resolve(system, &style.family);
@@ -70,9 +60,6 @@ pub fn layout(fonts: &Fonts, text: &str, style: &TextStyle, width: Option<f32>) 
     })
 }
 
-/// The installed face the browser would choose: nearest weight by the CSS
-/// font-matching rules, and the upright face when the family has no italic
-/// (the operator UI disables font synthesis).
 pub(super) fn resolve_face(system: &FontSystem, family: &FamilyChoice, weight: u16, italic: bool) -> (String, Weight, Style) {
     let db = system.db();
     let name = db.family_name(&family.family()).to_string();
@@ -88,7 +75,6 @@ pub(super) fn resolve_face(system: &FontSystem, family: &FamilyChoice, weight: u
     (name, Weight(css_weight(weight, &weights).unwrap_or(weight)), style)
 }
 
-/// CSS Fonts 4 weight matching.
 pub(super) fn css_weight(desired: u16, available: &[u16]) -> Option<u16> {
     let mut sorted = available.to_vec();
     sorted.sort_unstable();
@@ -140,9 +126,6 @@ pub(super) fn layout_with(fonts: &Fonts, system: &mut FontSystem, family: &Famil
         for mut line in lines {
             let kerned = kern_spaces(fonts, system, paragraph, &mut line.glyphs, size, style.align);
             line.w += kerned;
-            // CSS half-leading with the primary font's metrics: its ascent and
-            // descent are centered in the line box; `normal` adds the line gap.
-            // An icon at the start of a line does not set the line's metrics.
             let first = line.glyphs.iter().find(|g| !icons.iter().any(|r| r.contains(&g.start))).or(line.glyphs.first());
             let primary = first.and_then(|g| fonts.line_metrics(system, g.font_id, g.font_weight, size));
             let (ascent, descent, gap) = primary.unwrap_or((line.max_ascent, line.max_descent, 0.0));

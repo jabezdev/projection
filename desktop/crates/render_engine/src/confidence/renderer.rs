@@ -37,9 +37,6 @@ impl ConfidenceRenderer {
         })
     }
 
-    /// Keeps the layout in step with the scene and size. The first layout is
-    /// built in place; later ones on a worker while the old one stays up, so
-    /// loading or editing a long service never stalls presentation.
     pub(super) fn update_layout(&mut self, fonts: &Arc<Fonts>, size: (u32, u32)) {
         let wanted: LayoutKey = (self.scene.groups.clone(), self.scene.size, self.scene.style.clone(), size);
         if let Some((key, done)) = &self.building {
@@ -77,7 +74,6 @@ impl ConfidenceRenderer {
         self.video.update(now, self.scene.transition_ms);
         self.update_layout(fonts, size);
         let laid = self.layout.clone().expect("layout built");
-        // Metrics follow the layout on screen, which may lag a style change.
         let m = Metrics::new(size, &laid.style);
         self.focus(&m, size, now);
         let scroll = self.scroll.value(now);
@@ -88,14 +84,12 @@ impl ConfidenceRenderer {
         let full = Rect::new(0.0, 0.0, m.w, m.h);
         list.fill(full, rgb("#06090b"));
 
-        // Teleprompter.
         let viewport = Rect::new(0.0, m.scroll_top(), m.w, m.scroll_height());
         list.set_clip(Some(viewport));
         let origin = m.scroll_top() + m.padding() - scroll;
         if let Some(waiting) = &laid.waiting {
             list.text(waiting, 0.0, origin, rgb("#a8b7c4"));
         }
-        // `top: 45%` is measured in the scrollport less its 20cq scroll-padding.
         let stick = m.scroll_top() + 20.0 * m.cq + 0.45 * (m.scroll_height() - 40.0 * m.cq);
         for section in &laid.sections {
             let rect = Rect::new(0.0, origin + section.top, m.aside(), section.height);
@@ -103,7 +97,6 @@ impl ConfidenceRenderer {
                 continue;
             }
             list.fill(rect, section.aside);
-            // Rotated label, sticky at 45% of the viewport within its section.
             let (label_w, label_h) = (section.label.height, section.label.width + 3.0 * m.cq);
             let y = stick.min(rect.bottom() - label_h).max(rect.y);
             let x = (m.aside() - label_w) / 2.0;
@@ -135,7 +128,6 @@ impl ConfidenceRenderer {
         }
         list.set_clip(None);
 
-        // Topbar: clock and tape.
         if m.bar() {
             list.fill(Rect::new(0.0, 0.0, m.w, m.topbar()), rgb("#172029"));
             list.fill(Rect::new(0.0, m.topbar(), m.w, 1.0), rgb("#3d4d5b"));
@@ -169,7 +161,6 @@ impl ConfidenceRenderer {
             }
             list.fill(Rect::new(rect.right() - 1.0, 0.0, 1.0, rect.h), with_alpha(saturate(rgb("#3c4a57"), tone), alpha));
             list.fill(Rect::new(rect.x, rect.h - 0.3 * m.cq, rect.w - 1.0, 0.3 * m.cq), with_alpha(saturate(card.color, tone), alpha));
-            // Content is centered in the card's padding box above the colored edge.
             let center = (0.5 * m.cq + rect.h - 0.5 * m.cq - 0.3 * m.cq) / 2.0;
             list.text(&card.code, x + m.cq, center - card.code.height / 2.0, with_alpha(saturate(card.color, tone), alpha));
             let title_x = x + m.cq + card.code.width + m.cq;
@@ -177,7 +168,6 @@ impl ConfidenceRenderer {
         }
         list.set_clip(None);
 
-        // The foreground video covers everything once it can be drawn.
         let video_opacity = self.video.opacity(now);
         if video_opacity > 0.0 {
             list.fill(full, [0.0, 0.0, 0.0, video_opacity]);
@@ -186,10 +176,7 @@ impl ConfidenceRenderer {
         list
     }
 
-    /// Centers the active row and keeps its tape card in view: animated when
-    /// the cue changes, immediately after a resize.
     pub(super) fn focus(&mut self, m: &Metrics, size: (u32, u32), now: Instant) {
-        // Wait for a layout of the current groups before moving.
         let laid = self.layout.clone().expect("layout built");
         if laid.groups != self.scene.groups || laid.style != self.scene.style || laid.size != size || self.focused == Some((self.revision, size)) {
             return;
@@ -202,7 +189,6 @@ impl ConfidenceRenderer {
             let target = (m.padding() + row.top - (m.scroll_height() - row.height) / 2.0).clamp(0.0, max);
             self.scroll.scroll_to(target, now, animate);
         }
-        // Spacer after the cards lets the last ones scroll left.
         let strip = m.w - m.tape_left();
         let max_tape = (laid.cards.len() as f32 * m.card_width() + 70.0 * m.cq - strip).max(0.0);
         let tape = (group as f32 * m.card_width() - strip / 5.0).clamp(0.0, max_tape);

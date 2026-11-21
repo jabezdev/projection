@@ -1,13 +1,10 @@
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-
 use crate::AppState;
 use crate::system::backup;
 use crate::system::logging;
 
-
-/// Problems found while starting, shown to the operator once the UI loads.
 pub struct StartupWarnings(pub Vec<String>);
 
 #[tauri::command]
@@ -15,7 +12,6 @@ pub fn get_startup_warnings(warnings: tauri::State<StartupWarnings>) -> Vec<Stri
     warnings.0.clone()
 }
 
-/// Opens the log folder in the system file manager.
 #[tauri::command]
 pub fn open_logs_folder() -> Result<(), String> {
     let dir = logging::logs_dir();
@@ -23,13 +19,11 @@ pub fn open_logs_folder() -> Result<(), String> {
     reveal(&dir)
 }
 
-/// Opens `dir` in Explorer, Finder or the desktop's file manager.
 pub fn reveal(dir: &std::path::Path) -> Result<(), String> {
     let program = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
     std::process::Command::new(program).arg(dir).spawn().map(drop).map_err(|e| format!("Cannot open {}: {e}", dir.display()))
 }
 
-/// The data folder in use (library, settings, logs, backups).
 pub struct DataDir(pub std::path::PathBuf);
 
 #[derive(serde::Serialize)]
@@ -41,7 +35,6 @@ pub fn get_app_info(data: tauri::State<DataDir>) -> AppInfo {
     AppInfo { version: env!("CARGO_PKG_VERSION"), data_dir: data.0.to_string_lossy().into_owned(), last_backup_ms: last.map(|d| d.as_millis() as i64) }
 }
 
-/// Asks where to save, then writes a backup zip there. `None` when cancelled.
 #[tauri::command]
 pub async fn export_backup(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
