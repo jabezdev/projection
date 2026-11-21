@@ -31,6 +31,10 @@ impl Captures {
         Self { backends, choice: Mutex::new(choice.to_string()), running: Mutex::default(), failed: Mutex::default() }
     }
 
+    pub fn method_labels(&self) -> Vec<&'static str> {
+        self.backends.iter().map(|b| b.label()).collect()
+    }
+
     pub fn backend(&self) -> Option<Arc<dyn Backend>> {
         let choice = self.choice.lock().expect("capture choice poisoned").clone();
         self.backends.iter().find(|b| b.name() == choice).or(self.backends.first()).cloned()

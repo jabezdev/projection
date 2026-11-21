@@ -2,6 +2,7 @@ mod engine;
 mod frame_pump;
 mod gpu;
 
+pub mod benchmark;
 mod capture;
 mod confidence;
 mod frame;

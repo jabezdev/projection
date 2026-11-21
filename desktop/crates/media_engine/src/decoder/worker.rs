@@ -10,7 +10,7 @@ use crate::hwaccel::{self, HwDecoder};
 
 use super::*;
 
-pub(super) fn decode_threads() -> usize {
+pub(crate) fn decode_threads() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get()).min(4)
 }
 

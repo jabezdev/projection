@@ -1,4 +1,5 @@
 mod audio;
+pub mod bench;
 mod clock;
 mod decoder;
 mod frames;
@@ -11,7 +12,7 @@ mod session;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-pub use audio::{audio_recoveries, opened_outputs, AudioOutput, DeviceFormat, SessionAudio};
+pub use audio::{audio_recoveries, describe_devices, opened_outputs, AudioOutput, DeviceFormat, SessionAudio};
 pub use clock::now_us;
 pub use decoder::{active_decoders, fit_within, Clip, MAX_FRAME, MAX_YUV_FRAME};
 pub use frames::{FrameFormat, FrameStats, Plane, VideoFrame, YuvMatrix};

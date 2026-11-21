@@ -150,3 +150,15 @@ pub(super) fn build_stream(slot: Slot, failed: Arc<AtomicBool>, session: Option<
     stream.play()?;
     Ok((stream, session))
 }
+
+pub fn describe_devices() -> (Option<String>, Vec<String>) {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let host = cpal::default_host();
+    let name = |device: &cpal::Device| device.description().map(|d| d.name().to_string()).unwrap_or_else(|_| "unnamed device".into());
+    let default = host.default_output_device().map(|device| {
+        let format = device.default_output_config().map(|c| format!("{} Hz, {} channels, {:?}", c.sample_rate(), c.channels(), c.sample_format()));
+        format!("{} ({})", name(&device), format.unwrap_or_else(|e| e.to_string()))
+    });
+    let all = host.output_devices().map(|devices| devices.map(|d| name(&d)).collect()).unwrap_or_default();
+    (default, all)
+}

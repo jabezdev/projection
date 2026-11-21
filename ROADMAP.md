@@ -8,10 +8,10 @@ Released: `v0.2.0`.
 
 Many features have so far only been compile-checked for Windows. Prove them on the real machine before adding more.
 
-- [ ] Fix audio underruns after seeks and the repeated "Audio flush not acknowledged" warnings.
-- [ ] Find why idle memory grew from 298 to 366 MB.
-- [ ] Church-PC visit with one installer carrying every fix. Check: display scaling at 125–150 %, projector hotplug, HDMI audio switching, fonts, keep-awake, crash recovery, backups, live monitors (DX12 vs Vulkan), effects at 60 fps, clicker, MIDI and Stream Deck, window capture and Desktop Duplication, phone remote and the firewall rule, Companion, an update and a rollback, the 30-minute soak, a full rehearsal, and that closing leaves no process.
-- [ ] Choose the default decoder (software or hardware) from `profile.ts --compare` on that PC.
+- [x] Audio underruns after seeks and "Audio flush not acknowledged": seeks no longer wait on the output.
+- [x] Idle memory growth: paused videos without audio read up to 64 MB ahead; now 4 MB.
+- [x] System check on the first start of each version (`logs/system-check.log`, or run `PALTO.exe --system-check`): computer, storage, displays, fonts, audio, controllers, capture, keep-awake, network, firewall, GPU effects speed, and the video decoder, chosen from the library's videos.
+- [ ] Church-PC visit with one installer carrying every fix. Bring back `system-check.log`. Check by hand: display scaling at 125–150 %, projector hotplug, HDMI audio switching, crash recovery, live monitors (DX12 vs Vulkan), clicker, MIDI and Stream Deck presses, window capture and Desktop Duplication, the phone remote from a phone, Companion, an update and a rollback, the 30-minute soak, a full rehearsal, and that closing leaves no process.
 - [ ] Add the updater signing key as the `TAURI_SIGNING_PRIVATE_KEY` CI secret, so tag builds can ship updates.
 
 ## 2. One data model for desktop and web
@@ -20,10 +20,17 @@ PALTO stores a song as a title plus one lyrics string with numeric IDs. The web 
 
 Decided: a library song is a reference that service edits never change; library fixes reach upcoming services but not past ones; string IDs shared with Convex; edits as small operations, the same shape on both sides.
 
-- [ ] Shared model: songs with sections, services with arrangements and service-only variations, upcoming and past. **Open:** the details.
+- [ ] Shared model: songs with sections, services with arrangements and service-only variations, upcoming and past.
+  - A section is a type (Verse, Chorus, Bridge…) with an optional number, name and colour; a blank line splits slides.
+  - Songs have versions. An edit changes the current version in place unless a past service points at it, then it starts a new one.
+  - A service becomes past the day after its date, or when the operator ends it live; it then pins the song versions it used.
+  - A service item may override, for that service only: the arrangement, a section's lyrics or slide breaks, the key, notes, background and shown title.
+  - Every item kind syncs (songs, text, media, presentations, captures, headers). File paths and capture sources stay per device; media matches by content hash.
+  - Desktop "projects" become services with a date, title, leader and notes.
+  - Deleting a song archives it, so services still resolve it and it can be restored.
 - [ ] Migrate SQLite to it, after an automatic backup.
 - [ ] Undo and redo from a stored edit history.
-- [ ] Song credits (authors, copyright, CCLI number), filled by OpenLyrics import.
+- [ ] Song credits, all optional: authors with a role (words, music, translation), copyright, CCLI number, publisher, year. Filled by OpenLyrics import.
 - [ ] Service templates ("Sunday", "Youth night") with fixed items and empty slots.
 
 ## 3. Cloud sync, offline-first

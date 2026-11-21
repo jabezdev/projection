@@ -154,7 +154,11 @@ pub fn attach(context: &mut ffmpeg::codec::context::Context, codec: *const ffi::
         DecoderChoice::Auto => candidates().iter().map(|(name, _)| *name).collect(),
         DecoderChoice::Device(name) => candidates().iter().map(|(n, _)| *n).filter(|n| *n == name).collect(),
     };
-    for name in names {
+    attach_first(context, codec, &names)
+}
+
+pub fn attach_first(context: &mut ffmpeg::codec::context::Context, codec: *const ffi::AVCodec, names: &[&'static str]) -> Option<HwDecoder> {
+    for &name in names {
         let Some(kind) = device_type(name) else { continue };
         let Some(format) = hw_format(codec, kind) else { continue };
         let Some(device) = shared_device(name) else { continue };

@@ -19,6 +19,7 @@ mod worker;
 pub use packing::fit_within;
 use packing::pack;
 use worker::open_video;
+pub(crate) use worker::decode_threads;
 
 const STASH_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 const IDLE_STASH_BYTES: usize = 4 * 1024 * 1024;

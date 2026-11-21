@@ -35,6 +35,10 @@ impl InputState {
         (state, loaded.set_aside)
     }
 
+    pub fn devices(&self) -> InputDevices {
+        self.devices.lock().map(|d| d.clone()).unwrap_or_default()
+    }
+
     pub fn set_devices(&self, update: impl FnOnce(&mut InputDevices)) {
         if let Ok(mut devices) = self.devices.lock() {
             update(&mut devices);

@@ -84,6 +84,7 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
     event_bridge::forward_engine_events(app.handle().clone(), &channels);
     let media = outputs::start(app, &channels, &config, &dir)?;
     start_engine_thread(channels, media, store)?;
+    crate::system::check::start_if_due(app.handle(), &dir);
     Ok(())
 }
 

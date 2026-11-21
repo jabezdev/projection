@@ -63,6 +63,8 @@ pub struct AppConfig {
     pub osc_allowed: Vec<String>,
     pub capture_method: String,
     pub media_autoplay: bool,
+    pub decoder_chosen: bool,
+    pub system_check_version: String,
 }
 
 impl Default for AppConfig {
@@ -77,6 +79,8 @@ impl Default for AppConfig {
             osc_allowed: Vec::new(),
             capture_method: String::new(),
             media_autoplay: true,
+            decoder_chosen: false,
+            system_check_version: String::new(),
         }
     }
 }
@@ -127,7 +131,10 @@ pub fn set_video_decoder(config: tauri::State<ConfigStore>, choice: String) -> R
     if parsed == media_engine::hwaccel::DecoderChoice::Software && choice != "software" {
         return Err(format!("Unknown video decoder {choice}"));
     }
-    config.update(|c| c.video_decoder = choice.clone())?;
+    config.update(|c| {
+        c.video_decoder = choice.clone();
+        c.decoder_chosen = true;
+    })?;
     log::info!("Video decoder set to {choice}");
     media_engine::hwaccel::set_choice(parsed);
     Ok(())

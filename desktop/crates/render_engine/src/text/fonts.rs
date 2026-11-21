@@ -34,6 +34,10 @@ impl Fonts {
         f(&mut system.lock().expect("font system poisoned"))
     }
 
+    pub fn has_family(&self, name: &str) -> bool {
+        self.with(|system| installed(system, name.trim()))
+    }
+
     pub(super) fn resolve(&self, system: &FontSystem, requested: &str) -> FamilyChoice {
         let key = requested.trim().to_ascii_lowercase();
         match key.as_str() {

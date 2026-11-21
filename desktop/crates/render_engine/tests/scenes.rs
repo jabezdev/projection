@@ -283,3 +283,15 @@ fn an_outline_surrounds_the_glyphs() {
     assert!(blue > 100, "an outline in the outline color: {blue} pixels");
     assert!(text_brightness(&frame) >= 250, "the glyph fill is drawn over it");
 }
+
+#[test]
+fn the_render_benchmark_times_every_frame_and_names_its_adapter() {
+    if capture(OutputRole::Projection).is_none() {
+        return;
+    }
+    assert!(!render_engine::benchmark::adapters().is_empty());
+    let bench = render_engine::benchmark::effects_and_shader((640, 360), 5).unwrap();
+    assert_eq!(bench.frames, 5);
+    assert!(!bench.adapter.is_empty());
+    assert!(bench.mean_ms > 0.0 && bench.worst_ms >= bench.mean_ms);
+}

@@ -1,12 +1,3 @@
-; NSIS hooks for the PALTO installer (bundle.windows.nsis.installerHooks).
-;
-; LAN access (Settings > Remote) lets phones and Companion reach PALTO, which
-; Windows Firewall blocks unless a rule allows it. The installer runs per
-; user, so adding the rule asks for administrator permission once; updates
-; find the rule already there and do not ask again. Declining leaves PALTO
-; working on this computer only, and Windows asks the first time LAN access
-; is turned on instead.
-
 !macro NSIS_HOOK_POSTINSTALL
   nsExec::ExecToStack 'netsh advfirewall firewall show rule name="PALTO"'
   Pop $0
@@ -17,7 +8,6 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  ; Updates reinstall over the same folder and keep the rule.
   ${If} $UpdateMode <> 1
     nsExec::ExecToStack 'netsh advfirewall firewall show rule name="PALTO"'
     Pop $0

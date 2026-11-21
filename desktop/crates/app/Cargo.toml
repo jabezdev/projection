@@ -31,6 +31,7 @@ zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 midir = "0.11"
 elgato-streamdeck = { version = "0.14", default-features = false }
+sysinfo = { version = "0.40", default-features = false, features = ["system", "disk"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
