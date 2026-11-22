@@ -5,6 +5,7 @@ obs=$(readlink -f "$here/..")
 tools=${PROJECTION_WIN_TOOLS:-$HOME/.local/share/projection-win}
 target=x86_64-pc-windows-msvc
 nsis_version=3.12-1
+nsis_snapshot=20260504T084255Z
 
 mkdir -p "$tools"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -19,7 +20,7 @@ if [ ! -x "$nsis/usr/bin/makensis" ]; then
     work=$(mktemp -d)
     mkdir -p "$nsis"
     for pkg in "nsis_${nsis_version}_amd64" "nsis-common_${nsis_version}_all"; do
-        curl -sSfL -o "$work/$pkg.deb" "https://deb.debian.org/debian/pool/main/n/nsis/$pkg.deb"
+        curl -sSfL -o "$work/$pkg.deb" "https://snapshot.debian.org/archive/debian/$nsis_snapshot/pool/main/n/nsis/$pkg.deb"
         bsdtar -xf "$work/$pkg.deb" -C "$work"
         bsdtar -xf "$work"/data.tar.* -C "$nsis"
         rm "$work"/data.tar.* "$work"/control.tar.*
