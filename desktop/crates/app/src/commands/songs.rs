@@ -36,14 +36,7 @@ pub fn create_song(state: tauri::State<AppState>, mut song: Song) -> Result<Song
 
 #[tauri::command]
 pub fn update_song(state: tauri::State<AppState>, song: Song) -> Result<Song, String> {
-    let updated = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        let now = now_ms();
-        db.update_song_details(&song, now).map_err(|e| e.to_string())?;
-        let version = &song.current;
-        let current = db.edit_song_content(&song.id, version.sections.clone(), version.arrangement.clone(), version.background.clone(), now).map_err(|e| e.to_string())?;
-        Song { current, ..song }
-    };
+    let updated = state.db.lock().map_err(|e| e.to_string())?.save_song(&song, now_ms()).map_err(|e| e.to_string())?;
     state.send(EngineCommand::RefreshService)?;
     Ok(updated)
 }
@@ -54,7 +47,7 @@ pub fn archive_song(state: tauri::State<AppState>, id: String, archived: bool) -
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let mut song = db.song(&id).map_err(|e| e.to_string())?.ok_or_else(|| format!("Song {id} not found"))?;
         song.archived = archived;
-        db.update_song_details(&song, now_ms()).map_err(|e| e.to_string())?;
+        db.save_song(&song, now_ms()).map_err(|e| e.to_string())?;
     }
     state.send(EngineCommand::RefreshService)
 }

@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use protocol::model::{ItemContent, Service, ServiceItem};
 use protocol::CaptureSource;
 use rusqlite::{params, OptionalExtension};
+use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use super::Repository;
@@ -16,11 +17,21 @@ struct DeviceBinding {
 
 impl Repository {
     pub fn save_service(&self, service: &Service, now_ms: i64) -> Result<()> {
-        let frozen: bool = self.conn.query_row("SELECT EXISTS(SELECT 1 FROM service WHERE id = ?1 AND frozen = 1)", params![service.id], |row| row.get(0))?;
-        let mut service = service.clone();
-        if frozen {
-            self.pin_songs(&mut service)?;
-        }
+        self.atomic(|| {
+            let old = self.service(&service.id)?;
+            let frozen = self.is_frozen(&service.id)?;
+            let mut service = service.clone();
+            if frozen {
+                self.pin_songs(&mut service)?;
+            }
+            if let Some(old) = old.as_ref().filter(|_| !frozen) {
+                self.record_service_edit(old, &service, now_ms)?;
+            }
+            self.write_service(&service, old.as_ref(), now_ms)
+        })
+    }
+
+    pub(super) fn write_service(&self, service: &Service, old: Option<&Service>, now_ms: i64) -> Result<()> {
         self.conn
             .execute(
                 "INSERT INTO service(id, scheduled_at_ms, title, leader, notes, ended_at_ms, updated_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -28,13 +39,22 @@ impl Repository {
                 params![service.id, service.scheduled_at_ms, service.title, service.leader, service.notes, service.ended_at_ms, now_ms],
             )
             .context("save service")?;
-        self.conn
-            .execute("DELETE FROM device_binding WHERE item_id IN (SELECT id FROM service_item WHERE service_id = ?1)", params![service.id])?;
-        self.conn.execute("DELETE FROM service_item WHERE service_id = ?1", params![service.id])?;
+        let old_items: HashMap<&str, (usize, &ServiceItem)> = old.map(|o| o.items.iter().enumerate().map(|(i, item)| (item.id.as_str(), (i, item))).collect()).unwrap_or_default();
+        let kept: HashSet<&str> = service.items.iter().map(|i| i.id.as_str()).collect();
+        for id in old_items.keys().filter(|id| !kept.contains(*id)) {
+            self.conn.execute("DELETE FROM device_binding WHERE item_id = ?1", params![id])?;
+            self.conn.execute("DELETE FROM service_item WHERE id = ?1", params![id])?;
+        }
         for (position, item) in service.items.iter().enumerate() {
-            self.insert_item(&service.id, position, item)?;
+            if old_items.get(item.id.as_str()) != Some(&(position, item)) {
+                self.write_item(&service.id, position, item)?;
+            }
         }
         Ok(())
+    }
+
+    fn is_frozen(&self, id: &str) -> Result<bool> {
+        Ok(self.conn.query_row("SELECT EXISTS(SELECT 1 FROM service WHERE id = ?1 AND frozen = 1)", params![id], |row| row.get(0))?)
     }
 
     pub fn service(&self, id: &str) -> Result<Option<Service>> {
@@ -57,6 +77,7 @@ impl Repository {
     }
 
     pub fn delete_service(&self, id: &str) -> Result<bool> {
+        self.drop_history(id)?;
         self.conn.execute("DELETE FROM device_binding WHERE item_id IN (SELECT id FROM service_item WHERE service_id = ?1)", params![id])?;
         self.conn.execute("DELETE FROM service_item WHERE service_id = ?1", params![id])?;
         Ok(self.conn.execute("DELETE FROM service WHERE id = ?1", params![id]).context("delete service")? > 0)
@@ -79,11 +100,13 @@ impl Repository {
         let mut statement = self.conn.prepare(&format!("SELECT id FROM service {filter}"))?;
         let ids = statement.query_map(args, |row| row.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
         for id in &ids {
-            let Some(mut service) = self.service(id)? else { continue };
+            let Some(old) = self.service(id)? else { continue };
+            let mut service = old.clone();
             self.pin_songs(&mut service)?;
             let updated_at: i64 = self.conn.query_row("SELECT updated_at_ms FROM service WHERE id = ?1", params![id], |row| row.get(0))?;
-            self.save_service(&service, updated_at)?;
+            self.write_service(&service, Some(&old), updated_at)?;
             self.conn.execute("UPDATE service SET frozen = 1 WHERE id = ?1", params![id])?;
+            self.drop_history(id)?;
         }
         Ok(ids.len())
     }
@@ -98,23 +121,30 @@ impl Repository {
         Ok(())
     }
 
-    fn insert_item(&self, service_id: &str, position: usize, item: &ServiceItem) -> Result<()> {
+    fn write_item(&self, service_id: &str, position: usize, item: &ServiceItem) -> Result<()> {
         let (song_id, version_id) = match &item.content {
             ItemContent::Song(song) => (Some(song.song_id.as_str()), song.version_id.as_deref()),
             _ => (None, None),
         };
         self.conn
             .execute(
-                "INSERT INTO service_item(id, service_id, position, song_id, version_id, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO service_item(id, service_id, position, song_id, version_id, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(id) DO UPDATE SET service_id = ?2, position = ?3, song_id = ?4, version_id = ?5, body = ?6",
                 params![item.id, service_id, position as i64, song_id, version_id, serde_json::to_string(&ServiceItem { content: item.content.without_device_fields(), ..item.clone() })?],
             )
-            .context("insert service item")?;
+            .context("save service item")?;
         let binding = match &item.content {
             ItemContent::Presentation { slides, .. } => DeviceBinding { slides: slides.clone(), source: None },
             ItemContent::Capture { source, .. } => DeviceBinding { slides: Vec::new(), source: source.clone() },
-            _ => return Ok(()),
+            _ => {
+                self.conn.execute("DELETE FROM device_binding WHERE item_id = ?1", params![item.id])?;
+                return Ok(());
+            }
         };
-        self.conn.execute("INSERT INTO device_binding(item_id, body) VALUES (?1, ?2)", params![item.id, serde_json::to_string(&binding)?])?;
+        self.conn.execute(
+            "INSERT INTO device_binding(item_id, body) VALUES (?1, ?2) ON CONFLICT(item_id) DO UPDATE SET body = ?2",
+            params![item.id, serde_json::to_string(&binding)?],
+        )?;
         Ok(())
     }
 

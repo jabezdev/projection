@@ -2,7 +2,8 @@ import { ConvexError, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { itemContent, section } from "../schema";
-import { newId } from "@magi/shared";
+import { edits, newId } from "@magi/shared";
+import { currentUser } from "./auth";
 
 export type Content = Infer<typeof itemContent>;
 export type SongContent = { sections: Infer<typeof section>[]; arrangement: string[]; background?: string };
@@ -83,4 +84,49 @@ export async function pinSongs(ctx: MutationCtx, serviceUid: string) {
 export async function freeze(ctx: MutationCtx, service: Doc<"services">) {
   await pinSongs(ctx, service.uid);
   await ctx.db.patch(service._id, { frozen: true });
+}
+
+export async function serviceRecord(ctx: QueryCtx, uid: string): Promise<edits.ServiceRecord | null> {
+  const service = await serviceByUid(ctx, uid);
+  if (!service) return null;
+  const items = (await itemsOf(ctx, uid)).map(({ uid: id, title, notes, background, content }) => ({ id, title, notes, background, content }));
+  return { id: uid, scheduledAtMs: service.scheduledAtMs, title: service.title, notes: service.notes, endedAtMs: service.endedAtMs, items };
+}
+
+export async function songRecord(ctx: QueryCtx, uid: string): Promise<edits.SongRecord | null> {
+  const song = await songByUid(ctx, uid);
+  const version = song && (await versionByUid(ctx, song.currentVersion));
+  if (!song || !version) return null;
+  const { title, archived, credits, key, tags } = song;
+  return { id: uid, title, archived, credits, key, tags, current: { sections: version.sections, arrangement: version.arrangement, background: version.background } };
+}
+
+export async function logged<T>(ctx: MutationCtx, kind: "service" | "song", uid: string, work: () => Promise<T>): Promise<T> {
+  const read = () => (kind === "service" ? serviceRecord(ctx, uid) : songRecord(ctx, uid));
+  const before = await read();
+  const frozen = kind === "service" && (await serviceByUid(ctx, uid))?.frozen;
+  const result = await work();
+  const after = await read();
+  const user = await currentUser(ctx);
+  if (!before || !after || frozen || !user) return result;
+  const change: edits.Change =
+    kind === "service"
+      ? { kind, id: uid, ops: edits.diffService(before as edits.ServiceRecord, after as edits.ServiceRecord) }
+      : { kind, id: uid, ops: edits.diffSong(before as edits.SongRecord, after as edits.SongRecord) };
+  if (edits.isEmpty(change)) return result;
+  const names = await itemNames(ctx, [...((after as edits.ServiceRecord).items ?? []), ...((before as edits.ServiceRecord).items ?? [])]);
+  const atMs = Date.now();
+  await ctx.db.insert("edits", { uid: newId(), recordUid: uid, atMs, by: user._id, label: edits.describe(change, (id) => names.get(id) ?? "an item"), change });
+  return result;
+}
+
+async function itemNames(ctx: QueryCtx, items: edits.ItemRecord[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  for (const item of items) {
+    if (names.has(item.id)) continue;
+    const songId = item.content.kind === "song" ? item.content.songId : undefined;
+    const song = !item.title && songId ? await songByUid(ctx, songId) : null;
+    names.set(item.id, item.title || song?.title || (item.content.kind === "header" ? "a header" : `a ${item.content.kind} item`));
+  }
+  return names;
 }

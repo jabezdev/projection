@@ -29,7 +29,7 @@ Decided: a library song is a reference that service edits never change; library 
   - Desktop "projects" became services with a date and time, title, leader and notes. Times are stored as UTC and shown in local time.
   - Deleting a song archives it, so services still resolve it and it can be restored.
 - [x] Move SQLite to it. Dev data was dropped instead of migrated.
-- [ ] Undo and redo from a stored edit history.
+- [x] Undo and redo from a stored edit history, per service and per song. Convex logs the same edit operations.
 - [x] Song credits, all optional: authors with a role (words, music, translation), copyright, CCLI number, publisher, year. Filled by OpenLyrics import.
 - [ ] Service templates ("Sunday", "Youth night") with fixed items and empty slots.
 

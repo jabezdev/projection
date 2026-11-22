@@ -53,6 +53,12 @@ pub enum EngineCommand {
     SaveService {
         service: Service,
     },
+    StepServiceHistory {
+        service_id: String,
+        redo: bool,
+        #[serde(default)]
+        request: u64,
+    },
     RefreshService,
 }
 
@@ -77,7 +83,7 @@ impl EngineCommand {
 
     pub fn domain(&self) -> CommandDomain {
         match self {
-            EngineCommand::LoadService { .. } | EngineCommand::SaveService { .. } | EngineCommand::RefreshService => {
+            EngineCommand::LoadService { .. } | EngineCommand::SaveService { .. } | EngineCommand::StepServiceHistory { .. } | EngineCommand::RefreshService => {
                 CommandDomain::Editor
             }
 

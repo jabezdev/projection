@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requirePermission } from "./lib/auth";
-import { requireSong, setSongContent, songByUid, touch, versionByUid } from "./lib/sequence";
+import { logged, requireSong, setSongContent, songByUid, touch, versionByUid } from "./lib/sequence";
 import { defined } from "./lib/util";
 import { credits, section } from "./schema";
 import { newId } from "@magi/shared";
@@ -78,8 +78,10 @@ export const update = mutation({
   handler: async (ctx, { songId, ...fields }) => {
     const user = await requirePermission(ctx, "editLibrary");
     const song = await requireSong(ctx, songId);
-    await ctx.db.patch(song._id, defined(fields));
-    await touch(ctx, song._id, user._id);
+    await logged(ctx, "song", songId, async () => {
+      await ctx.db.patch(song._id, defined(fields));
+      await touch(ctx, song._id, user._id);
+    });
   },
 });
 
@@ -90,7 +92,7 @@ export const setContent = mutation({
     const song = await requireSong(ctx, songId);
     const ids = new Set(content.sections.map((s) => s.id));
     if (content.arrangement.some((id) => !ids.has(id))) throw new ConvexError("The arrangement names a part that isn't in the song");
-    return setSongContent(ctx, song, content, user._id);
+    return logged(ctx, "song", songId, () => setSongContent(ctx, song, content, user._id));
   },
 });
 
@@ -99,6 +101,6 @@ export const archive = mutation({
   handler: async (ctx, { songId, archived }) => {
     await requirePermission(ctx, "editLibrary");
     const song = await requireSong(ctx, songId);
-    await ctx.db.patch(song._id, { archived });
+    await logged(ctx, "song", songId, () => ctx.db.patch(song._id, { archived }));
   },
 });

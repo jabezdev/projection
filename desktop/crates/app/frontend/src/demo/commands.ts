@@ -2,9 +2,11 @@ import type { UiOnlyPair, UiOnlyProgramState } from './types';
 import { saveUiOnlyStore } from './store';
 import { emitUiOnly } from './events';
 import { UI_ONLY_MONITORS, UiOnlyEngine } from './engine';
-import { isPast, newId, type MediaFile, type Service, type Song } from '../api/models';
+import { isPast, newId, type MediaFile, type Service, type ServiceItem, type Song } from '../api/models';
+import { dropHistory, historyOf, recordService, recordSong, stepService, stepSong } from './history';
 
 function freeze(engine: UiOnlyEngine, service: Service): Service {
+  dropHistory(service.id);
   if (!engine.store.frozen.includes(service.id)) engine.store.frozen.push(service.id);
   return { ...service, items: service.items.map(item => item.content.kind === 'song' && !item.content.versionId ? { ...item, content: { ...item.content, versionId: engine.store.songs[item.content.songId]?.current.id } } : item) };
 }
@@ -13,6 +15,30 @@ function store(engine: UiOnlyEngine, service: Service) {
   const frozen = engine.store.frozen.includes(service.id) ? freeze(engine, service) : service;
   engine.store.services[service.id] = frozen;
   return frozen;
+}
+
+function writeSong(engine: UiOnlyEngine, song: Song, track = true): Song {
+  const old = engine.store.songs[song.id];
+  if (!old) throw new Error('Song not found');
+  let current = { ...song.current, id: old.current.id, number: old.current.number };
+  const sameContent = JSON.stringify([current.sections, current.arrangement, current.background]) === JSON.stringify([old.current.sections, old.current.arrangement, old.current.background]);
+  if (!sameContent && pinned(engine, old.current.id)) { engine.store.versions[old.current.id] = old.current; current = { ...current, id: newId(), number: old.current.number + 1 }; }
+  engine.store.songs[song.id] = { ...song, current };
+  if (track) recordSong(old, engine.store.songs[song.id]);
+  return engine.store.songs[song.id];
+}
+
+function itemName(engine: UiOnlyEngine, items: ServiceItem[]) {
+  return (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return 'an item';
+    if (item.title?.trim()) return item.title.trim();
+    const c = item.content;
+    if (c.kind === 'song') return engine.store.songs[c.songId]?.title ?? 'a song';
+    if (c.kind === 'media') return engine.store.media.find(m => m.id === c.mediaId)?.title ?? 'a media item';
+    if (c.kind === 'text') return c.steps[0]?.split('\n')[0] || 'a text item';
+    return `a ${c.kind}`;
+  };
 }
 
 function pinned(engine: UiOnlyEngine, versionId: string) {
@@ -73,18 +99,13 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         return song as T;
       }
       case 'update_song': {
-        const song = args?.song as Song;
-        const old = engine.store.songs[song?.id];
-        if (!old) throw new Error('Song not found');
-        let current = { ...song.current, id: old.current.id, number: old.current.number };
-        if (pinned(engine, old.current.id)) { engine.store.versions[old.current.id] = old.current; current = { ...current, id: newId(), number: old.current.number + 1 }; }
-        engine.store.songs[song.id] = { ...song, current };
+        const song = writeSong(engine, args?.song as Song);
         refresh(engine);
-        return engine.store.songs[song.id] as T;
+        return song as T;
       }
       case 'archive_song': {
         const song = engine.store.songs[id];
-        if (song) engine.store.songs[id] = { ...song, archived: Boolean(args?.archived) };
+        if (song) writeSong(engine, { ...song, archived: Boolean(args?.archived) });
         refresh(engine); return undefined as T;
       }
 
@@ -101,9 +122,28 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         return service as T;
       }
       case 'save_service': {
-        const service = store(engine, args?.service as Service);
+        const incoming = args?.service as Service;
+        const old = engine.store.services[incoming.id];
+        const service = store(engine, incoming);
+        if (old && !engine.store.frozen.includes(service.id)) recordService(old, service, itemName(engine, [...service.items, ...old.items]));
         if (engine.store.active_service_id === service.id) refresh(engine); else saveUiOnlyStore(engine.store);
         return undefined as T;
+      }
+      case 'edit_history': return historyOf(id) as T;
+      case 'undo_edit':
+      case 'redo_edit': {
+        const redo = command === 'redo_edit';
+        if (args?.record === 'song') {
+          const song = engine.store.songs[id];
+          const next = song && stepSong(song, redo);
+          const saved = next ? writeSong(engine, next, false) : undefined;
+          if (saved) refresh(engine);
+          return { song: saved, history: historyOf(id) } as T;
+        }
+        const service = engine.store.services[id];
+        const next = service && !engine.store.frozen.includes(id) ? stepService(service, redo) : null;
+        if (next) { engine.store.services[id] = next; if (engine.store.active_service_id === id) refresh(engine); else saveUiOnlyStore(engine.store); }
+        return { service: next ?? undefined, history: historyOf(id) } as T;
       }
       case 'end_service': {
         const service = engine.store.services[String(args?.serviceId)];
@@ -121,6 +161,7 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         const serviceId = String(args?.serviceId);
         if (engine.store.active_service_id === serviceId) throw new Error('This service is loaded. Load another service before deleting it.');
         delete engine.store.services[serviceId];
+        dropHistory(serviceId);
         saveUiOnlyStore(engine.store); return undefined as T;
       }
       case 'load_service': {

@@ -1,3 +1,4 @@
+mod history;
 mod media;
 use crate::output::displays;
 use crate::system::updates;
@@ -8,6 +9,7 @@ mod songs;
 mod system;
 mod transport;
 
+pub use history::*;
 pub use media::*;
 pub use missing_media::*;
 pub use pdf::*;
@@ -93,6 +95,9 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
         get_song_version,
         update_song,
         archive_song,
+        edit_history,
+        undo_edit,
+        redo_edit,
         delete_media,
         rename_media,
         import_media_files,

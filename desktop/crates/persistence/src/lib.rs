@@ -1,3 +1,3 @@
 pub mod repo;
 
-pub use repo::Repository;
+pub use repo::{History, Repository};

@@ -69,5 +69,10 @@ export function useEngine() {
     });
     return task;
   }, [setError]);
-  return { live, serviceRef, services, setServices, program, playback, media, setMedia, error, setError, run, persist, saveQueue };
+  const adopt = useCallback((updated: Service) => {
+    if (serviceRef.current?.id === updated.id) serviceRef.current = updated;
+    setServices(old => old.map(s => s.id === updated.id ? updated : s));
+    void saveQueue.current.then(() => invoke<EngineSnapshot>('get_engine_snapshot')).then(s => { if (!pendingSaves.current) setLive(s.service); });
+  }, []);
+  return { live, serviceRef, services, setServices, program, playback, media, setMedia, error, setError, run, persist, adopt, saveQueue };
 }

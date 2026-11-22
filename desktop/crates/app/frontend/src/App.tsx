@@ -26,7 +26,7 @@ import { mediaItem, songItem, withPartLyrics } from './service/serviceItems';
 
 function App() {
   const [outputConfig, setOutputConfig] = useOutputState('config', defaultOutputConfig);
-  const { live, serviceRef, services, setServices, program, media, setMedia, error, setError, run, persist, saveQueue } = useEngine();
+  const { live, serviceRef, services, setServices, program, media, setMedia, error, setError, run, persist, adopt, saveQueue } = useEngine();
   const { panesRef, panesStyle, resizeDivider } = useColumns();
   const bindings = useInputBindings();
   useKeyboardInput(bindings, setError);
@@ -120,13 +120,13 @@ function App() {
     </div>
     {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }]}/>}
     {partEditor && <PartEditor part={partEditor} onClose={() => setPartEditor(null)} onSave={part => run(async () => { await editPart(part.itemId, part.occurrence, part.lyrics); setPartEditor(null); })}/>}
-    {editor && <SongEditor backgrounds={media} song={editor.song} heading={editor.song ? 'Library song' : 'New library song'} onClose={() => setEditor(null)} onSave={async song => {
+    {editor && <SongEditor backgrounds={media} song={editor.song} heading={editor.song ? 'Library song' : 'New library song'} onClose={() => setEditor(null)} onStepped={refreshCatalog} onSave={async song => {
       if (editor.song) await invoke('update_song', { song });
       else await invoke('create_song', { song });
       await refreshCatalog();
       setEditor(null);
     }}/>}
-    {serviceEditor && <ServiceEditor service={serviceEditor.service} persist={persist} songs={library} media={media} initialItemId={serviceEditor.itemId} activeItemId={program?.active_item_id}
+    {serviceEditor && <ServiceEditor service={serviceEditor.service} persist={persist} adopt={adopt} songs={library} media={media} initialItemId={serviceEditor.itemId} activeItemId={program?.active_item_id}
       confirmRemove={outputsShown ? title => confirm(`The outputs are shown and ${title} is on air. Remove it from the service?`, 'Remove') : undefined}
       onCatalogChanged={refreshCatalog} onClose={() => setServiceEditor(null)}/>}
     {quickSearch && <QuickSearch songs={library} media={media} canAdd={!!live} onClose={() => setQuickSearch(false)} onAdd={result => result.kind === 'song' ? addSong(result.song) : addMedia(result.media)}/>}

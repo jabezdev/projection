@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requirePermission } from "./lib/auth";
-import { freeze, indexFields, itemByUid, itemsOf, requireSong, serviceByUid, setSongContent, songByUid, versionByUid, versionFor, type Content } from "./lib/sequence";
+import { freeze, indexFields, itemByUid, itemsOf, logged, requireSong, serviceByUid, setSongContent, songByUid, versionByUid, versionFor, type Content } from "./lib/sequence";
 import { defined } from "./lib/util";
 import { sectionKind } from "./schema";
 import { applyPatch, entriesOf, labelToSection, newId, resolveEntries, sectionLabel, type Entry } from "@magi/shared";
@@ -66,7 +66,7 @@ export const update = mutation({
   handler: async (ctx, { serviceId, ...fields }) => {
     await requirePermission(ctx, "arrange");
     const service = await requireService(ctx, serviceId);
-    await ctx.db.patch(service._id, defined(fields));
+    await logged(ctx, "service", serviceId, () => ctx.db.patch(service._id, defined(fields)));
   },
 });
 
@@ -85,7 +85,7 @@ export const end = mutation({
   handler: async (ctx, { serviceId }) => {
     await requirePermission(ctx, "arrange");
     const service = await requireService(ctx, serviceId);
-    await ctx.db.patch(service._id, { endedAtMs: service.endedAtMs ?? Date.now() });
+    await logged(ctx, "service", serviceId, () => ctx.db.patch(service._id, { endedAtMs: service.endedAtMs ?? Date.now() }));
     await freeze(ctx, service);
   },
 });
@@ -105,7 +105,8 @@ export const freezePast = mutation({
 async function append(ctx: MutationCtx, service: Doc<"services">, content: Content, title?: string) {
   const items = await itemsOf(ctx, service.uid);
   const uid = newId();
-  await ctx.db.insert("serviceItems", { uid, serviceUid: service.uid, position: (items[items.length - 1]?.position ?? 0) + 1, title, content, ...indexFields(content) });
+  const position = (items[items.length - 1]?.position ?? 0) + 1;
+  await logged(ctx, "service", service.uid, () => ctx.db.insert("serviceItems", { uid, serviceUid: service.uid, position, title, content, ...indexFields(content) }));
   if (service.frozen) await freeze(ctx, service);
   return uid;
 }
@@ -134,7 +135,7 @@ export const updateItem = mutation({
     await requirePermission(ctx, "arrange");
     const item = await itemByUid(ctx, itemId);
     const content = key !== undefined && item.content.kind === "song" ? { ...item.content, key: key.trim() || undefined } : item.content;
-    await ctx.db.patch(item._id, { ...defined({ notes, title }), content });
+    await logged(ctx, "service", item.serviceUid, () => ctx.db.patch(item._id, { ...defined({ notes, title }), content }));
   },
 });
 
@@ -142,7 +143,8 @@ export const removeItem = mutation({
   args: { itemId: v.string() },
   handler: async (ctx, { itemId }) => {
     await requirePermission(ctx, "arrange");
-    await ctx.db.delete((await itemByUid(ctx, itemId))._id);
+    const item = await itemByUid(ctx, itemId);
+    await logged(ctx, "service", item.serviceUid, () => ctx.db.delete(item._id));
   },
 });
 
@@ -159,8 +161,10 @@ export const moveItem = mutation({
       .order(direction < 0 ? "desc" : "asc")
       .first();
     if (!neighbour) return;
-    await ctx.db.patch(item._id, { position: neighbour.position });
-    await ctx.db.patch(neighbour._id, { position: item.position });
+    await logged(ctx, "service", item.serviceUid, async () => {
+      await ctx.db.patch(item._id, { position: neighbour.position });
+      await ctx.db.patch(neighbour._id, { position: item.position });
+    });
   },
 });
 
@@ -232,9 +236,9 @@ export const promoteEntry = mutation({
     if (!entry?.sectionId || !entry.variation) return;
     const sections = version.sections.map((s) => (s.id === entry.sectionId ? applyPatch(s.id, entry.variation, s) : s));
     delete entry.variation;
-    await setSongContent(ctx, song, { sections, arrangement: version.arrangement, background: version.background }, user._id);
+    await logged(ctx, "song", song.uid, () => setSongContent(ctx, song, { sections, arrangement: version.arrangement, background: version.background }, user._id));
     const content = { ...item.content, arrangement: entries };
-    await ctx.db.patch(item._id, { content, ...indexFields(content) });
+    await logged(ctx, "service", item.serviceUid, () => ctx.db.patch(item._id, { content, ...indexFields(content) }));
   },
 });
 
@@ -245,7 +249,7 @@ export const resetSequence = mutation({
     const item = await itemByUid(ctx, itemId);
     if (item.content.kind !== "song") return;
     const content = { ...item.content, arrangement: undefined };
-    await ctx.db.patch(item._id, { content, ...indexFields(content) });
+    await logged(ctx, "service", item.serviceUid, () => ctx.db.patch(item._id, { content, ...indexFields(content) }));
   },
 });
 
@@ -262,7 +266,7 @@ async function editEntries(
   const entries = entriesOf(item.content.arrangement, version).map((e) => ({ ...e }));
   edit(entries, version);
   const content = { ...item.content, arrangement: entries };
-  await ctx.db.patch(item._id, { content, ...indexFields(content) });
+  await logged(ctx, "service", item.serviceUid, () => ctx.db.patch(item._id, { content, ...indexFields(content) }));
 }
 
 function clamp(n: number, min: number, max: number) {

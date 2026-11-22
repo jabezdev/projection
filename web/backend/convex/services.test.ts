@@ -111,3 +111,21 @@ test("pairing codes are single use", async () => {
   await expect(admin.mutation(api.devices.claimPairingCode, { code, deviceName: "Again" })).rejects.toThrow();
   expect((await admin.query(api.devices.listMine, {})).map((d) => d.name)).toEqual(["Booth"]);
 });
+
+test("edits are logged as small operations in the shared format", async () => {
+  const { t, admin, songId, serviceId, itemId } = await setup();
+  const log = (uid: string) => t.run((ctx) => ctx.db.query("edits").withIndex("by_record", (q) => q.eq("recordUid", uid)).collect());
+  await admin.mutation(api.services.update, { serviceId, title: "Sunday AM" });
+  await admin.mutation(api.services.updateItem, { itemId, key: "G" });
+  await admin.mutation(api.services.removeItem, { itemId });
+  expect((await log(serviceId)).map((e) => e.label)).toEqual(["Add Amazing Grace", "Rename service", "Change key of Amazing Grace", "Remove Amazing Grace"]);
+  expect((await log(serviceId))[2].change.ops).toEqual([{ op: "set_item", id: itemId, field: "key", before: null, after: "G" }]);
+
+  await admin.mutation(api.songs.archive, { songId, archived: true });
+  expect((await log(songId)).map((e) => e.label)).toEqual(["Archive song"]);
+
+  await admin.mutation(api.services.end, { serviceId });
+  const before = (await log(serviceId)).length;
+  await admin.mutation(api.services.update, { serviceId, title: "Renamed later" });
+  expect(await log(serviceId)).toHaveLength(before);
+});

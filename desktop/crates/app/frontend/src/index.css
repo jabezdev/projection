@@ -44,6 +44,7 @@ input::placeholder, textarea::placeholder { color: var(--fg-3); }
 
 .ui-icon { width: 18px; height: 18px; flex-shrink: 0; }
 .icon-button { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; color: var(--fg-2); }
+.history-buttons { display: inline-flex; gap: 2px; }
 .icon-button:hover { color: var(--fg-1); background: var(--bg-4); }
 .icon-button:active { background: var(--bg-5); box-shadow: var(--key-press); }
 .primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 3px; background: var(--fg-1); color: #111; font-weight: 600; box-shadow: inset 0 -2px 0 #0002; }

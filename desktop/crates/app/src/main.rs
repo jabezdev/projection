@@ -46,6 +46,11 @@ impl library::storage::ServiceWriter for Db {
     fn resolve(&self, service: &protocol::model::Service) -> anyhow::Result<protocol::LiveService> {
         self.lock()?.resolve_service(service)
     }
+
+    fn step(&self, service_id: &str, redo: bool) -> anyhow::Result<Option<protocol::model::Service>> {
+        let db = self.lock()?;
+        if redo { db.redo_service(service_id, now_ms()) } else { db.undo_service(service_id, now_ms()) }
+    }
 }
 
 type Storage = library::storage::StorageWorker<Db>;

@@ -1,0 +1,654 @@
+{
+  "services": [
+    {
+      "after": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a",
+            "title": "Welcome"
+          },
+          {
+            "content": {
+              "kind": "song",
+              "songId": "grace"
+            },
+            "id": "x"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday AM"
+      },
+      "before": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a",
+            "title": "Welcome"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "label": "Edit service",
+      "name": "rename and add a song",
+      "ops": [
+        {
+          "after": "Sunday AM",
+          "before": "Sunday",
+          "field": "title",
+          "op": "set"
+        },
+        {
+          "item": {
+            "content": {
+              "kind": "song",
+              "songId": "grace"
+            },
+            "id": "x"
+          },
+          "op": "insert_item",
+          "prev": "a"
+        }
+      ]
+    },
+    {
+      "after": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "b"
+              ]
+            },
+            "id": "b"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "c"
+              ]
+            },
+            "id": "c"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "before": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "b"
+              ]
+            },
+            "id": "b"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "c"
+              ]
+            },
+            "id": "c"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "label": "Move a",
+      "name": "move an item to the end",
+      "ops": [
+        {
+          "from": null,
+          "id": "a",
+          "op": "move_item",
+          "to": "c"
+        }
+      ]
+    },
+    {
+      "after": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "c"
+              ]
+            },
+            "id": "c"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "before": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "b"
+              ]
+            },
+            "id": "b"
+          },
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "c"
+              ]
+            },
+            "id": "c"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "label": "Remove b",
+      "name": "remove an item",
+      "ops": [
+        {
+          "item": {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "b"
+              ]
+            },
+            "id": "b"
+          },
+          "op": "remove_item",
+          "prev": "a"
+        }
+      ]
+    },
+    {
+      "after": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "arrangement": [
+                {
+                  "id": "e1",
+                  "sectionId": "c"
+                },
+                {
+                  "id": "e2",
+                  "sectionId": "v1",
+                  "variation": {
+                    "lyrics": "Amazing grace, how sweet"
+                  }
+                }
+              ],
+              "key": "G",
+              "kind": "song",
+              "songId": "grace"
+            },
+            "id": "x"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "before": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "song",
+              "songId": "grace"
+            },
+            "id": "x"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "label": "Edit x",
+      "name": "change a song item's key and arrangement",
+      "ops": [
+        {
+          "after": "G",
+          "before": null,
+          "field": "key",
+          "id": "x",
+          "op": "set_item"
+        },
+        {
+          "after": [
+            {
+              "id": "e1",
+              "sectionId": "c"
+            },
+            {
+              "id": "e2",
+              "sectionId": "v1",
+              "variation": {
+                "lyrics": "Amazing grace, how sweet"
+              }
+            }
+          ],
+          "before": null,
+          "field": "arrangement",
+          "id": "x",
+          "op": "set_item"
+        }
+      ]
+    },
+    {
+      "after": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "header"
+            },
+            "id": "a"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "before": {
+        "id": "s",
+        "items": [
+          {
+            "content": {
+              "kind": "text",
+              "steps": [
+                "a"
+              ]
+            },
+            "id": "a"
+          }
+        ],
+        "scheduledAtMs": 1793491200000,
+        "title": "Sunday"
+      },
+      "label": "Edit a",
+      "name": "replace one item's content",
+      "ops": [
+        {
+          "after": {
+            "kind": "header"
+          },
+          "before": {
+            "kind": "text",
+            "steps": [
+              "a"
+            ]
+          },
+          "field": "content",
+          "id": "a",
+          "op": "set_item"
+        }
+      ]
+    }
+  ],
+  "songs": [
+    {
+      "after": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone\n\nI've been set free"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "before": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "label": "Edit Chorus",
+      "name": "edit a section's lyrics",
+      "ops": [
+        {
+          "after": {
+            "id": "c",
+            "kind": "chorus",
+            "lyrics": "My chains are gone\n\nI've been set free"
+          },
+          "before": {
+            "id": "c",
+            "kind": "chorus",
+            "lyrics": "My chains are gone"
+          },
+          "id": "c",
+          "op": "set_section"
+        }
+      ]
+    },
+    {
+      "after": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c",
+            "b",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            },
+            {
+              "id": "b",
+              "kind": "bridge",
+              "lyrics": "Bridge"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "before": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "label": "Add Bridge",
+      "name": "add a section to the arrangement",
+      "ops": [
+        {
+          "op": "insert_section",
+          "prev": "c",
+          "section": {
+            "id": "b",
+            "kind": "bridge",
+            "lyrics": "Bridge"
+          }
+        },
+        {
+          "after": [
+            "v1",
+            "c",
+            "b",
+            "c"
+          ],
+          "before": [
+            "v1",
+            "c"
+          ],
+          "field": "arrangement",
+          "op": "set"
+        }
+      ]
+    },
+    {
+      "after": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            },
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "before": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "label": "Reorder sections",
+      "name": "reorder sections",
+      "ops": [
+        {
+          "from": "v1",
+          "id": "c",
+          "op": "move_section",
+          "to": null
+        }
+      ]
+    },
+    {
+      "after": {
+        "credits": {
+          "authors": [
+            {
+              "name": "John Newton",
+              "role": "words"
+            }
+          ],
+          "ccli": "4768151"
+        },
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace (My Chains Are Gone)"
+      },
+      "before": {
+        "current": {
+          "arrangement": [
+            "v1",
+            "c"
+          ],
+          "id": "v1",
+          "number": 1,
+          "sections": [
+            {
+              "id": "v1",
+              "kind": "verse",
+              "lyrics": "Amazing grace",
+              "number": 1
+            },
+            {
+              "id": "c",
+              "kind": "chorus",
+              "lyrics": "My chains are gone"
+            }
+          ]
+        },
+        "id": "grace",
+        "title": "Amazing Grace"
+      },
+      "label": "Edit song",
+      "name": "rename and credit",
+      "ops": [
+        {
+          "after": "Amazing Grace (My Chains Are Gone)",
+          "before": "Amazing Grace",
+          "field": "title",
+          "op": "set"
+        },
+        {
+          "after": {
+            "authors": [
+              {
+                "name": "John Newton",
+                "role": "words"
+              }
+            ],
+            "ccli": "4768151"
+          },
+          "before": {},
+          "field": "credits",
+          "op": "set"
+        }
+      ]
+    }
+  ]
+}

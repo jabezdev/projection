@@ -3,14 +3,14 @@ use protocol::{CaptureKind, CaptureOptions, CaptureSource, SessionItemKind};
 
 use super::Repository;
 
-const DAY: i64 = 86_400_000;
-const NOV_1: i64 = 1_793_491_200_000;
+pub(super) const DAY: i64 = 86_400_000;
+pub(super) const NOV_1: i64 = 1_793_491_200_000;
 
-fn section(id: &str, kind: SectionKind, lyrics: &str) -> Section {
+pub(super) fn section(id: &str, kind: SectionKind, lyrics: &str) -> Section {
     Section { id: id.into(), kind, number: None, name: None, color: None, lyrics: lyrics.into() }
 }
 
-fn grace() -> Song {
+pub(super) fn grace() -> Song {
     let current = SongVersion {
         id: new_id(),
         number: 1,
@@ -21,24 +21,24 @@ fn grace() -> Song {
     Song { id: new_id(), title: "Amazing Grace".into(), archived: false, credits: Default::default(), key: None, tags: vec![], current }
 }
 
-fn item(content: ItemContent) -> ServiceItem {
+pub(super) fn item(content: ItemContent) -> ServiceItem {
     ServiceItem { id: new_id(), title: None, notes: None, background: None, content }
 }
 
-fn song_item(song: &Song) -> ServiceItem {
+pub(super) fn song_item(song: &Song) -> ServiceItem {
     item(ItemContent::Song(SongItem { song_id: song.id.clone(), version_id: None, key: None, arrangement: None }))
 }
 
-fn service(title: &str, scheduled_at_ms: i64, items: Vec<ServiceItem>) -> Service {
+pub(super) fn service(title: &str, scheduled_at_ms: i64, items: Vec<ServiceItem>) -> Service {
     Service { id: new_id(), scheduled_at_ms, title: title.into(), leader: None, notes: None, ended_at_ms: None, items }
 }
 
-fn song_of(item: &ServiceItem) -> &SongItem {
+pub(super) fn song_of(item: &ServiceItem) -> &SongItem {
     let ItemContent::Song(song) = &item.content else { panic!("not a song: {item:?}") };
     song
 }
 
-fn chorus_in(repo: &Repository, service: &Service) -> String {
+pub(super) fn chorus_in(repo: &Repository, service: &Service) -> String {
     let live = repo.resolve_service(&repo.service(&service.id).unwrap().unwrap()).unwrap();
     live.items[0].song.as_ref().unwrap().sections[1].lyrics.clone()
 }

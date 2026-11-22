@@ -1,4 +1,4 @@
-import { Ellipsis, Copy, Search, Upload, Trash2, ScreenShare, ChevronDown, Monitor, MonitorOff, RemoveFormatting, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
+import { Ellipsis, Undo2, Redo2, Copy, Search, Upload, Trash2, ScreenShare, ChevronDown, Monitor, MonitorOff, RemoveFormatting, ChevronUp, Film, GripVertical, Image, Library, MonitorPlay, Music, Pause, Pencil, Play, Plus, Settings, Square, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
 
 const icons = {
   settings: Settings,
@@ -28,6 +28,8 @@ const icons = {
   import: Upload,
   trash: Trash2,
   'screen-off': MonitorOff,
+  undo: Undo2,
+  redo: Redo2,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

@@ -55,6 +55,11 @@ impl ServiceStore for FakeStore {
     fn resolve_service(&self, service: &Service) -> anyhow::Result<LiveService> {
         self.load_service(&service.id)
     }
+    fn step_service(&self, service_id: &str, _redo: bool, _request: u64) -> anyhow::Result<Option<LiveService>> {
+        let mut stepped = self.load_service(service_id)?;
+        stepped.service.title.push_str(" (undone)");
+        self.save_service(&stepped.service).map(Some)
+    }
 }
 
 fn live(id: &str, title: &str, items: Vec<SessionItem>) -> LiveService {

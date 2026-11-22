@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -12,6 +14,15 @@ pub trait ServiceWriter: Send + 'static {
     fn load(&self, service_id: &str) -> anyhow::Result<Service>;
     fn save(&self, service: &Service) -> anyhow::Result<()>;
     fn resolve(&self, service: &Service) -> anyhow::Result<LiveService>;
+    fn step(&self, service_id: &str, redo: bool) -> anyhow::Result<Option<Service>>;
+}
+
+pub type StepReply = Result<Option<Service>, String>;
+
+#[derive(Default)]
+struct Replies {
+    next: AtomicU64,
+    waiting: Mutex<HashMap<u64, Sender<StepReply>>>,
 }
 
 #[derive(Default)]
@@ -25,6 +36,7 @@ pub struct StorageWorker<W> {
     writer: Arc<W>,
     saves: Sender<Service>,
     queued: Arc<Queued>,
+    replies: Arc<Replies>,
 }
 
 impl<W: ServiceWriter + Sync> StorageWorker<W> {
@@ -38,7 +50,18 @@ impl<W: ServiceWriter + Sync> StorageWorker<W> {
                 .name("storage".into())
                 .spawn(move || run(&*writer, &received, &queued, &events))?;
         }
-        Ok(Self { writer, saves, queued })
+        Ok(Self { writer, saves, queued, replies: Arc::default() })
+    }
+
+    pub fn expect_step(&self) -> (u64, Receiver<StepReply>) {
+        let request = self.replies.next.fetch_add(1, Ordering::Relaxed) + 1;
+        let (sender, receiver) = crossbeam::channel::bounded(1);
+        self.replies.waiting.lock().expect("replies poisoned").insert(request, sender);
+        (request, receiver)
+    }
+
+    pub fn forget_step(&self, request: u64) {
+        self.replies.waiting.lock().expect("replies poisoned").remove(&request);
     }
 
     pub fn flush(&self, timeout: Duration) -> bool {
@@ -74,6 +97,14 @@ impl<W: ServiceWriter + Sync> ServiceStore for StorageWorker<W> {
 
     fn resolve_service(&self, service: &Service) -> anyhow::Result<LiveService> {
         self.writer.resolve(service)
+    }
+
+    fn step_service(&self, service_id: &str, redo: bool, request: u64) -> anyhow::Result<Option<LiveService>> {
+        let stepped = if self.flush(LOAD_WAIT) { self.writer.step(service_id, redo) } else { Err(anyhow::anyhow!("earlier saves are still being written")) };
+        if let Some(reply) = self.replies.waiting.lock().expect("replies poisoned").remove(&request) {
+            let _ = reply.send(stepped.as_ref().map(Clone::clone).map_err(|e| format!("{e:#}")));
+        }
+        stepped?.map(|service| self.writer.resolve(&service)).transpose()
     }
 }
 
@@ -148,6 +179,11 @@ mod tests {
         fn resolve(&self, service: &Service) -> anyhow::Result<LiveService> {
             Ok(LiveService { service: service.clone(), items: Vec::new() })
         }
+
+        fn step(&self, service_id: &str, _redo: bool) -> anyhow::Result<Option<Service>> {
+            let written = self.written.lock().unwrap();
+            Ok(written.iter().rev().find(|(id, _)| id == service_id).map(|(id, title)| service(id, &format!("{title} undone"))))
+        }
     }
 
     fn service(id: &str, title: &str) -> Service {
@@ -185,6 +221,29 @@ mod tests {
         let written = disk.written.lock().unwrap().clone();
         let names: Vec<_> = written.iter().map(|(_, name)| name.as_str()).collect();
         assert_eq!(names, ["first", "second", "third"], "only adjacent saves of one service merge");
+    }
+
+    #[test]
+    fn undo_waits_for_earlier_saves_and_answers_the_waiting_command() {
+        let disk = Arc::new(SlowDisk::default());
+        disk.blocked.store(true, Ordering::Release);
+        let (events, _) = broadcast::channel(8);
+        let store = StorageWorker::start(disk.clone(), events).unwrap();
+        store.save_service(&service("1", "first")).unwrap();
+        store.save_service(&service("2", "other")).unwrap();
+        store.save_service(&service("1", "second")).unwrap();
+        let (request, reply) = store.expect_step();
+        let unblock = {
+            let disk = disk.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(30));
+                disk.blocked.store(false, Ordering::Release);
+            })
+        };
+        let live = store.step_service("1", false, request).unwrap();
+        unblock.join().unwrap();
+        assert_eq!(live.map(|l| l.service.title).as_deref(), Some("second undone"), "the step saw every earlier save");
+        assert_eq!(reply.try_recv().unwrap().unwrap().map(|s| s.title).as_deref(), Some("second undone"));
     }
 
     #[test]

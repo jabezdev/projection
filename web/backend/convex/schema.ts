@@ -140,6 +140,15 @@ export default defineSchema({
     hash: v.optional(v.string()),
   }).index("by_uid", ["uid"]),
 
+  edits: defineTable({
+    uid: v.string(),
+    recordUid: v.string(),
+    atMs: v.number(),
+    by: v.id("users"),
+    label: v.optional(v.string()),
+    change: v.any(),
+  }).index("by_record", ["recordUid", "atMs"]),
+
   pairingCodes: defineTable({
     code: v.string(),
     userId: v.id("users"),

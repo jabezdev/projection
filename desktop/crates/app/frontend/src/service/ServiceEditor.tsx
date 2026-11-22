@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../ui/Icons';
 import { invoke } from '../api/tauri';
+import { editHistory, historyKey, stepEdit, type History } from '../api/history';
+import HistoryButtons from '../ui/HistoryButtons';
 import { defaultCaptureOptions, defaultVideoOptions, isPast, type ItemContent, type MediaFile, type Service, type ServiceItem, type Song, type SongItem, type SongVersion, type VideoOptions } from '../api/models';
 import { fromServiceDraft, serviceDraft, splitSlides, type SongDraft } from '../song/song';
 import { captureItem, copyItem, headerItem, mediaItem, songItem } from './serviceItems';
@@ -15,6 +17,7 @@ import { Background } from '../song/SlidePreview';
 type Props = {
   service: Service;
   persist: (service: Service) => Promise<void>;
+  adopt: (service: Service) => void;
   songs: Song[];
   media: MediaFile[];
   initialItemId?: string;
@@ -23,14 +26,14 @@ type Props = {
   onCatalogChanged: () => Promise<void>;
   onClose: () => void;
 };
-type Toast = { text: string; undo?: ServiceItem[] };
+type Toast = { text: string; undoable?: boolean };
 type Change = (item: ServiceItem) => ServiceItem;
 const SAVE_DELAY = 350;
 const TOP = '';
 
 const localInput = (ms: number) => { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 
-export default function ServiceEditor({ service, persist, songs, media, initialItemId, activeItemId, confirmRemove, onCatalogChanged, onClose }: Props) {
+export default function ServiceEditor({ service, persist, adopt, songs, media, initialItemId, activeItemId, confirmRemove, onCatalogChanged, onClose }: Props) {
   const [name, setName] = useState(service.title);
   const [scheduledAtMs, setScheduledAtMs] = useState(service.scheduledAtMs);
   const [items, setItems] = useState(service.items);
@@ -41,6 +44,9 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
   const [error, setError] = useState('');
   const [dragged, setDragged] = useState<string | null>(null);
   const [dropAfter, setDropAfter] = useState<string | null>(null);
+  const [history, setHistory] = useState<History>({});
+  const [stepping, setStepping] = useState(false);
+  const [revision, setRevision] = useState(0);
   const versions = usePinnedVersions(items, songs);
   const library = useMemo(() => catalog(songs, media, versions), [songs, media, versions]);
   const body = useRef<HTMLDivElement>(null);
@@ -52,8 +58,23 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
     window.clearTimeout(timer.current); timer.current = undefined;
     const { name, scheduledAtMs, items } = latest.current;
     return persist({ ...service, title: name.trim() || service.title, scheduledAtMs, items })
-      .then(() => { setError(''); return true; }, e => { setError(String(e)); return false; });
+      .then(() => { setError(''); void editHistory(service.id).then(setHistory, () => {}); return true; }, e => { setError(String(e)); return false; });
   }, [persist, service]);
+  useEffect(() => { void editHistory(service.id).then(setHistory, () => {}); }, [service.id]);
+  async function step(redo: boolean) {
+    if (stepping) return;
+    setStepping(true); setToast(null);
+    try {
+      if (!(await flush())) return;
+      const result = await stepEdit('service', service.id, redo);
+      setHistory(result.history);
+      const next = result.service;
+      if (!next) return;
+      latest.current = { name: next.title, scheduledAtMs: next.scheduledAtMs, items: next.items };
+      setName(next.title); setScheduledAtMs(next.scheduledAtMs); setItems(next.items); setRevision(r => r + 1);
+      adopt(next);
+    } catch (e) { setError(String(e)); } finally { setStepping(false); }
+  }
   const save = useCallback((next: { name?: string; scheduledAtMs?: number; items?: ServiceItem[] }, delay = SAVE_DELAY) => {
     latest.current = { ...latest.current, ...next };
     if (next.items) setItems(next.items);
@@ -77,7 +98,7 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
     const at = after === TOP ? 0 : before.findIndex(i => i.id === after) + 1 || before.length;
     save({ items: [...before.slice(0, at), item, ...before.slice(at)] }, 0);
     setSelected(item.id); setInsert(null);
-    showToast({ text: `Added ${titleOf(item)}`, undo: before });
+    showToast({ text: `Added ${titleOf(item)}`, undoable: true });
   }
   function pick(choice: LibraryPick, after: string) {
     setError('');
@@ -92,7 +113,7 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
     const next = before.filter(i => i.id !== item.id);
     save({ items: next }, 0);
     if (selected === item.id) setSelected((next[index] ?? next[index - 1])?.id ?? null);
-    showToast({ text: `Removed ${titleOf(item)}`, undo: before });
+    showToast({ text: `Removed ${titleOf(item)}`, undoable: true });
   }
   function duplicate(item: ServiceItem) {
     const before = latest.current.items;
@@ -100,7 +121,7 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
     const at = before.findIndex(i => i.id === item.id) + 1;
     save({ items: [...before.slice(0, at), copy, ...before.slice(at)] }, 0);
     setSelected(copy.id);
-    showToast({ text: `Duplicated ${titleOf(item)}`, undo: before });
+    showToast({ text: `Duplicated ${titleOf(item)}`, undoable: true });
   }
   function move(id: string, after: string) {
     const before = latest.current.items;
@@ -115,7 +136,6 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
     place(headerItem('New section'), after);
     requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.section-editor input')?.select());
   }
-  function undo() { if (toast?.undo) { save({ items: toast.undo }, 0); setToast(null); } }
   function openInsert(after: string, anchor: HTMLElement) {
     const box = body.current?.getBoundingClientRect();
     const at = anchor.getBoundingClientRect();
@@ -136,12 +156,14 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
 
   return <div className="modal-backdrop" onKeyDown={e => {
     if (e.key === 'Escape' && !e.defaultPrevented && !insert && !slides) void close();
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && toast?.undo && !(e.target as HTMLElement).closest('input, textarea')) { e.preventDefault(); undo(); }
+    const key = historyKey(e);
+    if (key) { e.preventDefault(); void step(key === 'redo'); }
   }}><section className="service-editor" role="dialog" aria-modal="true" aria-label="Edit service">
     <header className="service-editor-head">
       <input aria-label="Service name" value={name} placeholder="Service name" onChange={e => save({ name: e.target.value })}/>
       <input type="datetime-local" aria-label="Service date and time" value={localInput(scheduledAtMs)} onChange={e => { const ms = new Date(e.target.value).getTime(); if (Number.isFinite(ms)) save({ scheduledAtMs: ms }); }}/>
       <span className="grow"/>
+      <HistoryButtons history={history} busy={stepping} onStep={redo => void step(redo)}/>
       <span className="saved-note">{past ? 'Past service · songs keep the words they had' : 'Changes save as you go'}</span>
       <button className="primary-action" onClick={() => void close()}>Done</button>
     </header>
@@ -173,14 +195,14 @@ export default function ServiceEditor({ service, persist, songs, media, initialI
         </div>
       </section>
       <section className="service-item-editor" aria-label="Selected item">
-        {item ? <ItemEditor key={item.id} item={item} songs={songs} versions={library.versions} media={media} onChange={(change, delay) => updateItem(item.id, change, delay)} onEditSlides={() => setSlides({ item })}/> : <p className="empty-panel">Select an item to edit it here.</p>}
+        {item ? <ItemEditor key={`${item.id}-${revision}`} item={item} songs={songs} versions={library.versions} media={media} onChange={(change, delay) => updateItem(item.id, change, delay)} onEditSlides={() => setSlides({ item })}/> : <p className="empty-panel">Select an item to edit it here.</p>}
       </section>
       {insert && <MiniLibrary top={insert.top} where={where} songs={songs} media={media} onClose={() => setInsert(null)}
         onPick={choice => void pick(choice, insert.after)}
         onImport={async () => { const imported = await invoke<MediaFile[]>('import_media_files'); if (imported.length) await onCatalogChanged(); }}
         onSlides={() => { setSlides({ after: insert.after }); setInsert(null); }}/>}
     </div>
-    {toast && <div className="editor-toast" role="status">{toast.text}{toast.undo && <button onClick={undo}>Undo</button>}</div>}
+    {toast && <div className="editor-toast" role="status">{toast.text}{toast.undoable && <button disabled={stepping} onClick={() => void step(false)}>Undo</button>}</div>}
   </section>
   {slides && <PresentationEditor images={media} item={'item' in slides ? slides.item : undefined} onClose={() => setSlides(null)} onSave={async saved => {
     if ('item' in slides) updateItem(saved.id, () => saved, 0); else place(saved, slides.after);

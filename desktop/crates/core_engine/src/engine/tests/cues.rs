@@ -213,6 +213,15 @@ fn saving_another_service_leaves_the_loaded_one_alone() {
 }
 
 #[test]
+fn undoing_the_loaded_service_replaces_the_live_copy() {
+    let mut h = setup();
+    h.load();
+    let title = h.engine.snapshot().service.as_ref().unwrap().service.title.clone();
+    h.send(EngineCommand::StepServiceHistory { service_id: "1".into(), redo: false, request: 1 });
+    assert_eq!(h.engine.snapshot().service.as_ref().unwrap().service.title, format!("{title} (undone)"));
+}
+
+#[test]
 fn saving_the_loaded_service_reresolves_selection() {
     let mut h = setup();
     h.load();

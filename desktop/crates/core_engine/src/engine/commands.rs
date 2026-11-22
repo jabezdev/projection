@@ -53,6 +53,11 @@ impl Engine {
                 let saved = ports.store.save_service(&service);
                 return self.replace_service(saved, &service.id, ports, errors);
             }
+            EngineCommand::StepServiceHistory { service_id, redo, request } => match ports.store.step_service(&service_id, redo, request) {
+                Ok(Some(live)) => return self.replace_service(Ok(live), &service_id, ports, errors),
+                Ok(None) => {}
+                Err(e) => errors.push(error("service", format!("Failed to {} service {service_id}: {e:#}", if redo { "redo" } else { "undo" }))),
+            },
             EngineCommand::RefreshService => {
                 let Some(current) = self.state.service.as_ref().map(|s| s.service.clone()) else { return false };
                 let resolved = ports.store.resolve_service(&current);

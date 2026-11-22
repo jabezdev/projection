@@ -27,6 +27,7 @@ pub trait ServiceStore {
     fn load_service(&self, service_id: &str) -> anyhow::Result<LiveService>;
     fn save_service(&self, service: &protocol::model::Service) -> anyhow::Result<LiveService>;
     fn resolve_service(&self, service: &protocol::model::Service) -> anyhow::Result<LiveService>;
+    fn step_service(&self, service_id: &str, redo: bool, request: u64) -> anyhow::Result<Option<LiveService>>;
 }
 
 pub struct Ports<'a> {

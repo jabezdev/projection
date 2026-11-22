@@ -2,6 +2,9 @@ use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, Connection};
 use std::path::Path;
 
+pub use history::History;
+
+mod history;
 mod media;
 mod resolve;
 mod schema;
@@ -10,6 +13,8 @@ mod songs;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod history_tests;
 
 pub struct Repository {
     conn: Connection,
@@ -21,6 +26,20 @@ impl Repository {
         let repo = Self { conn };
         repo.init_schema()?;
         Ok(repo)
+    }
+
+    fn atomic<T>(&self, work: impl FnOnce() -> Result<T>) -> Result<T> {
+        self.conn.execute_batch("SAVEPOINT atomic")?;
+        match work() {
+            Ok(value) => {
+                self.conn.execute_batch("RELEASE atomic")?;
+                Ok(value)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK TO atomic; RELEASE atomic");
+                Err(e)
+            }
+        }
     }
 
     pub fn backup_to(&self, path: &Path) -> Result<()> {

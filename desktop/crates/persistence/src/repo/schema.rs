@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use super::Repository;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 impl Repository {
     pub(super) fn init_schema(&self) -> Result<()> {
@@ -57,4 +57,10 @@ const TABLES: &str = "CREATE TABLE IF NOT EXISTS song (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, hash TEXT
     );
     CREATE TABLE IF NOT EXISTS media_path (media_id TEXT PRIMARY KEY, path TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS device_binding (item_id TEXT PRIMARY KEY, body TEXT NOT NULL);";
+    CREATE TABLE IF NOT EXISTS device_binding (item_id TEXT PRIMARY KEY, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS edit_step (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, record_id TEXT NOT NULL,
+        at_ms INTEGER NOT NULL, stack TEXT NOT NULL, body TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS edit_step_by_record ON edit_step(record_id, stack, seq);
+    CREATE TABLE IF NOT EXISTS edit_compaction (record_id TEXT PRIMARY KEY, through_seq INTEGER NOT NULL);";

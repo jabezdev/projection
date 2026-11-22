@@ -35,6 +35,22 @@ impl Repository {
         Ok(())
     }
 
+    pub fn save_song(&self, song: &Song, now_ms: i64) -> Result<Song> {
+        self.atomic(|| {
+            let before = self.song(&song.id)?.ok_or_else(|| anyhow!("song {} not found", song.id))?;
+            let saved = self.write_song(song, now_ms)?;
+            self.record_song_edit(&before, &saved, now_ms)?;
+            Ok(saved)
+        })
+    }
+
+    pub(super) fn write_song(&self, song: &Song, now_ms: i64) -> Result<Song> {
+        self.update_song_details(song, now_ms)?;
+        let version = &song.current;
+        let current = self.edit_song_content(&song.id, version.sections.clone(), version.arrangement.clone(), version.background.clone(), now_ms)?;
+        Ok(Song { current, ..song.clone() })
+    }
+
     pub fn update_song_details(&self, song: &Song, now_ms: i64) -> Result<()> {
         let affected = self
             .conn
@@ -59,6 +75,9 @@ impl Repository {
     ) -> Result<SongVersion> {
         let current = self.song(song_id)?.ok_or_else(|| anyhow!("song {song_id} not found"))?.current;
         let mut version = SongVersion { id: current.id.clone(), number: current.number, sections, arrangement, background };
+        if version.same_content(&current) {
+            return Ok(current);
+        }
         if self.version_is_pinned(&current.id)? {
             version.id = new_id();
             version.number = self.last_version_number(song_id)? + 1;
