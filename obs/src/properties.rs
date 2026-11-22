@@ -65,7 +65,8 @@ unsafe fn connection_group(props: *mut obs_properties_t, data: *mut c_void) {
 
 unsafe fn display_group(props: *mut obs_properties_t, kind: Kind) {
     let group = obs_properties_create();
-    obs_properties_add_bool(group, c"blank_when_hidden".as_ptr(), c"Hide when PALTO shows Clear, Black or Logo".as_ptr());
+    let hide = obs_properties_add_bool(group, c"blank_when_hidden".as_ptr(), c"Hide in OBS when the lyrics are hidden in PALTO".as_ptr());
+    obs_property_set_long_description(hide, c"Follows PALTO's Clear, Black and Logo. Turn this off to keep the text in OBS while the projection screen hides it.".as_ptr());
     let fade = obs_properties_add_int_slider(group, c"fade_ms".as_ptr(), c"Fade".as_ptr(), 0, 2000, 50);
     obs_property_int_set_suffix(fade, c" ms".as_ptr());
     obs_properties_add_bool(group, c"uppercase".as_ptr(), c"Capital letters".as_ptr());
