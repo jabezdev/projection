@@ -3,13 +3,24 @@ use std::sync::Mutex;
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
+use crate::Identity;
+
 pub const HOSTNAME: &str = "palto.local";
 const SERVICE_TYPE: &str = "_http._tcp.local.";
 const INSTANCE: &str = "PALTO remote";
+pub const FEED_SERVICE_TYPE: &str = "_palto._tcp.local.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Advert {
+    pub port: u16,
+    pub remote: bool,
+    pub feed: bool,
+}
 
 #[derive(Default)]
 pub struct Advertiser {
-    running: Mutex<Option<(ServiceDaemon, String, u16)>>,
+    identity: Identity,
+    running: Mutex<Option<(ServiceDaemon, Vec<String>, Advert)>>,
 }
 
 fn virtual_interface(name: &str) -> bool {
@@ -41,28 +52,52 @@ pub fn lan_addresses() -> Vec<IpAddr> {
     addresses
 }
 
+pub fn instance_name(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control()).map(|c| if c == '.' { '-' } else { c }).take(60).collect();
+    match clean.trim() {
+        "" => "PALTO".to_string(),
+        name => name.to_string(),
+    }
+}
+
 impl Advertiser {
-    pub fn set(&self, port: Option<u16>) {
+    pub fn new(identity: Identity) -> Self {
+        Self { identity, running: Mutex::default() }
+    }
+
+    pub fn set(&self, advert: Option<Advert>) {
+        let advert = advert.filter(|a| a.remote || a.feed);
         let mut running = self.running.lock().expect("mdns poisoned");
-        if running.as_ref().map(|(_, _, p)| *p) == port {
+        if running.as_ref().map(|(_, _, a)| *a) == advert {
             return;
         }
-        if let Some((daemon, fullname, _)) = running.take() {
-            let _ = daemon.unregister(&fullname);
+        if let Some((daemon, names, _)) = running.take() {
+            for name in names {
+                let _ = daemon.unregister(&name);
+            }
             let _ = daemon.shutdown();
         }
-        let Some(port) = port else { return };
+        let Some(advert) = advert else { return };
+        let host = format!("{HOSTNAME}.");
+        let addresses = lan_addresses();
         let result = ServiceDaemon::new().and_then(|daemon| {
-            let info = ServiceInfo::new(SERVICE_TYPE, INSTANCE, &format!("{HOSTNAME}."), lan_addresses().as_slice(), port, &[("path", "/")][..])?
-                .enable_addr_auto();
-            let fullname = info.get_fullname().to_string();
+            let mut names = Vec::new();
+            if advert.remote {
+                let info = ServiceInfo::new(SERVICE_TYPE, INSTANCE, &host, addresses.as_slice(), advert.port, &[("path", "/")][..])?.enable_addr_auto();
+                names.push(info.get_fullname().to_string());
+                daemon.register(info)?;
+            }
+            let feed = if advert.feed { protocol::FEED_VERSION.to_string() } else { "0".to_string() };
+            let properties = [("feed", feed.as_str()), ("name", self.identity.name.as_str()), ("version", self.identity.version.as_str())];
+            let info = ServiceInfo::new(FEED_SERVICE_TYPE, &instance_name(&self.identity.name), &host, addresses.as_slice(), advert.port, &properties[..])?.enable_addr_auto();
+            names.push(info.get_fullname().to_string());
             daemon.register(info)?;
-            Ok((daemon, fullname))
+            Ok((daemon, names))
         });
         match result {
-            Ok((daemon, fullname)) => {
-                log::info!("Advertising the remote as http://{HOSTNAME}:{port}/");
-                *running = Some((daemon, fullname, port));
+            Ok((daemon, names)) => {
+                log::info!("Advertising PALTO on port {} (remote {}, OBS feed {})", advert.port, advert.remote, advert.feed);
+                *running = Some((daemon, names, advert));
             }
             Err(e) => log::warn!("Cannot advertise {HOSTNAME} on the network: {e}"),
         }

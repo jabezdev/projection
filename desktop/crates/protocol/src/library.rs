@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::{Section, Service};
+use crate::model::{Credits, Section, Service};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LiveService {
@@ -23,6 +23,10 @@ pub struct LiveSong {
     pub song_id: String,
     pub version_id: String,
     pub sections: Vec<Section>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub credits: Credits,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

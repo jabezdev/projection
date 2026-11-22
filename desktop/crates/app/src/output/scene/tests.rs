@@ -21,7 +21,7 @@ fn section(id: &str, kind: SectionKind, lyrics: &str) -> Section {
 
 fn song_item(id: i64) -> SessionItem {
     let verse = section("v", SectionKind::Verse, "one\n\ntwo");
-    let song = LiveSong { song_id: "s".into(), version_id: "v1".into(), sections: vec![verse.clone(), section("c", SectionKind::Chorus, "chorus"), verse] };
+    let song = LiveSong { song_id: "s".into(), version_id: "v1".into(), sections: vec![verse.clone(), section("c", SectionKind::Chorus, "chorus"), verse], title: "Song".into(), credits: Default::default() };
     SessionItem {
         id: id.to_string(),
         title: Some("Song".into()),

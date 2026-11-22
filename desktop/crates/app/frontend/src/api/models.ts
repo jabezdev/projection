@@ -30,7 +30,7 @@ export type ItemContent =
 export type ServiceItem = { id: string; title?: string; notes?: string; background?: string; content: ItemContent };
 export type Service = { id: string; scheduledAtMs: number; title: string; leader?: string; notes?: string; endedAtMs?: number; items: ServiceItem[] };
 
-export type LiveSong = { song_id: string; version_id: string; sections: Section[] };
+export type LiveSong = { song_id: string; version_id: string; sections: Section[]; title?: string; credits?: Credits };
 export type SessionItemKind =
   | { kind: 'text'; data: { steps: string[] } }
   | { kind: 'image'; data: { path: string } }

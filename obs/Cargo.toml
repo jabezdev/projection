@@ -1,0 +1,25 @@
+[workspace]
+
+[package]
+name = "palto-obs"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "palto_obs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+protocol = { path = "../desktop/crates/protocol" }
+serde_json = "1.0"
+tokio = { version = "1", features = ["rt", "net", "time", "sync", "macros", "io-util"] }
+tokio-tungstenite = "0.30"
+futures-util = "0.3"
+mdns-sd = "0.13"
+if-addrs = "0.13"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"

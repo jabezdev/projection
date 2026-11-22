@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "seq": 7,
+  "display": "live",
+  "text": "Amazing grace, how sweet the sound\nThat saved a wretch like me",
+  "lines": [
+    "Amazing grace, how sweet the sound",
+    "That saved a wretch like me"
+  ],
+  "next_text": "I once was lost, but now am found",
+  "item": {
+    "kind": "song",
+    "title": "Amazing Grace"
+  },
+  "section": "Verse 1",
+  "song": {
+    "title": "Amazing Grace",
+    "authors": [
+      {
+        "name": "John Newton",
+        "role": "words"
+      }
+    ],
+    "copyright": "Public Domain",
+    "ccli": "22025",
+    "year": 1779
+  }
+}

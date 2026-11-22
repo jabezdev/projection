@@ -26,7 +26,7 @@ export function resolveItem(item: ServiceItem, { songs, versions, media }: Catal
       const version = content.versionId ? versions.get(content.versionId) : library?.current;
       if (version) {
         const sections = resolveSong(content, version);
-        song = { song_id: content.songId, version_id: version.id, sections };
+        song = { song_id: content.songId, version_id: version.id, sections, title: library?.title ?? '', credits: library?.credits ?? {} };
         background ??= version.background;
         kind = { kind: 'text', data: { steps: sections.flatMap(slides) } };
       } else kind = { kind: 'text', data: { steps: [] } };

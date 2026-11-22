@@ -1,3 +1,4 @@
+mod feed;
 pub mod http;
 pub mod mdns;
 pub mod osc;
@@ -29,12 +30,13 @@ const REBIND: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Listen {
     pub lan: bool,
+    pub feed: bool,
     pub port: u16,
 }
 
 impl Listen {
     pub fn addr(&self) -> SocketAddr {
-        let ip = if self.lan { IpAddr::V4(Ipv4Addr::UNSPECIFIED) } else { IpAddr::V4(Ipv4Addr::LOCALHOST) };
+        let ip = if self.lan || self.feed { IpAddr::V4(Ipv4Addr::UNSPECIFIED) } else { IpAddr::V4(Ipv4Addr::LOCALHOST) };
         SocketAddr::new(ip, self.port)
     }
 }
@@ -44,6 +46,13 @@ pub struct ServerStatus {
     pub listening: Option<SocketAddr>,
     pub error: Option<String>,
     pub remote_clients: usize,
+    pub feed_clients: Vec<SocketAddr>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Identity {
+    pub name: String,
+    pub version: String,
 }
 
 pub struct RemoteServer {
@@ -52,6 +61,7 @@ pub struct RemoteServer {
     events: broadcast::Sender<EngineEvent>,
     snapshot: SnapshotProvider,
     pairing: Arc<Pairing>,
+    identity: Identity,
     status: Arc<Mutex<ServerStatus>>,
     shutdown: watch::Receiver<bool>,
 }
@@ -61,6 +71,7 @@ struct Shared {
     events: broadcast::Sender<EngineEvent>,
     snapshot: SnapshotProvider,
     pairing: Arc<Pairing>,
+    identity: Identity,
     status: Arc<Mutex<ServerStatus>>,
     listen: watch::Receiver<Listen>,
 }
@@ -76,9 +87,10 @@ impl RemoteServer {
         events: broadcast::Sender<EngineEvent>,
         snapshot: SnapshotProvider,
         pairing: Arc<Pairing>,
+        identity: Identity,
         shutdown: watch::Receiver<bool>,
     ) -> Self {
-        Self { listen, commands, events, snapshot, pairing, status: Arc::default(), shutdown }
+        Self { listen, commands, events, snapshot, pairing, identity, status: Arc::default(), shutdown }
     }
 
     pub fn status(&self) -> Arc<Mutex<ServerStatus>> {
@@ -91,6 +103,7 @@ impl RemoteServer {
             events: self.events,
             snapshot: self.snapshot,
             pairing: self.pairing,
+            identity: self.identity,
             status: self.status,
             listen: self.listen.clone(),
         });
@@ -157,24 +170,40 @@ fn local_origin(origin: Option<&str>) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]") || host.eq_ignore_ascii_case(mdns::HOSTNAME)
 }
 
+pub(crate) async fn refuse_websocket(stream: TcpStream, status: u16, message: &str) {
+    use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
+    let refuse = |_: &Request, _: Response| -> Result<Response, ErrorResponse> {
+        let mut response = ErrorResponse::new(Some(message.to_string()));
+        *response.status_mut() = tokio_tungstenite::tungstenite::http::StatusCode::from_u16(status).unwrap_or_default();
+        Err(response)
+    };
+    let _ = tokio_tungstenite::accept_hdr_async(stream, refuse).await;
+}
+
 async fn handle(stream: TcpStream, peer: SocketAddr, shared: Arc<Shared>) -> anyhow::Result<()> {
     let request = http::peek_request(&stream).await?;
-    if !request.is_websocket() {
-        return http::serve(stream, request, &shared.pairing, now_ms).await;
+    let local = peer.ip().is_loopback();
+    let Listen { lan, feed, .. } = *shared.listen.borrow();
+    if request.path == protocol::FEED_PATH && request.is_websocket() {
+        if !local && !feed {
+            refuse_websocket(stream, 403, "Lyrics sharing with OBS is off in PALTO").await;
+            return Ok(());
+        }
+        return feed::serve(stream, peer, shared).await;
     }
-    let client = if peer.ip().is_loopback() && local_origin(request.header("origin")) {
+    if !local && !lan && request.path != "/api/check" {
+        return http::forbidden(stream).await;
+    }
+    if !request.is_websocket() {
+        return http::serve(stream, request, &shared.pairing, &shared.identity, now_ms).await;
+    }
+    let client = if local && local_origin(request.header("origin")) {
         Some(Client::Local)
     } else {
         request.param("token").and_then(|token| shared.pairing.authorize(token, now_ms())).map(|device| Client::Device(device.id))
     };
     let Some(client) = client else {
-        use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
-        let refuse = |_: &Request, _: Response| -> Result<Response, ErrorResponse> {
-            let mut response = ErrorResponse::new(Some("Pair this device first".into()));
-            *response.status_mut() = tokio_tungstenite::tungstenite::http::StatusCode::UNAUTHORIZED;
-            Err(response)
-        };
-        let _ = tokio_tungstenite::accept_hdr_async(stream, refuse).await;
+        refuse_websocket(stream, 401, "Pair this device first").await;
         warn!("Refused an unpaired remote connection from {peer}");
         return Ok(());
     };

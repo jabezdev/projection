@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "seq": 7,
+  "display": "black",
+  "text": "I once was lost, but now am found",
+  "lines": [
+    "I once was lost, but now am found"
+  ],
+  "next_text": "Amen",
+  "item": {
+    "kind": "song",
+    "title": "Amazing Grace"
+  },
+  "section": "Verse 1",
+  "song": {
+    "title": "Amazing Grace",
+    "authors": [
+      {
+        "name": "John Newton",
+        "role": "words"
+      }
+    ],
+    "copyright": "Public Domain",
+    "ccli": "22025",
+    "year": 1779
+  }
+}

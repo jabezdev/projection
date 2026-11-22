@@ -219,7 +219,22 @@ export const items = [
           "color": "#123456",
           "lyrics": "Oh"
         }
-      ]
+      ],
+      "title": "Amazing Grace",
+      "credits": {
+        "authors": [
+          {
+            "name": "John Newton",
+            "role": "words"
+          },
+          {
+            "name": "Anon"
+          }
+        ],
+        "copyright": "Public Domain",
+        "ccli": "22025",
+        "year": 1779
+      }
     }
   },
   {

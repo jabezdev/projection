@@ -116,7 +116,7 @@ fn generated() -> String {
             "items",
             "SessionItem[]",
             [
-                SessionItem { song: Some(LiveSong { song_id: "song1".into(), version_id: "ver1".into(), sections: song().current.sections }), ..item(1, SessionItemKind::Text { steps: vec!["Line one".into()] }) },
+                SessionItem { song: Some(LiveSong { song_id: "song1".into(), version_id: "ver1".into(), sections: song().current.sections, title: song().title, credits: song().credits }), ..item(1, SessionItemKind::Text { steps: vec!["Line one".into()] }) },
                 item(2, SessionItemKind::Image { path: "/media/a.png".into() }),
                 item(3, SessionItemKind::Video { path: "/media/b.mp4".into(), options: options.clone() }),
                 item(4, SessionItemKind::Audio { path: "/media/c.mp3".into(), options }),

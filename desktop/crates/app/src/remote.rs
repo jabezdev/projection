@@ -2,10 +2,10 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime};
 
-use network_server::mdns::{self, Advertiser};
+use network_server::mdns::{self, Advert, Advertiser};
 use network_server::osc::{OscArg, OscListen, OscStatus};
 use network_server::pairing::Pairing;
-use network_server::{Listen, ServerStatus};
+use network_server::{Identity, Listen, ServerStatus};
 use protocol::InputAction;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -22,7 +22,11 @@ pub struct RemoteState {
 }
 
 pub fn listen(config: &AppConfig) -> Listen {
-    Listen { lan: config.lan_enabled, port: config.ws_port }
+    Listen { lan: config.lan_enabled, feed: config.feed_enabled, port: config.ws_port }
+}
+
+pub fn identity() -> Identity {
+    Identity { name: sysinfo::System::host_name().ok().filter(|n| !n.is_empty()).unwrap_or_else(|| "PALTO".into()), version: env!("CARGO_PKG_VERSION").into() }
 }
 
 pub fn osc_listen(config: &AppConfig) -> OscListen {
@@ -42,7 +46,7 @@ impl RemoteState {
     pub fn apply(&self, config: &AppConfig) {
         self.listen.send_replace(listen(config));
         self.osc.send_replace(osc_listen(config));
-        self.advertiser.set(config.lan_enabled.then_some(config.ws_port));
+        self.advertiser.set(Some(Advert { port: config.ws_port, remote: config.lan_enabled, feed: config.feed_enabled }));
     }
 }
 
@@ -90,6 +94,14 @@ pub struct RemoteStatus {
     pairing_seconds_left: u64,
     devices: Vec<DeviceInfo>,
     osc: OscInfo,
+    feed: FeedInfo,
+}
+
+#[derive(Serialize)]
+pub struct FeedInfo {
+    enabled: bool,
+    name: String,
+    clients: Vec<String>,
 }
 
 #[tauri::command]
@@ -109,6 +121,7 @@ pub fn get_remote_status(remote: tauri::State<RemoteState>, config: tauri::State
         listening: server.listening.is_some(),
         error: server.error,
         remote_clients: server.remote_clients,
+        feed: FeedInfo { enabled: config.feed_enabled, name: identity().name, clients: server.feed_clients.iter().map(|peer| peer.ip().to_string()).collect() },
         name_url: format!("http://{}:{}/", mdns::HOSTNAME, config.ws_port),
         qr_svg: address_urls.first().and_then(|url| network_server::qr_svg(url)),
         address_urls,
@@ -137,6 +150,8 @@ pub fn get_remote_status(remote: tauri::State<RemoteState>, config: tauri::State
 #[derive(Deserialize)]
 pub struct RemoteSettings {
     lan_enabled: bool,
+    #[serde(default)]
+    feed_enabled: bool,
     port: u16,
     osc_enabled: bool,
     osc_port: u16,
@@ -164,12 +179,13 @@ pub fn set_remote_settings(remote: tauri::State<RemoteState>, config: tauri::Sta
     }
     let saved = config.update(|c| {
         c.lan_enabled = settings.lan_enabled;
+        c.feed_enabled = settings.feed_enabled;
         c.ws_port = settings.port;
         c.osc_enabled = settings.osc_enabled;
         c.osc_port = settings.osc_port;
         c.osc_allowed = allowed;
     })?;
-    log::info!("Remote settings: LAN {}, port {}, OSC {} on {}", saved.lan_enabled, saved.ws_port, saved.osc_enabled, saved.osc_port);
+    log::info!("Remote settings: LAN {}, OBS feed {}, port {}, OSC {} on {}", saved.lan_enabled, saved.feed_enabled, saved.ws_port, saved.osc_enabled, saved.osc_port);
     remote.apply(&saved);
     Ok(())
 }

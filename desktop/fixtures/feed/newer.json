@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "seq": 3,
+  "display": "dimmed",
+  "text": "Still here",
+  "lines": ["Still here"],
+  "item": { "kind": "hologram", "title": "Future", "colour": "red" },
+  "speaker": "Pastor",
+  "song": { "title": "New", "authors": [{ "name": "A", "role": "arranger" }], "key": "G" }
+}

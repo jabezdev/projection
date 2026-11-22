@@ -2,6 +2,7 @@ mod input;
 mod output_config;
 mod commands;
 mod events;
+mod feed;
 mod library;
 pub mod model;
 mod playback;
@@ -11,6 +12,7 @@ pub use input::{InputAction, InputBinding, InputBindings, InputTrigger, MidiMess
 pub use output_config::{BackgroundFit, Easing, OutputConfig, TextAlign, TransitionDirection, TransitionKind, VerticalAlign, OUTPUT_CONFIG_VERSION, SHADER_PRESETS};
 pub use commands::*;
 pub use events::*;
+pub use feed::*;
 pub use library::*;
 pub use playback::*;
 pub use program::*;

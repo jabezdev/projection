@@ -58,6 +58,7 @@ pub fn network(report: &mut Report, app: &tauri::AppHandle) {
         }
     }
     report.info(format!("LAN access is {}", if config.lan_enabled { "on" } else { "off (Settings → Remote)" }));
+    report.info(format!("Lyrics sharing with OBS is {}", if config.feed_enabled { "on" } else { "off (Settings → Remote)" }));
     match firewall_rule() {
         Some(true) => report.ok("Windows Firewall has a PALTO rule"),
         Some(false) => report.warn("Windows Firewall has no PALTO rule; Windows will ask when LAN access is turned on"),

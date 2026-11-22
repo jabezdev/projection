@@ -7,10 +7,11 @@ type RemoteStatus = {
   pairing_code: string | null; pairing_seconds_left: number;
   devices: { id: string; name: string; paired_ms: number; last_seen_ms: number }[];
   osc: { enabled: boolean; port: number; allowed: string[]; listening: boolean; error: string | null; last: [string, string, number, boolean] | null };
+  feed: { enabled: boolean; name: string; clients: string[] };
 };
-type Settings = { lan_enabled: boolean; port: number; osc_enabled: boolean; osc_port: number; osc_allowed: string[] };
+type Settings = { lan_enabled: boolean; feed_enabled: boolean; port: number; osc_enabled: boolean; osc_port: number; osc_allowed: string[] };
 
-const settingsOf = (s: RemoteStatus): Settings => ({ lan_enabled: s.lan_enabled, port: s.port, osc_enabled: s.osc.enabled, osc_port: s.osc.port, osc_allowed: s.osc.allowed });
+const settingsOf = (s: RemoteStatus): Settings => ({ lan_enabled: s.lan_enabled, feed_enabled: s.feed.enabled, port: s.port, osc_enabled: s.osc.enabled, osc_port: s.osc.port, osc_allowed: s.osc.allowed });
 const ago = (ms: number) => ms < 60_000 ? `${Math.round(ms / 1000)} s ago` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min ago` : `${Math.round(ms / 3_600_000)} h ago`;
 
 export default function RemoteSettings() {
@@ -57,6 +58,11 @@ export default function RemoteSettings() {
         : <><button onClick={() => run('start_pairing')}>Pair a device</button><small>Shows a code for 5 minutes. Each device pairs once and is remembered.</small></>}
       {status.devices.length > 0 && <ul className="remote-devices">{status.devices.map(d => <li key={d.id}><span>{d.name}<small>Last used {ago(Math.max(0, loadedAt - d.last_seen_ms))}</small></span><button onClick={() => run('remove_remote_device', { id: d.id })}>Remove</button></li>)}</ul>}
     </fieldset>}
+    <fieldset><legend>OBS (livestream computer)</legend>
+      <label className="setting-check"><input type="checkbox" checked={status.feed.enabled} onChange={e => void save({ feed_enabled: e.target.checked })}/>Share lyrics with OBS on this network</label>
+      <small>Install the PALTO plugin in OBS, then add a PALTO Lyrics, Song Info or Section source. OBS finds this computer as “{status.feed.name}”. It only reads what is on screen and cannot control PALTO.</small>
+      {status.feed.enabled && <small>{status.feed.clients.length ? `Connected: ${status.feed.clients.map(ip => `OBS on ${ip}`).join(', ')}.` : 'No OBS connected.'}</small>}
+    </fieldset>
     <fieldset><legend>OSC (Companion and controllers)</legend>
       <label className="setting-check"><input type="checkbox" checked={status.osc.enabled} onChange={e => void save({ osc_enabled: e.target.checked })}/>Accept OSC messages</label>
       <fieldset className="setting-group" disabled={!status.osc.enabled}>

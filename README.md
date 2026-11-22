@@ -1,6 +1,6 @@
 # Magi Projection
 
-**PALTO** (`desktop/`, Rust + Tauri + wgpu + FFmpeg 9 + React) runs the service offline. The song library (`web/`, React + Convex + Clerk) is where the team prepares it. Windows installer: [Releases](https://github.com/jabezdev/projection/releases/latest).
+**PALTO** (`desktop/`, Rust + Tauri + wgpu + FFmpeg 9 + React) runs the service offline. The song library (`web/`, React + Convex + Clerk) is where the team prepares it. The OBS plugin (`obs/`, Rust) shows PALTO's lyrics and song credits on the livestream. Windows installer: [Releases](https://github.com/jabezdev/projection/releases/latest).
 
 ## Desktop
 

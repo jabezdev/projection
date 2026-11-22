@@ -25,7 +25,8 @@ impl Repository {
                         let sections = song_item.resolve(&version);
                         let steps = sections.iter().flat_map(|s| split_slides(&s.lyrics)).collect();
                         background = version.background.clone();
-                        song = Some(LiveSong { song_id: song_item.song_id.clone(), version_id: version.id.clone(), sections });
+                        let (title, credits) = library.map(|s| (s.title, s.credits)).unwrap_or_default();
+                        song = Some(LiveSong { song_id: song_item.song_id.clone(), version_id: version.id.clone(), sections, title, credits });
                         SessionItemKind::Text { steps }
                     }
                     None => SessionItemKind::Text { steps: Vec::new() },

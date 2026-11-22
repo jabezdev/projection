@@ -4,6 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use crate::pairing::Pairing;
+use crate::Identity;
 
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_BODY: usize = 4 * 1024;
@@ -97,18 +98,31 @@ struct PairRequest {
     name: String,
 }
 
-pub async fn serve(mut stream: TcpStream, request: Request, pairing: &Pairing, now_ms: impl Fn() -> i64) -> anyhow::Result<()> {
+pub async fn forbidden(mut stream: TcpStream) -> anyhow::Result<()> {
+    respond(&mut stream, "403 Forbidden", "text/plain", b"Turn on network access in PALTO").await
+}
+
+pub fn check(identity: &Identity, paired: bool) -> Vec<u8> {
+    serde_json::json!({
+        "app": "palto",
+        "paired": paired,
+        "name": identity.name,
+        "version": identity.version,
+        "feed_versions": [protocol::FEED_VERSION],
+    })
+    .to_string()
+    .into_bytes()
+}
+
+pub async fn serve(mut stream: TcpStream, request: Request, pairing: &Pairing, identity: &Identity, now_ms: impl Fn() -> i64) -> anyhow::Result<()> {
     let mut head = vec![0u8; request.head_len];
     tokio::time::timeout(READ_TIMEOUT, stream.read_exact(&mut head)).await??;
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", path) => {
             if path == "/api/check" {
                 let known = request.param("token").is_some_and(|token| pairing.authorize(token, now_ms()).is_some());
-                return if known {
-                    respond(&mut stream, "200 OK", "application/json", b"{\"paired\":true}").await
-                } else {
-                    respond(&mut stream, "401 Unauthorized", "application/json", b"{\"paired\":false}").await
-                };
+                let status = if known { "200 OK" } else { "401 Unauthorized" };
+                return respond(&mut stream, status, "application/json", &check(identity, known)).await;
             }
             match FILES.iter().find(|(p, ..)| *p == path || (*p == "/" && path == "/index.html")) {
                 Some((_, content_type, body)) => respond(&mut stream, "200 OK", content_type, body.as_bytes()).await,

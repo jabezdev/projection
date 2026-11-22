@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "seq": 7,
+  "display": "live",
+  "text": "Welcome home",
+  "lines": [
+    "Welcome home"
+  ],
+  "item": {
+    "kind": "text",
+    "title": "Welcome"
+  }
+}

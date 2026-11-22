@@ -53,7 +53,7 @@ Decided: PALTO keeps a full local copy and nothing live waits on the network; wh
 
 ## 5. More sources and outputs
 
-- [ ] **OBS lyrics plugin.** A native Rust plugin in its own `obs/` project. It reads a read-only `/feed/v1` WebSocket with no pairing, finds PALTO through mDNS `_palto._tcp` or a subnet probe, and draws with OBS's own text sources. Waits on song credits (2). **Open:** whether the feed follows the LAN access switch or gets its own switch.
+- [ ] **OBS lyrics plugin.** A native Rust plugin in its own `obs/` project. It reads a read-only `/feed/v1` WebSocket with no pairing, finds PALTO through mDNS `_palto._tcp` or a subnet probe, and draws with OBS's own text sources. The feed has its own "Share lyrics with OBS" switch. Built and tested on Linux OBS 32; still to check on the church's stream PC: finding PALTO by mDNS and by the probe, the firewall, blanking, and a full service.
 - [ ] **Screen sharing from other devices.** PALTO hosts a share page on the LAN and receives WebRTC, with audio. **Open:** HTTPS, one sender or several, which browsers can share audio.
 - [ ] **Presentations.** PowerPoint import. **Open:** convert through an installed office suite, or require a PDF export. Speaker notes and the next slide on the confidence screen.
 - [ ] **Web pages** (Canva, Google Slides) drawn off-screen as a source. **Open:** CEF or a hidden webview, chosen by cost.

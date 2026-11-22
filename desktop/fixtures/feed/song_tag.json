@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "seq": 7,
+  "display": "live",
+  "text": "Amen",
+  "lines": [
+    "Amen"
+  ],
+  "item": {
+    "kind": "song",
+    "title": "Amazing Grace"
+  },
+  "section": "Ending",
+  "song": {
+    "title": "Amazing Grace",
+    "authors": [
+      {
+        "name": "John Newton",
+        "role": "words"
+      }
+    ],
+    "copyright": "Public Domain",
+    "ccli": "22025",
+    "year": 1779
+  }
+}

@@ -22,7 +22,8 @@ pub(super) fn start(app: &tauri::App, channels: &Channels, config: &RwLock<AppCo
     let sink: CommandSink = Arc::new(move |command| engine.command(command));
     let snapshot = channels.snapshot.clone();
     let snapshot_provider: Arc<dyn Fn() -> EngineSnapshot + Send + Sync> = Arc::new(move || snapshot.read().expect("snapshot lock poisoned").clone());
-    let server = RemoteServer::new(listen_rx, sink, channels.events.clone(), snapshot_provider, pairing.clone(), channels.shutdown_rx.clone());
+    let identity = remote::identity();
+    let server = RemoteServer::new(listen_rx, sink, channels.events.clone(), snapshot_provider, pairing.clone(), identity.clone(), channels.shutdown_rx.clone());
 
     let state = remote::RemoteState {
         pairing,
@@ -30,7 +31,7 @@ pub(super) fn start(app: &tauri::App, channels: &Channels, config: &RwLock<AppCo
         server: server.status(),
         osc,
         osc_status: Arc::default(),
-        advertiser: mdns::Advertiser::default(),
+        advertiser: mdns::Advertiser::new(identity),
     };
     let osc_status = state.osc_status.clone();
     state.apply(&saved);
