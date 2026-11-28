@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111418">
+  <meta name="theme-color" content="#121314">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>PALTO remote</title>
@@ -14,35 +14,64 @@
 </head>
 <body>
   <main id="pair" hidden>
+    <img class="logo" src="/icon.svg" alt="" width="56" height="56">
     <h1>PALTO remote</h1>
     <p>On the PALTO computer, open <b>Settings → Remote</b> and choose <b>Pair a device</b>. Enter the code it shows.</p>
     <form id="pair-form">
       <label>Code<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
-      <label>Name for this device<input id="name" maxlength="60" placeholder="e.g. Leader's phone"></label>
+      <label>Name for this device<input id="name" maxlength="60" placeholder="e.g. Operator's phone"></label>
       <button type="submit">Pair</button>
     </form>
     <p id="pair-error" class="error" role="alert"></p>
   </main>
+
   <main id="remote" hidden>
-    <header>
-      <span id="service">No service loaded</span>
+    <header class="bar">
+      <div class="title"><small id="service-date"></small><span id="service">No service loaded</span></div>
       <span id="connection" class="status">Connecting…</span>
     </header>
-    <section class="slides">
-      <div class="slide current"><small id="current-label">Now</small><p id="current"></p></div>
-      <div class="slide next"><small id="next-label">Next</small><p id="next"></p></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-live" aria-selected="true" data-tab="live">Live</button>
+      <button role="tab" id="tab-order" aria-selected="false" data-tab="order">Service</button>
+    </nav>
+    <p id="display-banner" class="banner" hidden></p>
+
+    <section id="view-live" class="view live-view">
+      <article class="screen now">
+        <header><span class="dot" id="now-dot"></span><small id="now-label">Now</small><small id="now-count" class="count"></small></header>
+        <p id="now-text"></p>
+      </article>
+      <article class="screen next">
+        <header><span class="dot" id="next-dot"></span><small id="next-label">Next</small></header>
+        <p id="next-text"></p>
+      </article>
+      <div id="media" class="media" hidden>
+        <div class="media-head"><span id="media-title"></span><small id="media-time"></small></div>
+        <div class="progress"><span id="media-progress"></span></div>
+        <div class="media-buttons">
+          <button id="media-toggle" aria-label="Play">Play</button>
+          <button id="media-stop" aria-label="Stop">Stop</button>
+        </div>
+      </div>
     </section>
-    <nav class="modes" aria-label="Display">
-      <button data-display="live">Live</button>
-      <button data-display="clear">Clear</button>
-      <button data-display="black">Black</button>
-      <button data-display="logo">Logo</button>
-    </nav>
-    <nav class="steps">
-      <button id="prev" aria-label="Previous">◀ Previous</button>
-      <button id="next-button" aria-label="Next">Next ▶</button>
-    </nav>
-    <p id="error" class="error" role="alert"></p>
+
+    <section id="view-order" class="view order-view" hidden>
+      <ol id="order" class="order"></ol>
+    </section>
+
+    <footer class="controls">
+      <nav class="modes" aria-label="Projector shows">
+        <button data-display="live">Live</button>
+        <button data-display="clear">Clear</button>
+        <button data-display="black">Black</button>
+        <button data-display="logo">Logo</button>
+      </nav>
+      <nav class="steps">
+        <button id="prev" aria-label="Previous slide">‹ Back</button>
+        <button id="next-button" aria-label="Next slide">Next ›</button>
+      </nav>
+      <p id="error" class="error" role="alert"></p>
+    </footer>
   </main>
   <script src="/remote.js"></script>
 </body>

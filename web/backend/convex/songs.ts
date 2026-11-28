@@ -5,6 +5,7 @@ import { requirePermission } from "./lib/auth";
 import { logged, requireSong, setSongContent, songByUid, touch, versionByUid } from "./lib/sequence";
 import { defined } from "./lib/util";
 import { credits, section } from "./schema";
+import { nextSeq } from "./lib/clock";
 import { newId } from "@magi/shared";
 
 async function withVersion(ctx: QueryCtx, song: Doc<"songs">) {
@@ -61,6 +62,7 @@ export const create = mutation({
       searchText: "",
       updatedAt: Date.now(),
       updatedBy: user._id,
+      seq: await nextSeq(ctx),
     });
     await touch(ctx, id, user._id);
     return uid;

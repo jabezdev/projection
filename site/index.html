@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PALTO · Church presentation software</title>
+  <meta name="description" content="PALTO puts lyrics, videos and slides on the projector, the stage screen and the livestream. It runs offline on the church computer, and the worship team prepares songs from their phones.">
+  <meta name="theme-color" content="#121314">
+  <meta property="og:title" content="PALTO · Church presentation software">
+  <meta property="og:description" content="Lyrics, videos and slides for Sunday. Runs offline on the church computer. Free and open source.">
+  <meta property="og:image" content="img/control.webp">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+    <symbol id="i-offline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></symbol>
+  </svg>
+
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.svg" alt="">PALTO</a>
+      <nav>
+        <a class="optional" href="#features">Features</a>
+        <a class="optional" href="#download">Download</a>
+        <a href="guide.html">Guide</a>
+        <a href="https://github.com/jabezdev/projection">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <span class="eyebrow live">Church presentation software</span>
+          <h1>Sunday, on screens you can trust.</h1>
+          <p class="lead">PALTO puts lyrics, videos and slides on the projector, the stage screen and the livestream. It runs on the church computer with no internet needed, and the worship team prepares the songs from their phones.</p>
+          <div class="actions">
+            <a class="button primary" data-download="palto" href="https://github.com/jabezdev/projection/releases/latest"><svg><use href="#i-download"/></svg>Download for Windows <small data-version="palto"></small></a>
+            <a class="button" href="guide.html">Read the guide</a>
+          </div>
+          <p class="fineprint">Free and open source. Windows 10 and 11, 64-bit.</p>
+        </div>
+        <figure class="shot" style="margin:0"><img src="img/control.webp" width="1600" height="900" alt="PALTO's control panel: the service order on the left with songs split into verses and choruses, slide previews in the middle, and the projector and stage screen controls on the right."></figure>
+      </div>
+    </section>
+
+    <section class="band" id="features">
+      <div class="wrap">
+        <span class="eyebrow">Features</span>
+        <h2>Everything a service needs, in one window.</h2>
+        <p>Songs, scripture, announcements, countdowns, the sermon slides and the offering video all sit in one service order. Press the space bar, a clicker or a phone to move on.</p>
+        <div class="grid">
+          <article><span class="icon live"><svg><use href="#i-music"/></svg></span><h3>Songs that know their parts</h3><p>Verses, choruses and bridges, each with its own colour. Set the usual order once, change it for one Sunday without touching the library. Past services keep the words they used.</p></article>
+          <article><span class="icon"><svg><use href="#i-calendar"/></svg></span><h3>Services from templates</h3><p>Start from your usual order: Welcoming, Praise &amp; Worship, Message, Closing. Tick this week's parts, fold sections away, and add a part back when the program changes.</p></article>
+          <article><span class="icon"><svg><use href="#i-monitor"/></svg></span><h3>Projector and stage screen</h3><p>The congregation sees the lyrics. The singers see the current and next slide on a confidence screen. Logo, black and clear are one press away.</p></article>
+          <article><span class="icon"><svg><use href="#i-film"/></svg></span><h3>Videos, images and slides</h3><p>Countdown videos, background loops, music, PDF slides and a shared screen, all played smoothly on modest hardware.</p></article>
+          <article><span class="icon"><svg><use href="#i-phone"/></svg></span><h3>A remote in your pocket</h3><p>Pair a phone on the same Wi-Fi to see what is showing, jump to any song or slide, and switch to black or logo from anywhere in the room.</p></article>
+          <article><span class="icon"><svg><use href="#i-radio"/></svg></span><h3>Lyrics on the livestream</h3><p>The PALTO plugin for OBS shows the lyrics, the song credits and the current section as OBS text, styled the way your stream looks.</p></article>
+          <article><span class="icon"><svg><use href="#i-grid"/></svg></span><h3>Stream Deck, clickers and MIDI</h3><p>Map any key, presentation clicker, MIDI pad or Stream Deck button. Bitfocus Companion talks to PALTO over OSC.</p></article>
+          <article><span class="icon"><svg><use href="#i-users"/></svg></span><h3>A team library on the web</h3><p>Song leaders add lyrics, set arrangements and plan services from any browser. Singers open the lyrics and see what is on screen right now.</p></article>
+          <article><span class="icon"><svg><use href="#i-offline"/></svg></span><h3>Nothing waits on the internet</h3><p>PALTO keeps its own copy of everything. If the connection drops mid-service, nothing changes on screen, and edits go up when it comes back.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="band dark">
+      <div class="wrap">
+        <span class="eyebrow">How a Sunday goes</span>
+        <h2>Prepared during the week, run without surprises.</h2>
+        <p>Everyone works on the same service. PALTO stays in charge once it goes live.</p>
+        <ol class="flow">
+          <li><h3>Leaders plan</h3><p>The song leader picks the songs and the order of verses and choruses in the team library, from a phone or a laptop.</p></li>
+          <li><h3>PALTO syncs</h3><p>The church computer picks up every change on its own, videos included, and keeps working if the internet goes away.</p></li>
+          <li><h3>The operator runs it</h3><p>Keyboard, clicker, Stream Deck or phone. While PALTO runs a service live, nobody can change it from the web.</p></li>
+          <li><h3>Everyone sees it</h3><p>Lyrics on the projector, the next line on the stage screen, the same words on the livestream, and on singers' phones.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="wrap">
+        <span class="eyebrow">Requirements</span>
+        <h2>Built for the computer the church already has.</h2>
+        <p>PALTO is tested against a modest church PC, not a studio workstation.</p>
+        <div class="specs">
+          <dl>
+            <dt>System</dt><dd>Windows 10 or 11, 64-bit</dd>
+            <dt>Processor</dt><dd>AMD Ryzen 3 2200G or similar</dd>
+            <dt>Memory</dt><dd>8 GB</dd>
+            <dt>Graphics</dt><dd>Integrated graphics, or a GTX 1050 Ti for heavier video</dd>
+          </dl>
+          <dl>
+            <dt>Screens</dt><dd>A projector or TV, plus an optional stage screen</dd>
+            <dt>Network</dt><dd>Only for the phone remote, OBS and the team library</dd>
+            <dt>Updates</dt><dd>Built in, with a way back to the previous version</dd>
+            <dt>Price</dt><dd>Free. MIT licensed.</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="band dark" id="download">
+      <div class="wrap">
+        <span class="eyebrow">Download</span>
+        <h2>Get PALTO.</h2>
+        <p>Windows may warn that the installer is from an unknown publisher. Choose <b>More info → Run anyway</b>. The <a href="guide.html#install">guide</a> explains why.</p>
+        <div class="downloads">
+          <div class="download">
+            <span class="icon live"><svg><use href="#i-monitor"/></svg></span>
+            <h3>PALTO for Windows</h3>
+            <p>The presentation app for the church computer. Updates itself after that.</p>
+            <a class="button primary" data-download="palto" href="https://github.com/jabezdev/projection/releases/latest"><svg><use href="#i-download"/></svg>Download installer</a>
+            <span class="version" data-version-line="palto">Latest release on GitHub</span>
+          </div>
+          <div class="download">
+            <span class="icon"><svg><use href="#i-radio"/></svg></span>
+            <h3>PALTO for OBS</h3>
+            <p>A plugin for the livestream computer. Needs OBS 30 or newer on Windows.</p>
+            <a class="button" data-download="obs" href="https://github.com/jabezdev/projection/releases"><svg><use href="#i-download"/></svg>Download plugin</a>
+            <span class="version" data-version-line="obs">All releases on GitHub</span>
+          </div>
+          <div class="download">
+            <span class="icon"><svg><use href="#i-cloud"/></svg></span>
+            <h3>Team library</h3>
+            <p>Runs in the browser and installs on phones. Each church hosts its own; ask your admin for the address, or set one up with the guide.</p>
+            <a class="button" href="guide.html#team-library">Set up a team library</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.svg" alt="">PALTO</a>
+      <span>Free and open source, MIT licence.</span>
+      <a href="guide.html">Guide</a>
+      <a href="https://github.com/jabezdev/projection">Source code</a>
+      <a href="https://github.com/jabezdev/projection/releases">All releases</a>
+    </div>
+  </footer>
+</body>
+</html>

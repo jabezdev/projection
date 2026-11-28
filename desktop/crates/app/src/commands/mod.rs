@@ -6,6 +6,7 @@ mod missing_media;
 mod pdf;
 mod services;
 mod songs;
+mod templates;
 mod system;
 mod transport;
 
@@ -15,6 +16,7 @@ pub use missing_media::*;
 pub use pdf::*;
 pub use services::*;
 pub use songs::*;
+pub use templates::*;
 pub use system::*;
 pub use transport::*;
 
@@ -89,6 +91,18 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
         end_service,
         freeze_past_services,
         delete_service,
+        list_templates,
+        save_template,
+        delete_template,
+        create_service_from_template,
+        save_service_as_template,
+        crate::sync::get_sync_status,
+        crate::sync::pair_sync,
+        crate::sync::unpair_sync,
+        crate::sync::set_sync_offline,
+        crate::sync::sync_now,
+        crate::sync::list_sync_conflicts,
+        crate::sync::resolve_sync_conflict,
         list_songs,
         create_song,
         get_song,

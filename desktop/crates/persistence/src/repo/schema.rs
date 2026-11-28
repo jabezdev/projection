@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use super::Repository;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 impl Repository {
     pub(super) fn init_schema(&self) -> Result<()> {
@@ -63,4 +63,13 @@ const TABLES: &str = "CREATE TABLE IF NOT EXISTS song (
         at_ms INTEGER NOT NULL, stack TEXT NOT NULL, body TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS edit_step_by_record ON edit_step(record_id, stack, seq);
-    CREATE TABLE IF NOT EXISTS edit_compaction (record_id TEXT PRIMARY KEY, through_seq INTEGER NOT NULL);";
+    CREATE TABLE IF NOT EXISTS edit_compaction (record_id TEXT PRIMARY KEY, through_seq INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS service_template (id TEXT PRIMARY KEY, name TEXT NOT NULL, body TEXT NOT NULL, updated_at_ms INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS sync_state (
+        kind TEXT NOT NULL, id TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, pushed INTEGER NOT NULL DEFAULT 0, base TEXT,
+        PRIMARY KEY (kind, id)
+    );
+    CREATE TABLE IF NOT EXISTS sync_deleted (kind TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (kind, id));
+    CREATE TABLE IF NOT EXISTS sync_conflict (id TEXT PRIMARY KEY, record_id TEXT NOT NULL, at_ms INTEGER NOT NULL, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS media_remote (media_id TEXT PRIMARY KEY, url TEXT, uploaded INTEGER NOT NULL DEFAULT 0);";

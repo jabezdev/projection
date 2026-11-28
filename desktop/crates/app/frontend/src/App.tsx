@@ -13,6 +13,8 @@ import LibraryModal from './library/LibraryModal';
 import QuickSearch from './library/QuickSearch';
 import ControlsSettings from './settings/ControlsSettings';
 import RemoteSettings from './settings/RemoteSettings';
+import SyncSettings from './settings/SyncSettings';
+import { useSyncStatus } from './settings/useSyncStatus';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useInputBindings, useKeyboardInput } from './api/input';
 import { useOutputsLoading, useOutputsShown } from './outputs/useOutputs';
@@ -39,6 +41,15 @@ function App() {
     let unlisten: (() => void) | undefined;
     void listen<UpdateState>('update:state', event => { if (event.payload.state === 'ready') setUpdateReady(event.payload.version); }).then(u => { unlisten = u; });
     return () => unlisten?.();
+  }, []);
+  const [syncStatus] = useSyncStatus();
+  const [settingsTab, setSettingsTab] = useState<string | undefined>(undefined);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let timer: number | undefined;
+    void listen<string[]>('library:changed', () => { window.clearTimeout(timer); timer = window.setTimeout(() => void refreshRef.current().catch(() => {}), 400); }).then(u => { unlisten = u; });
+    return () => { unlisten?.(); window.clearTimeout(timer); };
   }, []);
   const streamRef = useRef<HTMLDivElement>(null);
   const [library, setLibrary] = useState<Song[]>([]);
@@ -79,6 +90,7 @@ function App() {
   async function openLibrary() { await refreshCatalog(); setLibraryOpen(true); }
   async function openService(itemId?: string) { await refreshCatalog(); const service = serviceRef.current; if (service) setServiceEditor({ itemId, service }); }
   async function refreshServices() { setServices(await invoke<Service[]>('list_services')); }
+  useEffect(() => { refreshRef.current = async () => { await Promise.all([refreshServices(), refreshCatalog()]); }; });
   async function loadService(serviceId: string) {
     if (outputsShown && live && live.service.id !== serviceId && !(await confirm('The outputs are shown. Load another service? Its first item goes on air.', 'Load service'))) return false;
     await saveQueue.current; await invoke('load_service', { serviceId });
@@ -104,6 +116,7 @@ function App() {
   return <OutputConfigContext.Provider value={outputConfig}><div className="operator-shell">
 
     {updateReady && <div role="status" className="ui-notice">PALTO {updateReady} is ready to install: Settings → System.<button aria-label="Dismiss update notice" onClick={() => setUpdateReady(null)}><Icon name="close"/></button></div>}
+    {!!syncStatus?.conflicts && <div role="status" className="ui-notice">{syncStatus.conflicts} change{syncStatus.conflicts > 1 ? 's were' : ' was'} made here and online at the same time.<button onClick={() => { setSettingsTab('sync'); setSettingsOpen(true); }}>Review</button></div>}
     {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close"/></button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
       <SessionPane live={live} pending={outputsLoading.projection} serviceRef={serviceRef} services={services} program={program} run={run} persist={persist}
@@ -118,7 +131,7 @@ function App() {
       {resizeDivider(1)}
       <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
-    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} onClose={() => setSettingsOpen(false)} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }]}/>}
+    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} initialTab={settingsTab} onClose={() => { setSettingsOpen(false); setSettingsTab(undefined); }} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }, { id: 'sync', label: 'Cloud sync', content: <SyncSettings/> }]}/>}
     {partEditor && <PartEditor part={partEditor} onClose={() => setPartEditor(null)} onSave={part => run(async () => { await editPart(part.itemId, part.occurrence, part.lyrics); setPartEditor(null); })}/>}
     {editor && <SongEditor backgrounds={media} song={editor.song} heading={editor.song ? 'Library song' : 'New library song'} onClose={() => setEditor(null)} onStepped={refreshCatalog} onSave={async song => {
       if (editor.song) await invoke('update_song', { song });

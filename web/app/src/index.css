@@ -1,50 +1,75 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #8b5cf6;
-  --color-accent-soft: #8b5cf633;
-  --color-variation: #f59e0b;
-  --color-bg: #09090b;
-  --color-card: #18181b;
-  --color-hover: #27272a;
-  --color-line: #3f3f46;
-  --color-muted: #a1a1aa;
+  --font-sans: Barlow, "Segoe UI", system-ui, sans-serif;
+  --font-label: "Barlow Condensed", Barlow, "Segoe UI", sans-serif;
+  --color-accent: #ff5a36;
+  --color-accent-soft: #ff5a3624;
+  --color-variation: #f2a93b;
+  --color-bg: #121314;
+  --color-sunk: #0b0c0d;
+  --color-card: #18191b;
+  --color-raised: #1f2022;
+  --color-hover: #27282b;
+  --color-line: #2e2f33;
+  --color-fg: #ecebe6;
+  --color-muted: #a6a59f;
+  --color-faint: #74736e;
 }
 
-:root {
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
-  color: #fafafa;
-  background-color: var(--color-bg);
-  -webkit-font-smoothing: antialiased;
-}
+@layer base {
+  :root {
+    font-family: var(--font-sans);
+    color-scheme: dark;
+    color: var(--color-fg);
+    background-color: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+  }
 
-body {
-  margin: 0;
-  min-height: 100dvh;
-  overflow-x: hidden;
-}
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
 
-input,
-textarea,
-select {
-  @apply rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent;
-}
+  input,
+  textarea,
+  select {
+    @apply rounded-lg border border-line bg-sunk px-3 py-2 text-sm text-fg outline-none placeholder:text-faint focus:border-muted;
+  }
 
-textarea {
-  @apply w-full font-[inherit] leading-relaxed;
-  field-sizing: content;
-  min-height: 4lh;
+  textarea {
+    @apply w-full font-[inherit] leading-relaxed;
+    field-sizing: content;
+    min-height: 4lh;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--color-accent);
+  }
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover disabled:opacity-40;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-40;
 }
 
 @utility btn-primary {
-  @apply btn border-accent bg-accent text-white hover:bg-accent/80;
+  @apply btn border-accent bg-accent font-semibold text-[#1b0a05] hover:bg-[#ff7152];
+}
+
+@utility btn-icon {
+  @apply inline-grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-30;
 }
 
 @utility card {
-  @apply rounded-xl border border-line/60 bg-card p-4;
+  @apply rounded-xl border border-line bg-card p-4;
+}
+
+@utility eyebrow {
+  @apply font-label text-xs font-semibold tracking-[0.14em] text-muted uppercase;
 }

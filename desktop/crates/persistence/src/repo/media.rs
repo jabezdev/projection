@@ -2,10 +2,17 @@ use anyhow::{Context, Result};
 use protocol::model::{MediaFile, MediaKind};
 use rusqlite::{params, OptionalExtension, Row};
 
+use protocol::sync::RecordKind as Kind;
+
 use super::Repository;
 
 impl Repository {
     pub fn save_media_file(&self, media: &MediaFile) -> Result<()> {
+        self.write_media_file(media)?;
+        self.mark_dirty(Kind::Media, &media.id)
+    }
+
+    pub(super) fn write_media_file(&self, media: &MediaFile) -> Result<()> {
         self.conn
             .execute(
                 "INSERT INTO media_file(id, title, kind, hash) VALUES (?1, ?2, ?3, ?4)
@@ -35,6 +42,13 @@ impl Repository {
     }
 
     pub fn delete_media_file(&self, id: &str) -> Result<bool> {
+        let removed = self.remove_media_file(id)?;
+        self.mark_deleted(Kind::Media, id)?;
+        Ok(removed)
+    }
+
+    pub(super) fn remove_media_file(&self, id: &str) -> Result<bool> {
+        self.conn.execute("DELETE FROM media_remote WHERE media_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM media_path WHERE media_id = ?1", params![id])?;
         Ok(self.conn.execute("DELETE FROM media_file WHERE id = ?1", params![id]).context("delete media file")? > 0)
     }

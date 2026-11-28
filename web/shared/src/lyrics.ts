@@ -3,10 +3,11 @@ export type ParsedSection = { label: string; lyrics: string };
 const LABEL_WORDS =
   "verse|chorus|pre-?chorus|bridge|tag|intro|outro|ending|refrain|interlude|vamp|coda|instrumental";
 const LABEL_LINE = new RegExp(`^\\s*[\\[(]?\\s*((?:${LABEL_WORDS})(?:\\s*\\d+)?)\\s*[\\])]?\\s*:?\\s*$`, "i");
+const BRACKETED = /^\s*\[([^[\]]{1,40})\]\s*$/;
 
 export function parseLabelLine(line: string): string | null {
   const match = LABEL_LINE.exec(line);
-  if (!match) return null;
+  if (!match) return BRACKETED.exec(line)?.[1].trim() || null;
   return match[1]
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -18,7 +19,7 @@ export function parseLyrics(text: string): ParsedSection[] {
   const hasLabels = lines.some((line) => parseLabelLine(line) !== null);
 
   if (!hasLabels) {
-    return splitBlocks(text).map((lyrics, i) => ({ label: `Part ${i + 1}`, lyrics }));
+    return splitSlides(text).map((lyrics, i) => ({ label: `Part ${i + 1}`, lyrics }));
   }
 
   const sections: ParsedSection[] = [];
@@ -43,7 +44,7 @@ export function parseLyrics(text: string): ParsedSection[] {
 }
 
 export function toSlides(lyrics: string, maxLines = 2): string[] {
-  return splitBlocks(lyrics).flatMap((block) => {
+  return splitSlides(lyrics).flatMap((block) => {
     const lines = block.split("\n");
     const slides: string[] = [];
     for (let i = 0; i < lines.length; i += maxLines) {
@@ -61,7 +62,7 @@ export function shortLabel(label: string): string {
   return num ? `${short}${num}` : short;
 }
 
-function splitBlocks(text: string): string[] {
+export function splitSlides(text: string): string[] {
   return text
     .replace(/\r\n?/g, "\n")
     .split(/\n\s*\n/)

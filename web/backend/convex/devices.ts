@@ -61,7 +61,7 @@ export const listMine = query({
       .query("devices")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    return devices.map(({ _id, name, pairedAt }) => ({ _id, name, pairedAt }));
+    return devices.map(({ _id, name, pairedAt, lastSeenAt }) => ({ _id, name, pairedAt, lastSeenAt }));
   },
 });
 
@@ -77,15 +77,15 @@ export const revoke = mutation({
   },
 });
 
-export async function requireDevice(ctx: QueryCtx, token: string): Promise<Doc<"users">> {
+export async function requireDevice(ctx: QueryCtx, token: string): Promise<{ device: Doc<"devices">; user: Doc<"users"> }> {
   const tokenHash = await sha256Hex(token);
   const device = await ctx.db
     .query("devices")
     .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
     .unique();
   const user = device ? await ctx.db.get(device.userId) : null;
-  if (!user || !can(user.role, "arrange")) {
+  if (!device || !user || !can(user.role, "arrange")) {
     throw new ConvexError("This computer isn't paired, or its operator lost access");
   }
-  return user;
+  return { device, user };
 }

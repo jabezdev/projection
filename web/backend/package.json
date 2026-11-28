@@ -13,13 +13,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "convex": "^1.46.0",
-    "@magi/shared": "workspace:*"
+    "@auth/core": "0.37.0",
+    "@convex-dev/auth": "^2.1.0",
+    "@magi/shared": "workspace:*",
+    "convex": "^1.51.0"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24",
-    "convex-test": "^0.0.60",
+    "convex-test": "^0.0.75",
+    "jose": "^6.2.18",
     "typescript": "~6.0.2",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"

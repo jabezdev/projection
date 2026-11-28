@@ -4,6 +4,7 @@ import { emitUiOnly } from './events';
 import { UI_ONLY_MONITORS, UiOnlyEngine } from './engine';
 import { isPast, newId, type MediaFile, type Service, type ServiceItem, type Song } from '../api/models';
 import { dropHistory, historyOf, recordService, recordSong, stepService, stepSong } from './history';
+import { runTemplateCommand } from './templates';
 
 function freeze(engine: UiOnlyEngine, service: Service): Service {
   dropHistory(service.id);
@@ -265,6 +266,8 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
       }
 
       default: {
+        const handled = runTemplateCommand(engine.store, command, args);
+        if (handled.done) { saveUiOnlyStore(engine.store); return handled.value as T; }
         console.debug('[ui-only] unhandled invoke', command, args);
         return undefined as T;
       }

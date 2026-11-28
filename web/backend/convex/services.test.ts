@@ -1,16 +1,12 @@
-import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
-import schema from "./schema";
-
-const modules = import.meta.glob("./**/*.ts");
+import { backend, member } from "../test/members";
+import { api, internal } from "./_generated/api";
 const DAY = 86_400_000;
 const NOV_1 = Date.UTC(2026, 10, 1);
 
 async function setup() {
-  const t = convexTest(schema, modules);
-  const admin = t.withIdentity({ tokenIdentifier: "admin", name: "Admin" });
-  await admin.mutation(api.users.ensure, {});
+  const t = backend();
+  const admin = await member(t, "Admin", "admin");
   const songId = await admin.mutation(api.songs.create, {
     title: "Amazing Grace",
     credits: { ccli: "22025", authors: [{ name: "John Newton", role: "words" }] },
@@ -28,10 +24,14 @@ async function setup() {
 
 const labels = (entries: { kind: string; number?: number }[]) => entries.map((e) => `${e.kind}${e.number ?? ""}`);
 
-test("first user is admin, later users start as singers who can only read", async () => {
+test("the first account is an admin with the Sunday template, later ones are singers who can only read", async () => {
+  const fresh = backend();
+  const first = await fresh.mutation(internal.users.createUser, { method: { name: "usernamePassword", profile: {} } });
+  const second = await fresh.mutation(internal.users.createUser, { method: { name: "usernamePassword", profile: {} } });
+  const roles = await fresh.run(async (ctx) => [(await ctx.db.get(first))!.role, (await ctx.db.get(second))!.role, (await ctx.db.query("templates").collect()).length]);
+  expect(roles).toEqual(["admin", "singer", 1]);
   const { t, serviceId } = await setup();
-  const singer = t.withIdentity({ tokenIdentifier: "singer", name: "Singer" });
-  await singer.mutation(api.users.ensure, {});
+  const singer = await member(t, "Singer", "singer");
   expect((await singer.query(api.users.me, {}))!.role).toBe("singer");
   expect(await singer.query(api.services.get, { serviceId })).not.toBeNull();
   await expect(singer.mutation(api.services.create, { scheduledAtMs: NOV_1, title: "x" })).rejects.toThrow();

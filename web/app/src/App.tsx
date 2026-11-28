@@ -1,14 +1,17 @@
-import { SignIn, UserButton } from "@clerk/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@magi/backend/api";
-import { Authenticated, AuthLoading, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { useEffect } from "react";
+import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
+import { CalendarDays, Library as LibraryIcon, LogOut, MonitorPlay, Users } from "lucide-react";
 import { Navigate, NavLink, Route, Routes } from "react-router";
 import { MeContext } from "./lib/me";
 import { Library } from "./pages/Library";
 import { NewSong } from "./pages/NewSong";
+import { NowShowing } from "./pages/NowShowing";
+import { SignIn } from "./pages/SignIn";
+import { Templates } from "./pages/Templates";
 import { ServicePage } from "./pages/service/ServicePage";
 import { Services } from "./pages/Services";
-import { SongPage } from "./pages/SongPage";
+import { SongPage } from "./pages/song/SongPage";
 import { Team } from "./pages/Team";
 
 export function App() {
@@ -30,28 +33,33 @@ export function App() {
 }
 
 function SignedInApp() {
-  const ensure = useMutation(api.users.ensure);
   const me = useQuery(api.users.me);
-
-  useEffect(() => {
-    void ensure();
-  }, [ensure]);
+  const { signOut } = useAuthActions();
 
   if (!me) return <Centered>Setting up your account…</Centered>;
 
   return (
     <MeContext.Provider value={me}>
-      <div className="mx-auto flex min-h-dvh max-w-4xl flex-col pb-20 md:pb-0">
-        <header className="sticky top-0 z-10 flex items-center gap-6 border-b border-line/60 bg-bg/90 px-4 py-3 backdrop-blur">
-          <span className="font-semibold">Song Library</span>
+      <div className="mx-auto flex min-h-dvh max-w-5xl flex-col pb-20 md:pb-0">
+        <header className="sticky top-0 z-10 flex items-center gap-6 border-b border-line bg-bg/90 px-4 py-2.5 backdrop-blur">
+          <span className="flex items-center gap-2.5">
+            <img src="/icon.svg" alt="" className="size-7" />
+            <span className="font-label text-lg font-semibold tracking-[0.14em]">PALTO</span>
+            <span className="hidden text-sm text-faint sm:inline">Library</span>
+          </span>
           <nav className="hidden gap-1 md:flex">
             <Tabs />
           </nav>
-          <span className="ml-auto text-xs text-muted capitalize">{me.role}</span>
-          <UserButton />
+          <span className="ml-auto text-right text-xs leading-tight text-muted">
+            {me.name}
+            <span className="block text-faint capitalize">{me.role}</span>
+          </span>
+          <button className="btn-icon" title="Sign out" aria-label="Sign out" onClick={() => void signOut()}>
+            <LogOut size={16} />
+          </button>
         </header>
 
-        <main className="flex-1 px-4 py-4">
+        <main className="flex-1 px-4 py-5">
           <Routes>
             <Route path="/" element={<Navigate to="/services" replace />} />
             <Route path="/library" element={<Library />} />
@@ -59,12 +67,14 @@ function SignedInApp() {
             <Route path="/library/:songId" element={<SongPage />} />
             <Route path="/services" element={<Services />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
+            <Route path="/templates" element={<Templates />} />
+            <Route path="/now" element={<NowShowing />} />
             <Route path="/team" element={<Team />} />
             <Route path="*" element={<Navigate to="/services" replace />} />
           </Routes>
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t border-line/60 bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
           <Tabs />
         </nav>
       </div>
@@ -72,20 +82,30 @@ function SignedInApp() {
   );
 }
 
+const TABS = [
+  { to: "/services", label: "Services", icon: CalendarDays },
+  { to: "/now", label: "Now", icon: MonitorPlay },
+  { to: "/library", label: "Songs", icon: LibraryIcon },
+  { to: "/team", label: "Team", icon: Users },
+];
+
 function Tabs() {
   const tab = ({ isActive }: { isActive: boolean }) =>
-    `rounded-lg px-4 py-2.5 text-sm ${isActive ? "text-white md:bg-hover" : "text-muted hover:text-white"}`;
+    `flex flex-col items-center gap-1 px-3 py-2 text-[11px] font-medium md:flex-row md:gap-2 md:rounded-lg md:text-sm ${
+      isActive ? "text-fg md:bg-hover" : "text-faint hover:text-fg md:text-muted"
+    }`;
   return (
     <>
-      <NavLink to="/services" className={tab}>
-        Services
-      </NavLink>
-      <NavLink to="/library" className={tab}>
-        Library
-      </NavLink>
-      <NavLink to="/team" className={tab}>
-        Team
-      </NavLink>
+      {TABS.map(({ to, label, icon: Icon }) => (
+        <NavLink key={to} to={to} className={tab}>
+          {({ isActive }) => (
+            <>
+              <Icon size={18} className={isActive ? "text-accent" : ""} />
+              {label}
+            </>
+          )}
+        </NavLink>
+      ))}
     </>
   );
 }

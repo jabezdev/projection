@@ -10,6 +10,7 @@ mod remote;
 mod settings;
 mod shutdown;
 mod startup;
+mod sync;
 mod system;
 
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};

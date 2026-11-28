@@ -4,6 +4,8 @@ import type { Change, ServiceRecord, SongRecord } from "./types";
 
 export * from "./types";
 export { describe } from "./label";
+export { same } from "./json";
+export { rebase, type Rebased } from "./rebase";
 export { diffService, diffSong };
 
 export const isEmpty = (change: Change) => change.ops.length === 0;

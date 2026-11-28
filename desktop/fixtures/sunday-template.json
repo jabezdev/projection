@@ -1,0 +1,17 @@
+{
+  "id": "sunday",
+  "name": "Sunday",
+  "title": "Sunday Service",
+  "weekday": 0,
+  "startMinutes": 600,
+  "parts": [
+    { "id": "sunday-welcoming", "title": "Welcoming", "items": [] },
+    { "id": "sunday-countdown", "title": "Countdown", "items": [] },
+    { "id": "sunday-worship", "title": "Praise & Worship", "items": [] },
+    { "id": "sunday-offering", "title": "Tithes and Offering", "items": [] },
+    { "id": "sunday-special-number", "title": "Special Number", "optional": true, "items": [] },
+    { "id": "sunday-message", "title": "Message", "items": [] },
+    { "id": "sunday-special-program", "title": "Special Program", "optional": true, "items": [] },
+    { "id": "sunday-closing", "title": "Closing", "items": [] }
+  ]
+}

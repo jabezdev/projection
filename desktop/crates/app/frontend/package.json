@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/song/song.test.mjs src/library/search.test.mjs"
+    "test": "node --experimental-strip-types --test src/song/song.test.mjs src/library/search.test.mjs src/service/templates.test.mjs"
   },
   "dependencies": {
     "@fontsource/barlow": "5",

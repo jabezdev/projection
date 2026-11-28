@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PALTO Guide</title>
+  <meta name="description" content="Install PALTO, set up the screens, plan a service, pair a phone remote, connect the team library, OBS and Stream Deck.">
+  <meta name="theme-color" content="#121314">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.svg" alt="">PALTO</a>
+      <nav>
+        <a class="optional" href="./#features">Features</a>
+        <a class="optional" href="./#download">Download</a>
+        <a href="guide.html" aria-current="page">Guide</a>
+        <a href="https://github.com/jabezdev/projection">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap guide">
+    <aside>
+      <nav aria-label="Guide">
+        <a href="#install">Install</a>
+        <a href="#screens">Screens</a>
+        <a href="#songs">Songs</a>
+        <a href="#services">Services and templates</a>
+        <a href="#running">Running a service</a>
+        <a href="#phone">Phone remote</a>
+        <a href="#team-library">Team library</a>
+        <a href="#obs">OBS livestream</a>
+        <a href="#controllers">Stream Deck and Companion</a>
+        <a href="#updates">Updates</a>
+        <a href="#trouble">When something is wrong</a>
+      </nav>
+    </aside>
+
+    <article>
+      <span class="eyebrow live">Guide</span>
+      <h1>Setting up PALTO</h1>
+      <p>From the installer to a full Sunday. Each part stands on its own; skip what your church does not use.</p>
+
+      <h2 id="install">Install</h2>
+      <ol>
+        <li>Download <a data-download="palto" href="https://github.com/jabezdev/projection/releases/latest">the Windows installer</a> on the church computer.</li>
+        <li>Run it. Windows may say it protected your PC from an unknown publisher: choose <b>More info</b>, then <b>Run anyway</b>.</li>
+        <li>Start PALTO from the Start menu.</li>
+      </ol>
+      <div class="note"><p>The warning appears because the installer is not signed with a paid certificate. Every download comes from the project's GitHub releases, and updates inside PALTO are signed and checked before they install.</p></div>
+      <p>On the first start of each version, PALTO checks the computer: displays, audio, graphics speed, the video decoder, network and firewall. It writes the result to <code>logs\system-check.log</code> in PALTO's data folder (<code>%APPDATA%\com.magi.projection</code>). To run it again, start <code>PALTO.exe --system-check</code>.</p>
+
+      <h2 id="screens">Screens</h2>
+      <p>Connect the projector, and the stage screen if you have one, before starting PALTO. Set Windows to <b>Extend these displays</b>.</p>
+      <ol>
+        <li>Open <b>Settings</b> at the bottom left of PALTO.</li>
+        <li>On <b>Projection</b>, pick the projector's display and turn it on. Choose the font, size and position of the lyrics.</li>
+        <li>On <b>Confidence</b>, pick the stage screen. Singers see the current slide and the next one.</li>
+        <li>On <b>Logo &amp; backgrounds</b>, set the logo shown between parts and the default background behind lyrics.</li>
+      </ol>
+      <p>If a display is unplugged during a service, PALTO keeps running; pick the display again in Settings if the output does not come back on its own.</p>
+
+      <h2 id="songs">Songs</h2>
+      <p>A song is a set of parts (verses, choruses, a bridge) and a usual order. Each part has a colour, so the order reads at a glance: V1 C V2 C B C.</p>
+      <ul>
+        <li><b>Add a song</b> in the Library: paste the lyrics. Lines like <code>Verse 1</code>, <code>[Chorus]</code> or <code>Bridge:</code> start a new part. A blank line inside a part starts a new slide.</li>
+        <li><b>Import</b> OpenLyrics files (<code>.xml</code>) with their credits, CCLI number and copyright.</li>
+        <li><b>Change one Sunday only</b>: in a service, drop or repeat a part, or change its words. The library song stays as it was.</li>
+        <li><b>Past services</b> keep the words they used, even after the song is fixed in the library.</li>
+      </ul>
+
+      <h2 id="services">Services and templates</h2>
+      <p>A service is a dated order of items: songs, text, scripture, images, videos, PDF slides and screen captures. Section headings group them.</p>
+      <p>A template is your usual order. PALTO starts with a <b>Sunday</b> template: Welcoming, Countdown, Praise &amp; Worship, Tithes and Offering, Special Number, Message, Special Program and Closing. The two Special parts are optional.</p>
+      <ol>
+        <li>Choose <b>New service…</b> from the service menu, pick a template and tick this week's parts. Optional parts start unticked.</li>
+        <li>Fold sections you are not working on. Remove a section with or without its items, or clear every empty one at once.</li>
+        <li>Use <b>Add part…</b> to bring back a part you left out. It lands in its usual place.</li>
+        <li>To keep the countdown video or the offering slide in every service, build a service with them and choose <b>Save as template…</b>. Songs are left out unless you ask.</li>
+      </ol>
+
+      <h2 id="running">Running a service</h2>
+      <p>Click a slide to show it. From then on, the keyboard is enough:</p>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td><code>→</code> <code>Space</code> <code>Page Down</code></td><td>Next slide, then the next item</td></tr>
+          <tr><td><code>←</code> <code>Page Up</code></td><td>Previous slide</td></tr>
+          <tr><td><code>↓</code> <code>↑</code></td><td>Next or previous item</td></tr>
+          <tr><td><code>B</code> or <code>.</code></td><td>Black screen</td></tr>
+          <tr><td><code>C</code></td><td>Clear the words, keep the background</td></tr>
+          <tr><td><code>L</code></td><td>Show the logo</td></tr>
+          <tr><td><code>Esc</code></td><td>Back to live</td></tr>
+          <tr><td><code>P</code></td><td>Play or pause the video or audio</td></tr>
+        </tbody>
+      </table>
+      <p>Presentation clickers send Page Up and Page Down, so they work as they are. Change any key, or add MIDI notes, in <b>Settings → Controls</b>.</p>
+
+      <h2 id="phone">Phone remote</h2>
+      <p>Any phone on the same Wi-Fi can run the service: see what is on screen and what comes next, jump to any song or slide, play and pause videos, and switch to black or logo.</p>
+      <ol>
+        <li>In PALTO, open <b>Settings → Remote</b> and turn on <b>Allow phones and other computers on this network</b>.</li>
+        <li>On the phone, open <code>http://palto.local:8080</code>, or scan the QR code in that same settings page.</li>
+        <li>Choose <b>Pair a device</b> in PALTO and type the 6-digit code on the phone. Each phone pairs once.</li>
+        <li>Add the page to the home screen to open it like an app.</li>
+      </ol>
+      <p>If the phone cannot connect, check that Windows treats the network as <b>Private</b> (Settings → Network → Properties), and use the number address PALTO shows instead of <code>palto.local</code>. Remove a lost phone from the same page.</p>
+
+      <h2 id="team-library">Team library</h2>
+      <p>The team library is a web app where song leaders add songs, set arrangements and plan services, and singers read the lyrics. PALTO keeps its own copy and syncs with it.</p>
+      <h3>Roles</h3>
+      <table>
+        <thead><tr><th>Role</th><th>Can</th></tr></thead>
+        <tbody>
+          <tr><td>Admin</td><td>Everything, and choose everyone's role. The first account is the admin.</td></tr>
+          <tr><td>Leader</td><td>Edit songs and plan services</td></tr>
+          <tr><td>Librarian</td><td>Edit songs</td></tr>
+          <tr><td>Operator</td><td>Plan services and pair projection computers</td></tr>
+          <tr><td>Singer</td><td>Read lyrics and see what is on screen now</td></tr>
+        </tbody>
+      </table>
+      <h3>Connect PALTO</h3>
+      <ol>
+        <li>On the web, open <b>Team → Projection computers</b> and create a pairing code. It shows the team address too.</li>
+        <li>In PALTO, open <b>Settings → Cloud sync</b>, enter the address and the code, and name the computer.</li>
+        <li>PALTO sends what it has and fetches the team's songs, services, templates and media (up to 100 MB per file).</li>
+      </ol>
+      <p>While PALTO runs a service live, the web shows it as live and nobody can change it there. If the same thing was changed in both places, PALTO lists it under <b>Needs attention</b> with both versions side by side; the service carries on meanwhile. <b>Work offline</b> stops syncing completely.</p>
+      <h3>Host one for your church</h3>
+      <p>The library runs on <a href="https://www.convex.dev">Convex</a> and any static host. The <a href="https://github.com/jabezdev/projection#web">README</a> has the steps: create a Convex project and a Cloudflare Pages project, add three keys to the repository, and run the deploy workflow.</p>
+
+      <h2 id="obs">OBS livestream</h2>
+      <p>The PALTO plugin for OBS adds three text sources: <b>PALTO Lyrics</b>, <b>PALTO Song Info</b> (title and credits) and <b>PALTO Section</b> (for example "Verse 1"). OBS draws the text, so the font, colour and outline match your stream.</p>
+      <ol>
+        <li>In PALTO, turn on <b>Settings → Remote → Share lyrics with OBS</b>.</li>
+        <li>On the OBS computer, run <a data-download="obs" href="https://github.com/jabezdev/projection/releases">the plugin installer</a>. It needs OBS 30 or newer on Windows.</li>
+        <li>In OBS, add a PALTO source. It finds PALTO on the network; pick the computer, or type its address.</li>
+      </ol>
+      <p>The plugin only reads what is on screen. It needs no pairing and cannot change anything in PALTO.</p>
+
+      <h2 id="controllers">Stream Deck and Companion</h2>
+      <p>PALTO accepts OSC messages, so <a href="https://bitfocus.io/companion">Bitfocus Companion</a> can drive it from a Stream Deck.</p>
+      <ol>
+        <li>In PALTO, open <b>Settings → Remote</b> and turn on <b>Accept OSC messages</b>. The port is 9000 unless you change it.</li>
+        <li>If Companion runs on another computer, turn on network access and list that computer's IP address under OSC.</li>
+        <li>In Companion, add a <b>Generic OSC</b> connection to the PALTO computer and port, then give each button an OSC send action with one of these addresses:</li>
+      </ol>
+      <table>
+        <thead><tr><th>Address</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td><code>/palto/next</code> · <code>/palto/previous</code></td><td>Next or previous slide</td></tr>
+          <tr><td><code>/palto/next_item</code> · <code>/palto/previous_item</code></td><td>Next or previous item</td></tr>
+          <tr><td><code>/palto/live</code> · <code>/palto/black</code> · <code>/palto/clear</code> · <code>/palto/logo</code></td><td>What the projector shows</td></tr>
+          <tr><td><code>/palto/play_pause</code> · <code>/palto/stop</code></td><td>Video and audio</td></tr>
+        </tbody>
+      </table>
+      <p>A message with the value 0 is treated as a button release and ignored, so a button that sends on press and release still acts once.</p>
+
+      <h2 id="updates">Updates</h2>
+      <p><b>Settings → System</b> shows the version and checks for updates. An update installs only when you choose <b>Install and restart</b>, and never while the outputs are showing. If a new version causes trouble, the same page can reinstall an earlier one.</p>
+
+      <h2 id="trouble">When something is wrong</h2>
+      <ul>
+        <li><b>A video stutters:</b> run the system check and look at the video decoder line. A GTX 1050 Ti or newer handles 1080p easily; integrated graphics prefer H.264 files.</li>
+        <li><b>The projector shows the wrong screen:</b> pick it again in Settings → Projection. Windows sometimes renumbers displays after a restart.</li>
+        <li><b>Phones cannot connect:</b> the network must be Private in Windows, and the phone on the same Wi-Fi, not a guest network.</li>
+        <li><b>Sync says it can't reach the team library:</b> everything keeps working. Changes go up when the connection is back.</li>
+        <li><b>Anything else:</b> PALTO's logs are in <code>%APPDATA%\com.magi.projection\logs</code>. Attach them to a <a href="https://github.com/jabezdev/projection/issues">GitHub issue</a>.</li>
+      </ul>
+    </article>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.svg" alt="">PALTO</a>
+      <span>Free and open source, MIT licence.</span>
+      <a href="https://github.com/jabezdev/projection">Source code</a>
+      <a href="https://github.com/jabezdev/projection/releases">All releases</a>
+    </div>
+  </footer>
+</body>
+</html>

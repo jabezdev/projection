@@ -9,9 +9,9 @@ type Tab = 'projection' | 'confidence' | 'backgrounds' | 'system';
 const TABS: [Tab, string][] = [['projection', 'Projection'], ['confidence', 'Confidence'], ['backgrounds', 'Logo & backgrounds'], ['system', 'System']];
 const FONTS = ['Arial', 'Verdana', 'Tahoma', 'Segoe UI', 'Georgia', 'Times New Roman', 'Trebuchet MS', 'Impact', 'sans-serif', 'serif', 'monospace'];
 
-export default function OutputSettings({ config, onChange, onClose, extraTabs }: { config: OutputConfig; onChange: (config: OutputConfig) => Promise<void>; onClose: () => void; extraTabs?: { id: string; label: string; content: ReactNode }[] }) {
+export default function OutputSettings({ config, onChange, onClose, extraTabs, initialTab }: { config: OutputConfig; onChange: (config: OutputConfig) => Promise<void>; onClose: () => void; extraTabs?: { id: string; label: string; content: ReactNode }[]; initialTab?: string }) {
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<string>('projection');
+  const [tab, setTab] = useState<string>(initialTab ?? 'projection');
   useEffect(() => { if (isTauri()) void invoke('preview_output_style', { config }).catch(e => setError(String(e))); }, [config]);
   const update = (patch: Partial<OutputConfig>) => { void onChange({ ...config, ...patch }).catch(e => setError(String(e))); };
   const range = (key: keyof OutputConfig, label: string, min: number, max: number, step = 1) => <label className="setting-range">{label}<output>{String(config[key])}</output><input aria-label={label} type="range" min={min} max={max} step={step} value={Number(config[key])} onChange={e => update({ [key]: Number(e.target.value) })}/></label>;

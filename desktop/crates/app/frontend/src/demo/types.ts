@@ -1,5 +1,5 @@
 import type { TauriEvent } from '../api/tauri';
-import type { LiveService, MediaFile, Service, Song, SongVersion } from '../api/models';
+import type { LiveService, MediaFile, Service, ServiceTemplate, Song, SongVersion } from '../api/models';
 import type { ProgramState } from '../api/useEngine';
 
 export type UiOnlyProgramState = ProgramState;
@@ -38,4 +38,5 @@ export type UiOnlyStore = {
   program_state: UiOnlyProgramState;
   services: Record<string, Service>;
   frozen: string[];
+  templates?: Record<string, ServiceTemplate>;
 };

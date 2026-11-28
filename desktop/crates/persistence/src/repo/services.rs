@@ -5,6 +5,8 @@ use rusqlite::{params, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
+use protocol::sync::RecordKind as Kind;
+
 use super::Repository;
 
 #[derive(Serialize, Deserialize, Default)]
@@ -27,7 +29,11 @@ impl Repository {
             if let Some(old) = old.as_ref().filter(|_| !frozen) {
                 self.record_service_edit(old, &service, now_ms)?;
             }
-            self.write_service(&service, old.as_ref(), now_ms)
+            self.write_service(&service, old.as_ref(), now_ms)?;
+            if old.as_ref() != Some(&service) {
+                self.mark_dirty(Kind::Service, &service.id)?;
+            }
+            Ok(())
         })
     }
 
@@ -77,6 +83,14 @@ impl Repository {
     }
 
     pub fn delete_service(&self, id: &str) -> Result<bool> {
+        self.atomic(|| {
+            let removed = self.remove_service(id)?;
+            self.mark_deleted(Kind::Service, id)?;
+            Ok(removed)
+        })
+    }
+
+    pub(super) fn remove_service(&self, id: &str) -> Result<bool> {
         self.drop_history(id)?;
         self.conn.execute("DELETE FROM device_binding WHERE item_id IN (SELECT id FROM service_item WHERE service_id = ?1)", params![id])?;
         self.conn.execute("DELETE FROM service_item WHERE service_id = ?1", params![id])?;
@@ -89,7 +103,7 @@ impl Repository {
             return Err(anyhow!("service {id} not found"));
         }
         self.freeze_services("WHERE id = ?1", params![id])?;
-        Ok(())
+        self.mark_dirty(Kind::Service, id)
     }
 
     pub fn freeze_past_services(&self, today_starts_at_ms: i64) -> Result<usize> {
@@ -107,6 +121,7 @@ impl Repository {
             self.write_service(&service, Some(&old), updated_at)?;
             self.conn.execute("UPDATE service SET frozen = 1 WHERE id = ?1", params![id])?;
             self.drop_history(id)?;
+            self.mark_dirty(Kind::Service, id)?;
         }
         Ok(ids.len())
     }
@@ -133,6 +148,10 @@ impl Repository {
                 params![item.id, service_id, position as i64, song_id, version_id, serde_json::to_string(&ServiceItem { content: item.content.without_device_fields(), ..item.clone() })?],
             )
             .context("save service item")?;
+        self.save_binding(item)
+    }
+
+    pub(super) fn save_binding(&self, item: &ServiceItem) -> Result<()> {
         let binding = match &item.content {
             ItemContent::Presentation { slides, .. } => DeviceBinding { slides: slides.clone(), source: None },
             ItemContent::Capture { source, .. } => DeviceBinding { slides: Vec::new(), source: source.clone() },
@@ -146,6 +165,17 @@ impl Repository {
             params![item.id, serde_json::to_string(&binding)?],
         )?;
         Ok(())
+    }
+
+    pub(super) fn with_binding(&self, mut item: ServiceItem) -> Result<ServiceItem> {
+        let body: Option<String> = self.conn.query_row("SELECT body FROM device_binding WHERE item_id = ?1", params![item.id], |row| row.get(0)).optional()?;
+        let binding: DeviceBinding = body.map(|b| serde_json::from_str(&b)).transpose()?.unwrap_or_default();
+        match &mut item.content {
+            ItemContent::Presentation { slides, .. } if slides.is_empty() => *slides = binding.slides,
+            ItemContent::Capture { source, .. } if source.is_none() => *source = binding.source,
+            _ => {}
+        }
+        Ok(item)
     }
 
     fn items_of(&self, service_id: &str) -> Result<Vec<ServiceItem>> {

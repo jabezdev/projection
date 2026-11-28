@@ -2,9 +2,10 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requirePermission } from "./lib/auth";
-import { freeze, indexFields, itemByUid, itemsOf, logged, requireSong, serviceByUid, setSongContent, songByUid, versionByUid, versionFor, type Content } from "./lib/sequence";
+import { assertNotLive, freeze, indexFields, itemByUid, itemsOf, logged, requireSong, serviceByUid, setSongContent, songByUid, versionByUid, versionFor, type Content } from "./lib/sequence";
 import { defined } from "./lib/util";
 import { sectionKind } from "./schema";
+import { nextSeq, tombstone } from "./lib/clock";
 import { applyPatch, entriesOf, labelToSection, newId, resolveEntries, sectionLabel, type Entry } from "@magi/shared";
 
 async function requireService(ctx: QueryCtx, uid: string): Promise<Doc<"services">> {
@@ -35,7 +36,8 @@ export const list = query({
   handler: async (ctx) => {
     await requirePermission(ctx, "view");
     const services = await ctx.db.query("services").withIndex("by_time").order("desc").take(100);
-    return services.map(({ uid, scheduledAtMs, title, endedAtMs, frozen }) => ({ id: uid, scheduledAtMs, title, endedAtMs, frozen }));
+    const now = Date.now();
+    return services.map(({ uid, scheduledAtMs, title, endedAtMs, frozen, liveUntil }) => ({ id: uid, scheduledAtMs, title, endedAtMs, frozen, live: (liveUntil ?? 0) > now }));
   },
 });
 
@@ -47,7 +49,7 @@ export const get = query({
     if (!service) return null;
     const leader = service.leaderId ? await ctx.db.get(service.leaderId) : null;
     const items = await Promise.all((await itemsOf(ctx, serviceId)).map((item) => describe(ctx, item)));
-    return { id: service.uid, scheduledAtMs: service.scheduledAtMs, title: service.title, notes: service.notes, endedAtMs: service.endedAtMs, frozen: service.frozen, leaderName: leader?.name ?? null, items };
+    return { id: service.uid, scheduledAtMs: service.scheduledAtMs, title: service.title, notes: service.notes, endedAtMs: service.endedAtMs, frozen: service.frozen, live: (service.liveUntil ?? 0) > Date.now(), leaderName: leader?.name ?? service.leader ?? null, items };
   },
 });
 
@@ -56,7 +58,7 @@ export const create = mutation({
   handler: async (ctx, { scheduledAtMs, title }) => {
     const user = await requirePermission(ctx, "arrange");
     const uid = newId();
-    await ctx.db.insert("services", { uid, scheduledAtMs, title: title.trim() || "Service", frozen: false, leaderId: user.role === "leader" ? user._id : undefined });
+    await ctx.db.insert("services", { uid, scheduledAtMs, title: title.trim() || "Service", frozen: false, leaderId: user.role === "leader" ? user._id : undefined, seq: await nextSeq(ctx) });
     return uid;
   },
 });
@@ -75,8 +77,10 @@ export const remove = mutation({
   handler: async (ctx, { serviceId }) => {
     await requirePermission(ctx, "arrange");
     const service = await requireService(ctx, serviceId);
+    assertNotLive(service);
     for (const item of await itemsOf(ctx, serviceId)) await ctx.db.delete(item._id);
     await ctx.db.delete(service._id);
+    await tombstone(ctx, "service", serviceId);
   },
 });
 

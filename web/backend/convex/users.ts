@@ -1,31 +1,24 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { can, currentUser, requirePermission } from "./lib/auth";
 import { role } from "./schema";
+import { seedDefaultTemplate } from "./templates";
 
-export const ensure = mutation({
-  args: {},
+export const createUser = internalMutation({
+  args: { method: v.object({ name: v.string(), profile: v.any() }) },
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not signed in");
-
-    const name = identity.name ?? identity.email ?? "Unnamed";
-    const email = identity.email;
-    const existing = await currentUser(ctx);
-    if (existing) {
-      if (existing.name !== name || existing.email !== email) {
-        await ctx.db.patch(existing._id, { name, email });
-      }
-      return existing._id;
-    }
-
     const anyone = await ctx.db.query("users").first();
-    return ctx.db.insert("users", {
-      tokenIdentifier: identity.tokenIdentifier,
-      name,
-      email,
-      role: anyone ? "singer" : "admin",
-    });
+    if (!anyone) await seedDefaultTemplate(ctx);
+    return ctx.db.insert("users", { name: "", role: anyone ? "singer" : "admin" });
+  },
+});
+
+export const setName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const user = await currentUser(ctx);
+    if (!user) throw new ConvexError("Not signed in");
+    await ctx.db.patch(user._id, { name: name.trim() });
   },
 });
 
@@ -36,6 +29,7 @@ export const me = query({
     if (!user) return null;
     return {
       ...user,
+      name: user.name || "Unnamed",
       can: {
         editLibrary: can(user.role, "editLibrary"),
         arrange: can(user.role, "arrange"),
@@ -51,9 +45,7 @@ export const list = query({
   handler: async (ctx) => {
     await requirePermission(ctx, "view");
     const users = await ctx.db.query("users").collect();
-    return users
-      .map(({ _id, name, email, role }) => ({ _id, name, email, role }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return users.map(({ _id, name, role }) => ({ _id, name: name || "Unnamed", role })).sort((a, b) => a.name.localeCompare(b.name));
   },
 });
 

@@ -67,6 +67,13 @@ export function applyServiceOp(op: ServiceOp, service: ServiceRecord): boolean {
   }
 }
 
+export function serviceValue(op: ServiceOp, service: ServiceRecord): Json | undefined {
+  if (op.op === "set") return json(service[op.field]);
+  if (op.op !== "set_item") return undefined;
+  const item = service.items.find((i) => i.id === op.id);
+  return item ? getItem(item, op.field) : undefined;
+}
+
 function setField(service: ServiceRecord, field: ServiceField, value: Json) {
   const record = service as Record<string, unknown>;
   if (value === null) delete record[field]; else record[field] = structuredClone(value);

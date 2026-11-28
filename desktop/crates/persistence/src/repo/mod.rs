@@ -3,18 +3,25 @@ use rusqlite::{params, Connection};
 use std::path::Path;
 
 pub use history::History;
+pub use remote::Applied;
+pub use sync::DirtyRecord;
 
 mod history;
 mod media;
+mod remote;
 mod resolve;
 mod schema;
 mod services;
 mod songs;
+mod sync;
+mod templates;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod history_tests;
+#[cfg(test)]
+mod sync_tests;
 
 pub struct Repository {
     conn: Connection,

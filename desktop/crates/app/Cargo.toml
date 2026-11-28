@@ -32,6 +32,10 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 midir = "0.11"
 elgato-streamdeck = { version = "0.14", default-features = false }
 sysinfo = { version = "0.40", default-features = false, features = ["system", "disk"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-no-provider"] }
+sha2 = "0.10"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+futures-util = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"

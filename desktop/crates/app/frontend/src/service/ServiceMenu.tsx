@@ -5,6 +5,7 @@ import { isPast, type LiveService, type MediaFile, type Service, type Song } fro
 import { ItemThumb } from '../library/Thumbs';
 import { catalog, resolveItem, type Catalog } from '../api/resolve';
 import { copyItem } from './serviceItems';
+import { useTemplateFlows } from './useTemplateFlows';
 
 type Props = {
   live: LiveService | null;
@@ -27,6 +28,7 @@ export default function ServiceMenu({ live, services, persist, onLoad, onEdit, o
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [library, setLibrary] = useState<Catalog | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const flows = useTemplateFlows({ onError, onCreated: async created => { await onListChanged(); if (await onLoad(created.id)) { close(); onEdit(); } } });
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) close(); };
@@ -81,6 +83,7 @@ export default function ServiceMenu({ live, services, persist, onLoad, onEdit, o
           {menu === p.id && <div className="service-row-menu" role="menu">
             <button role="menuitem" onClick={() => { setMenu(null); setRenaming({ id: p.id, name: p.title }); }}>Rename</button>
             <button role="menuitem" onClick={() => { setMenu(null); void act(async () => { await create(`${p.title} (copy)`, p); }); }}>Duplicate</button>
+            <button role="menuitem" onClick={() => { close(); flows.saveAsTemplate(p); }}>Save as template…</button>
             {!isPast(p) && <button role="menuitem" onClick={() => { setMenu(null); void act(async () => { if (!(await confirm(`End “${p.title}”? Its songs keep the words they have now, even if the library changes later.`, 'End service'))) return; await invoke('end_service', { serviceId: p.id }); await onListChanged(); }); }}>End service…</button>}
             <button role="menuitem" className="danger" disabled={p.id === project?.id} title={p.id === project?.id ? 'Load another service first' : undefined} onClick={() => { setMenu(null); void act(async () => { if (!(await confirm(`Delete “${p.title}”? This cannot be undone.`, 'Delete'))) return; await invoke('delete_service', { serviceId: p.id }); await onListChanged(); }); }}>Delete…</button>
           </div>}
@@ -88,9 +91,11 @@ export default function ServiceMenu({ live, services, persist, onLoad, onEdit, o
         {!list.length && <p className="empty-panel">{q ? 'No service matches.' : 'No services yet.'}</p>}
       </div>
       <div className="service-popover-foot">
-        <button onClick={() => void act(async () => { const created = await create('New service', null); if (await onLoad(created.id)) { close(); onEdit(); } })}><Icon name="plus"/>New service</button>
+        <button onClick={() => { close(); flows.newService(); }}><Icon name="plus"/>New service…</button>
         <button disabled={!project} onClick={() => void act(async () => { if (!project) return; const created = await create(`${project.title} (copy)`, project); if (await onLoad(created.id)) { close(); onEdit(); } })}><Icon name="copy"/>Copy of this one</button>
+        <button onClick={() => { close(); flows.editTemplates(); }}><Icon name="template"/>Templates…</button>
       </div>
     </div>}
+    {flows.dialogs}
   </div>;
 }

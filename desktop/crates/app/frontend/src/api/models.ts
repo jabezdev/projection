@@ -53,3 +53,11 @@ export function newId() {
 
 export const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 export const isPast = (service: Service, todayStartsAt = startOfToday()) => service.endedAtMs != null || service.scheduledAtMs < todayStartsAt;
+
+export type TemplatePart = { id: string; title: string; optional?: boolean; notes?: string; items: ServiceItem[] };
+export type ServiceTemplate = { id: string; name: string; title?: string; weekday?: number; startMinutes?: number; parts: TemplatePart[] };
+
+export type RecordKind = 'song' | 'service' | 'template' | 'media';
+export type SyncState = 'off' | 'idle' | 'syncing' | 'offline' | 'error';
+export type SyncStatus = { paired: boolean; deployment?: string; deviceName?: string; offline: boolean; state: SyncState; lastSyncedMs?: number; error?: string; pending: number; conflicts: number; uploads: number; downloads: number; liveService?: string };
+export type Conflict = { id: string; kind: RecordKind; recordId: string; title: string; label: string; mine: unknown; theirs: unknown; keepMine: unknown; atMs: number };

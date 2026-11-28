@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
@@ -19,12 +20,8 @@ export function can(role: Role, permission: Permission): boolean {
 }
 
 export async function currentUser(ctx: QueryCtx): Promise<Doc<"users"> | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) return null;
-  return ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
+  const userId = await getAuthUserId(ctx);
+  return userId ? ctx.db.get(userId) : null;
 }
 
 export async function requirePermission(

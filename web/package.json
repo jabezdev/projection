@@ -10,8 +10,8 @@
     "dev:backend": "bun run --cwd backend dev",
     "dev:app": "bun run --cwd app dev",
     "build": "bun run --cwd app build",
-    "deploy:backend": "bun run --cwd backend deploy",
     "test": "bun run --cwd shared test && bun run --cwd backend test",
-    "typecheck": "bun run --cwd shared typecheck && bun run --cwd backend typecheck && bun run --cwd app typecheck"
+    "typecheck": "bun run --cwd shared typecheck && bun run --cwd backend typecheck && bun run --cwd app typecheck",
+    "deploy": "cd backend && bunx convex deploy --cmd 'bun run --cwd ../app build' --cmd-url-env-var-name VITE_CONVEX_URL && cd .. && bunx wrangler pages deploy app/dist --project-name palto-library"
   }
 }

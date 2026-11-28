@@ -7,6 +7,7 @@ mod library;
 pub mod model;
 mod playback;
 mod program;
+pub mod sync;
 
 pub use input::{InputAction, InputBinding, InputBindings, InputTrigger, MidiMessage, INPUT_BINDINGS_VERSION};
 pub use output_config::{BackgroundFit, Easing, OutputConfig, TextAlign, TransitionDirection, TransitionKind, VerticalAlign, OUTPUT_CONFIG_VERSION, SHADER_PRESETS};

@@ -32,13 +32,15 @@ export function Library() {
       ) : songs.length === 0 ? (
         <p className="text-muted">{search ? "No songs match." : "The library is empty."}</p>
       ) : (
-        <ul className="divide-y divide-line/60 overflow-hidden rounded-xl border border-line/60 bg-card">
+        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
           {songs.map((song) => (
             <li key={song.id}>
-              <Link to={`/library/${song.id}`} className="flex items-baseline gap-3 px-4 py-3 hover:bg-hover">
-                <span className="font-medium">{song.title}</span>
-                <span className="truncate text-sm text-muted">{song.credits.authors?.map((a) => a.name).join(", ")}</span>
-                {song.key && <span className="ml-auto text-xs text-muted">{song.key}</span>}
+              <Link to={`/library/${song.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-hover">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{song.title}</span>
+                  <span className="block truncate text-sm text-faint">{song.credits.authors?.map((a) => a.name).join(", ")}</span>
+                </span>
+                {song.key && <span className="rounded-md bg-hover px-2 py-0.5 font-label text-sm font-semibold text-muted">{song.key}</span>}
               </Link>
             </li>
           ))}

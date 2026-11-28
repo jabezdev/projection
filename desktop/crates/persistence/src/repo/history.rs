@@ -78,6 +78,7 @@ impl Repository {
         let change = self.replay(seq, &step, stack, now_ms)?;
         change.apply_to_service(&mut service);
         self.write_service(&service, Some(&before), now_ms)?;
+        self.mark_dirty(protocol::sync::RecordKind::Service, id)?;
         Ok(Some(service))
     }
 

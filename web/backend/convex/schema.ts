@@ -71,13 +71,25 @@ export const itemContent = v.union(
 
 export const mediaKind = v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("presentation"));
 
+export const serviceItem = v.object({ id: v.string(), title: v.optional(v.string()), notes: v.optional(v.string()), background: v.optional(v.string()), content: itemContent });
+
+export const templatePart = v.object({ id: v.string(), title: v.string(), optional: v.optional(v.boolean()), notes: v.optional(v.string()), items: v.array(serviceItem) });
+
+export const templateFields = {
+  name: v.string(),
+  title: v.optional(v.string()),
+  weekday: v.optional(v.number()),
+  startMinutes: v.optional(v.number()),
+  parts: v.array(templatePart),
+};
+
+export const recordKind = v.union(v.literal("song"), v.literal("service"), v.literal("template"), v.literal("media"));
+
 export default defineSchema({
   users: defineTable({
-    tokenIdentifier: v.string(),
     name: v.string(),
-    email: v.optional(v.string()),
     role,
-  }).index("by_token", ["tokenIdentifier"]),
+  }),
 
   songs: defineTable({
     uid: v.string(),
@@ -90,8 +102,10 @@ export default defineSchema({
     searchText: v.string(),
     updatedAt: v.number(),
     updatedBy: v.id("users"),
+    seq: v.number(),
   })
     .index("by_uid", ["uid"])
+    .index("by_seq", ["seq"])
     .searchIndex("search", { searchField: "searchText", filterFields: ["archived"] }),
 
   songVersions: defineTable({
@@ -110,11 +124,17 @@ export default defineSchema({
     scheduledAtMs: v.number(),
     title: v.string(),
     leaderId: v.optional(v.id("users")),
+    leader: v.optional(v.string()),
     notes: v.optional(v.string()),
     endedAtMs: v.optional(v.number()),
     frozen: v.boolean(),
+    liveDevice: v.optional(v.id("devices")),
+    liveUntil: v.optional(v.number()),
+    seq: v.number(),
   })
     .index("by_uid", ["uid"])
+    .index("by_seq", ["seq"])
+    .index("by_live", ["liveDevice"])
     .index("by_time", ["scheduledAtMs"]),
 
   serviceItems: defineTable({
@@ -138,7 +158,35 @@ export default defineSchema({
     title: v.string(),
     kind: mediaKind,
     hash: v.optional(v.string()),
-  }).index("by_uid", ["uid"]),
+    storageId: v.optional(v.id("_storage")),
+    size: v.optional(v.number()),
+    seq: v.number(),
+  })
+    .index("by_uid", ["uid"])
+    .index("by_hash", ["hash"])
+    .index("by_seq", ["seq"]),
+
+  templates: defineTable({ uid: v.string(), ...templateFields, seq: v.number() })
+    .index("by_uid", ["uid"])
+    .index("by_seq", ["seq"]),
+
+  tombstones: defineTable({ kind: recordKind, uid: v.string(), seq: v.number() })
+    .index("by_seq", ["seq"])
+    .index("by_record", ["kind", "uid"]),
+
+  syncClock: defineTable({ value: v.number() }),
+
+  nowShowing: defineTable({
+    deviceId: v.id("devices"),
+    serviceId: v.string(),
+    serviceTitle: v.string(),
+    itemTitle: v.optional(v.string()),
+    section: v.optional(v.string()),
+    text: v.string(),
+    next: v.optional(v.string()),
+    blank: v.boolean(),
+    updatedAt: v.number(),
+  }).index("by_updated", ["updatedAt"]),
 
   edits: defineTable({
     uid: v.string(),
@@ -162,6 +210,7 @@ export default defineSchema({
     userId: v.id("users"),
     tokenHash: v.string(),
     pairedAt: v.number(),
+    lastSeenAt: v.optional(v.number()),
   })
     .index("by_token_hash", ["tokenHash"])
     .index("by_user", ["userId"]),

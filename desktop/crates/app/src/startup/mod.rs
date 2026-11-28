@@ -62,7 +62,9 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
 
     let mut warnings = settings_files::load_output_and_input_settings(app, &dir);
     let (config, config_path) = settings_files::load_app_config(app, &dir, &channels.engine);
-    let db = Db(Arc::new(Mutex::new(Repository::new(dir.join(DB_FILENAME))?)));
+    let repo = Repository::new(dir.join(DB_FILENAME))?;
+    repo.seed_default_template(crate::now_ms())?;
+    let db = Db(Arc::new(Mutex::new(repo)));
     warnings.extend(crash_recovery::restore_last_service(app, &dir, &db, &channels)?);
 
     app.manage(StartupWarnings(warnings));
@@ -84,6 +86,7 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
     event_bridge::forward_engine_events(app.handle().clone(), &channels);
     let media = outputs::start(app, &channels, &config, &dir)?;
     start_engine_thread(channels, media, store)?;
+    crate::sync::start(app.handle(), dir.clone())?;
     crate::system::check::start_if_due(app.handle(), &dir);
     Ok(())
 }

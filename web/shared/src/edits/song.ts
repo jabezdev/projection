@@ -41,6 +41,13 @@ function set(song: SongRecord, field: SongField, value: Json) {
   if (next === undefined) delete target[field]; else target[field] = next;
 }
 
+export function songValue(op: SongOp, song: SongRecord): Json | undefined {
+  if (op.op === "set") return get(song, op.field);
+  if (op.op !== "set_section") return undefined;
+  const section = song.current.sections.find((s) => s.id === op.id);
+  return section ? json(section) : undefined;
+}
+
 export function invertSongOp(op: SongOp): SongOp {
   switch (op.op) {
     case "set": return { ...op, before: op.after, after: op.before };

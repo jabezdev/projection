@@ -27,12 +27,11 @@ export function Team() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-muted">Team</h2>
-        <ul className="divide-y divide-line/60 rounded-xl border border-line/60 bg-card">
+        <ul className="divide-y divide-line rounded-xl border border-line bg-card">
           {users?.map((user) => (
             <li key={user._id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <div className="truncate">{user.name}</div>
-                <div className="truncate text-xs text-muted">{user.email}</div>
               </div>
               {me.can.manageTeam ? (
                 <select value={user.role} onChange={(e) => safe(setRole)({ userId: user._id, role: e.target.value as Role })}>
@@ -72,9 +71,10 @@ function PairDevice() {
     <section className="card space-y-3">
       <h2 className="font-semibold">Projection computers</h2>
       <p className="text-sm text-muted">
-        To connect the projection app, get a code here and type it into the app. The computer then works as you
-        until you remove it.
+        To connect PALTO, open Settings → Cloud sync on the projection computer, then type in this team address and a
+        code from here. The computer then works as you until you remove it.
       </p>
+      <div className="font-mono text-sm break-all select-all">{import.meta.env.VITE_CONVEX_URL as string}</div>
       {pairing ? (
         <div>
           <div className="font-mono text-3xl tracking-widest">{pairing.code}</div>
@@ -92,7 +92,7 @@ function PairDevice() {
           {devices.map((d) => (
             <li key={d._id} className="flex items-center gap-2 text-sm">
               <span className="flex-1">{d.name}</span>
-              <span className="text-xs text-muted">paired {new Date(d.pairedAt).toLocaleDateString()}</span>
+              <span className="text-xs text-muted">{d.lastSeenAt ? `last synced ${new Date(d.lastSeenAt).toLocaleString()}` : `paired ${new Date(d.pairedAt).toLocaleDateString()}`}</span>
               <button className="btn" onClick={() => confirm(`Remove ${d.name}?`) && safe(revoke)({ deviceId: d._id })}>
                 Remove
               </button>

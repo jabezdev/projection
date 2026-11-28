@@ -3,7 +3,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { itemContent, section } from "../schema";
 import { edits, newId } from "@magi/shared";
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 import { currentUser } from "./auth";
+import { nextSeq } from "./clock";
 
 export type Content = Infer<typeof itemContent>;
 export type SongContent = { sections: Infer<typeof section>[]; arrangement: string[]; background?: string };
@@ -30,6 +33,12 @@ export async function requireSong(ctx: QueryCtx, uid: string): Promise<Doc<"song
   const song = await songByUid(ctx, uid);
   if (!song) throw new ConvexError("Song not found");
   return song;
+}
+
+export function assertNotLive(service: Doc<"services">) {
+  if (service.liveUntil !== undefined && service.liveUntil > Date.now()) {
+    throw new ConvexError("PALTO is running this service live. Make changes there, or after the service.");
+  }
 }
 
 export async function itemsOf(ctx: QueryCtx, serviceUid: string): Promise<Doc<"serviceItems">[]> {
@@ -68,7 +77,7 @@ export async function touch(ctx: MutationCtx, songId: Id<"songs">, userId: Id<"u
   const version = await versionByUid(ctx, song.currentVersion);
   const authors = song.credits.authors?.map((a) => a.name) ?? [];
   const searchText = [song.title, ...authors, ...(version?.sections.map((s) => s.lyrics) ?? [])].join("\n");
-  await ctx.db.patch(songId, { searchText, updatedAt: Date.now(), updatedBy: userId });
+  await ctx.db.patch(songId, { searchText, updatedAt: Date.now(), updatedBy: userId, seq: await nextSeq(ctx) });
 }
 
 export async function pinSongs(ctx: MutationCtx, serviceUid: string) {
@@ -83,14 +92,14 @@ export async function pinSongs(ctx: MutationCtx, serviceUid: string) {
 
 export async function freeze(ctx: MutationCtx, service: Doc<"services">) {
   await pinSongs(ctx, service.uid);
-  await ctx.db.patch(service._id, { frozen: true });
+  await ctx.db.patch(service._id, { frozen: true, seq: await nextSeq(ctx) });
 }
 
 export async function serviceRecord(ctx: QueryCtx, uid: string): Promise<edits.ServiceRecord | null> {
   const service = await serviceByUid(ctx, uid);
   if (!service) return null;
   const items = (await itemsOf(ctx, uid)).map(({ uid: id, title, notes, background, content }) => ({ id, title, notes, background, content }));
-  return { id: uid, scheduledAtMs: service.scheduledAtMs, title: service.title, notes: service.notes, endedAtMs: service.endedAtMs, items };
+  return { id: uid, scheduledAtMs: service.scheduledAtMs, title: service.title, leader: service.leader, notes: service.notes, endedAtMs: service.endedAtMs, items };
 }
 
 export async function songRecord(ctx: QueryCtx, uid: string): Promise<edits.SongRecord | null> {
@@ -101,13 +110,17 @@ export async function songRecord(ctx: QueryCtx, uid: string): Promise<edits.Song
   return { id: uid, title, archived, credits, key, tags, current: { sections: version.sections, arrangement: version.arrangement, background: version.background } };
 }
 
-export async function logged<T>(ctx: MutationCtx, kind: "service" | "song", uid: string, work: () => Promise<T>): Promise<T> {
+export async function logged<T>(ctx: MutationCtx, kind: "service" | "song", uid: string, work: () => Promise<T>, actor?: Doc<"users">): Promise<T> {
   const read = () => (kind === "service" ? serviceRecord(ctx, uid) : songRecord(ctx, uid));
   const before = await read();
-  const frozen = kind === "service" && (await serviceByUid(ctx, uid))?.frozen;
+  const service = kind === "service" ? await serviceByUid(ctx, uid) : null;
+  if (service && !actor) assertNotLive(service);
+  const frozen = service?.frozen;
   const result = await work();
   const after = await read();
-  const user = await currentUser(ctx);
+  const user = actor ?? (await currentUser(ctx));
+  const doc = kind === "service" ? await serviceByUid(ctx, uid) : await songByUid(ctx, uid);
+  if (doc && !same(before, after)) await ctx.db.patch(doc._id, { seq: await nextSeq(ctx) });
   if (!before || !after || frozen || !user) return result;
   const change: edits.Change =
     kind === "service"

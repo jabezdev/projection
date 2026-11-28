@@ -3,6 +3,8 @@ use protocol::model::{new_id, Section, Song, SongVersion};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
+use protocol::sync::RecordKind as Kind;
+
 use super::Repository;
 
 #[derive(Serialize, Deserialize)]
@@ -32,7 +34,7 @@ impl Repository {
                 ],
             )
             .context("insert song")?;
-        Ok(())
+        self.mark_dirty(Kind::Song, &song.id)
     }
 
     pub fn save_song(&self, song: &Song, now_ms: i64) -> Result<Song> {
@@ -62,7 +64,7 @@ impl Repository {
         if affected == 0 {
             return Err(anyhow!("song {} not found", song.id));
         }
-        Ok(())
+        self.mark_dirty(Kind::Song, &song.id)
     }
 
     pub fn edit_song_content(
@@ -87,6 +89,7 @@ impl Repository {
             self.conn.execute("UPDATE song_version SET body = ?2 WHERE id = ?1", params![version.id, body_json(&version)?])?;
         }
         self.conn.execute("UPDATE song SET updated_at_ms = ?2 WHERE id = ?1", params![song_id, now_ms])?;
+        self.mark_dirty(Kind::Song, song_id)?;
         Ok(version)
     }
 
@@ -134,7 +137,7 @@ impl Repository {
         Ok(Some(SongVersion { id, number, sections: body.sections, arrangement: body.arrangement, background: body.background }))
     }
 
-    fn insert_version(&self, song_id: &str, version: &SongVersion) -> Result<()> {
+    pub(super) fn insert_version(&self, song_id: &str, version: &SongVersion) -> Result<()> {
         self.conn
             .execute(
                 "INSERT INTO song_version(id, song_id, number, body) VALUES (?1, ?2, ?3, ?4)",
@@ -148,12 +151,12 @@ impl Repository {
         Ok(self.conn.query_row("SELECT COALESCE(MAX(number), 0) FROM song_version WHERE song_id = ?1", params![song_id], |row| row.get(0))?)
     }
 
-    fn version_is_pinned(&self, version_id: &str) -> Result<bool> {
+    pub(super) fn version_is_pinned(&self, version_id: &str) -> Result<bool> {
         Ok(self.conn.query_row("SELECT EXISTS(SELECT 1 FROM service_item WHERE version_id = ?1)", params![version_id], |row| row.get(0))?)
     }
 }
 
-fn body_json(version: &SongVersion) -> Result<String> {
+pub(super) fn body_json(version: &SongVersion) -> Result<String> {
     let body = VersionBody { sections: version.sections.clone(), arrangement: version.arrangement.clone(), background: version.background.clone() };
     Ok(serde_json::to_string(&body)?)
 }

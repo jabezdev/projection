@@ -1,142 +1,148 @@
 import { api } from "@magi/backend/api";
-import { SECTION_KINDS, sectionCode, sectionLabel, type SectionKind } from "@magi/shared";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { EditableText } from "../../components/EditableText";
 import { useSafe } from "../../lib/errors";
 import type { Service, Item } from "./types";
-import { EntryEditor } from "./EntryEditor";
+import { ItemCard } from "./ItemCard";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, Film, Monitor, Presentation, Radio, X } from "lucide-react";
 import { AddSong } from "./AddSong";
 
 export function Arrange({ service }: { service: Service }) {
+  const [collapsed, setCollapsed] = useCollapsed();
+  const last = service.items.length - 1;
+  const groups = groupBySection(service.items);
   return (
     <div className="space-y-3">
-      {service.items.map((item, i) => item.kind === "song" ? (
-        <ItemCard key={item.id} item={item} isFirst={i === 0} isLast={i === service.items.length - 1} />
-      ) : (
-        <OtherItem key={item.id} item={item} isFirst={i === 0} isLast={i === service.items.length - 1} />
-      ))}
+      {service.live && <p className="flex items-center gap-2 rounded-lg border border-accent/50 bg-accent-soft px-3 py-2 text-sm"><Radio size={16} className="text-accent" />PALTO is running this service live. Changes wait until it ends.</p>}
+      <SectionTools service={service} />
+      {groups.map(({ header, items }) => {
+        const hidden = header ? collapsed.has(header.id) : false;
+        return (
+          <div key={header?.id ?? "start"} className="space-y-3">
+            {header && <SectionRow header={header} count={items.length} collapsed={hidden} onToggle={() => setCollapsed(header.id, !hidden)} isFirst={header === service.items[0]} isLast={service.items.indexOf(header) === last} />}
+            {!hidden && items.map((item) => {
+              const i = service.items.indexOf(item);
+              return item.kind === "song"
+                ? <ItemCard key={item.id} item={item} isFirst={i === 0} isLast={i === last} />
+                : <OtherItem key={item.id} item={item} isFirst={i === 0} isLast={i === last} />;
+            })}
+          </div>
+        );
+      })}
       <AddSong serviceId={service.id} />
     </div>
   );
 }
+
+function groupBySection(items: Item[]) {
+  const groups: { header: Item | null; items: Item[] }[] = [];
+  for (const item of items) {
+    if (item.kind === "header") groups.push({ header: item, items: [] });
+    else if (groups.length) groups[groups.length - 1].items.push(item);
+    else groups.push({ header: null, items: [item] });
+  }
+  return groups;
+}
+
+const COLLAPSED_KEY = "palto.collapsedSections";
+
+function useCollapsed(): [Set<string>, (id: string, collapsed: boolean) => void] {
+  const [ids, setIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as string[]); } catch { return new Set(); }
+  });
+  const set = (id: string, collapsed: boolean) => {
+    const next = new Set(ids);
+    if (collapsed) next.add(id); else next.delete(id);
+    setIds(next);
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next].slice(-500))); } catch { return; }
+  };
+  return [ids, set];
+}
+
+function SectionRow({ header, count, collapsed, onToggle, isFirst, isLast }: { header: Item; count: number; collapsed: boolean; onToggle: () => void; isFirst: boolean; isLast: boolean }) {
+  const safe = useSafe();
+  const updateItem = useMutation(api.services.updateItem);
+  const moveItem = useMutation(api.services.moveItem);
+  const removeSection = useMutation(api.serviceParts.removeSection);
+  const itemId = header.id;
+  const remove = () => {
+    if (count === 0) return void safe(removeSection)({ itemId, withItems: false });
+    const all = confirm(`Remove “${header.title}” and its ${count} item${count === 1 ? "" : "s"}?\n\nPress Cancel to keep the items and remove only the section heading.`);
+    if (all) return void safe(removeSection)({ itemId, withItems: true });
+    if (confirm(`Remove only the “${header.title}” heading? Its items join the section above.`)) void safe(removeSection)({ itemId, withItems: false });
+  };
+  return (
+    <div className="flex items-center gap-1 border-b border-line pt-4 pb-1.5">
+      <button className="btn-icon" aria-expanded={!collapsed} aria-label={collapsed ? `Show ${header.title}` : `Hide ${header.title}`} onClick={onToggle}>
+        {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+      </button>
+      <EditableText className="min-w-0 flex-1 border-transparent bg-transparent px-1 font-label text-base font-semibold tracking-[0.12em] uppercase focus:border-line" value={header.title} onSave={(title) => safe(updateItem)({ itemId, title })} />
+      <span className="px-2 text-xs text-faint">{count === 0 ? "empty" : `${count} item${count === 1 ? "" : "s"}`}</span>
+      <button className="btn-icon" disabled={isFirst} aria-label="Move section up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}><ArrowUp size={15} /></button>
+      <button className="btn-icon" disabled={isLast} aria-label="Move section down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}><ArrowDown size={15} /></button>
+      <button className="btn-icon" aria-label="Remove section" onClick={remove}><X size={15} /></button>
+    </div>
+  );
+}
+
+function SectionTools({ service }: { service: Service }) {
+  const safe = useSafe();
+  const templates = useQuery(api.templates.list);
+  const addPart = useMutation(api.serviceParts.addPart);
+  const addHeader = useMutation(api.services.addHeader);
+  const removeEmpty = useMutation(api.serviceParts.removeEmptySections);
+  const saveFromService = useMutation(api.templates.saveFromService);
+  const titles = new Set(service.items.filter((i) => i.kind === "header").map((i) => i.title));
+  const missing = (templates ?? []).flatMap((t) => t.parts.filter((p) => !titles.has(p.title)).map((p) => ({ template: t, part: p })));
+  const empty = service.items.some((item, i) => item.kind === "header" && (i === service.items.length - 1 || service.items[i + 1].kind === "header"));
+  const saveAsTemplate = () => {
+    const name = prompt("Name of the template. Its sections and fixed items, like videos and slides, are kept; songs are left out.", service.title);
+    if (name) void safe(saveFromService)({ serviceId: service.id, name, keepSongs: false });
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <select className="max-w-56" aria-label="Add a section" value="" onChange={(e) => {
+        const [templateId, partId] = e.target.value.split("|");
+        if (templateId === "new") void safe(addHeader)({ serviceId: service.id, title: prompt("Section name") || "New section" });
+        else if (partId) void safe(addPart)({ serviceId: service.id, templateId, partId });
+      }}>
+        <option value="">Add a section…</option>
+        {missing.map(({ template, part }) => <option key={`${template.id}|${part.id}`} value={`${template.id}|${part.id}`}>{part.title}{templates && templates.length > 1 ? ` (${template.name})` : ""}</option>)}
+        <option value="new|">New section…</option>
+      </select>
+      {empty && <button className="btn" onClick={() => safe(removeEmpty)({ serviceId: service.id })}>Remove empty sections</button>}
+      <span className="grow" />
+      <button className="btn" onClick={saveAsTemplate}>Save as template</button>
+    </div>
+  );
+}
+
+const KINDS = {
+  header: ["Section", FileText],
+  text: ["Text", FileText],
+  media: ["Media", Film],
+  presentation: ["Slides", Presentation],
+  capture: ["Screen capture", Monitor],
+  song: ["Song", FileText],
+} as const;
 
 function OtherItem({ item, isFirst, isLast }: { item: Item; isFirst: boolean; isLast: boolean }) {
   const safe = useSafe();
   const moveItem = useMutation(api.services.moveItem);
   const removeItem = useMutation(api.services.removeItem);
   const itemId = item.id;
-  const kind = { header: "Section", text: "Text", media: "Media", presentation: "Slides", capture: "Screen capture", song: "Song" }[item.kind];
+  const [label, Icon] = KINDS[item.kind];
   return (
-    <div className={`flex items-center gap-2 px-1 ${item.kind === "header" ? "pt-3 font-semibold" : "text-sm"}`}>
-      <span className="mr-auto">{item.title}<span className="ml-2 text-xs font-normal text-muted">{kind}</span></span>
-      <button className="btn" disabled={isFirst} title="Move up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}>↑</button>
-      <button className="btn" disabled={isLast} title="Move down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}>↓</button>
-      <button className="btn" title="Remove from service" onClick={() => confirm(`Remove “${item.title}” from this service?`) && safe(removeItem)({ itemId })}>✕</button>
-    </div>
-  );
-}
-
-export function ItemCard({ item, isFirst, isLast }: { item: Item; isFirst: boolean; isLast: boolean }) {
-  const safe = useSafe();
-  const updateItem = useMutation(api.services.updateItem);
-  const moveItem = useMutation(api.services.moveItem);
-  const removeItem = useMutation(api.services.removeItem);
-  const insertEntry = useMutation(api.services.insertEntry);
-  const resetSequence = useMutation(api.services.resetSequence);
-  const [selected, setSelected] = useState<string | null>(null);
-  const selectedEntry = item.entries.find((e) => e.entryId === selected);
-  const itemId = item.id;
-
-  return (
-    <div className="card space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto font-semibold">
-          {item.title}
-          {item.versionNumber !== null && <span className="ml-2 text-xs font-normal text-muted">past · version {item.versionNumber}</span>}
-        </h2>
-        <EditableText
-          className="w-20"
-          placeholder="Key"
-          value={item.key ?? ""}
-          onSave={(key) => safe(updateItem)({ itemId, key })}
-        />
-        <button className="btn" disabled={isFirst} title="Move up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}>
-          ↑
-        </button>
-        <button className="btn" disabled={isLast} title="Move down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}>
-          ↓
-        </button>
-        <button
-          className="btn"
-          title="Remove from service"
-          onClick={() => confirm(`Remove “${item.title}” from this service?`) && safe(removeItem)({ itemId })}
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {item.entries.map((entry) => (
-          <button
-            key={entry.entryId}
-            title={sectionLabel(entry)}
-            onClick={() => setSelected(selected === entry.entryId ? null : entry.entryId)}
-            className={`rounded-md px-2.5 py-1 text-sm ${
-              selected === entry.entryId ? "bg-accent text-white" : "bg-accent-soft hover:bg-accent/40"
-            } ${entry.isVariation || !entry.sectionId ? "ring-1 ring-variation" : ""}`}
-          >
-            {sectionCode(entry)}
-          </button>
-        ))}
-        <select
-          className="py-1"
-          value=""
-          onChange={async (e) => {
-            const value = e.target.value;
-            const index = item.entries.length;
-            if (value.startsWith("__new:")) {
-              await safe(insertEntry)({ itemId, index, kind: value.slice(6) as SectionKind, lyrics: "" });
-            } else if (value) {
-              await safe(insertEntry)({ itemId, index, sectionId: value });
-            }
-          }}
-        >
-          <option value="">+ section</option>
-          {item.librarySections.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-          <optgroup label="New part for this service only">
-            {SECTION_KINDS.map((k) => (
-              <option key={k.kind} value={`__new:${k.kind}`}>{k.label}</option>
-            ))}
-          </optgroup>
-        </select>
-      </div>
-
-      {selectedEntry && <EntryEditor itemId={itemId} entries={item.entries} entry={selectedEntry} onClose={() => setSelected(null)} />}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <EditableText
-          className="min-w-0 flex-1"
-          placeholder="Notes for the team (e.g. “acapella last chorus”)"
-          value={item.notes ?? ""}
-          onSave={(notes) => safe(updateItem)({ itemId, notes })}
-        />
-        {item.songId && (
-          <button
-            className="btn text-muted"
-            onClick={() =>
-              confirm("Reset this song to the library's usual order? Changes for this service will be lost.") &&
-              safe(resetSequence)({ itemId })
-            }
-          >
-            Reset order
-          </button>
-        )}
-      </div>
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-card/60 px-3 py-2 text-sm">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-hover text-muted"><Icon size={15} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{item.title}</span>
+        <span className="text-xs text-faint">{label}</span>
+      </span>
+      <button className="btn-icon" disabled={isFirst} aria-label="Move up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}><ArrowUp size={15} /></button>
+      <button className="btn-icon" disabled={isLast} aria-label="Move down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}><ArrowDown size={15} /></button>
+      <button className="btn-icon" aria-label="Remove from service" onClick={() => confirm(`Remove “${item.title}” from this service?`) && safe(removeItem)({ itemId })}><X size={15} /></button>
     </div>
   );
 }

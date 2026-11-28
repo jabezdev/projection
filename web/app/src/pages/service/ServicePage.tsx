@@ -1,5 +1,5 @@
 import { api } from "@magi/backend/api";
-import { sectionCode, sectionLabel } from "@magi/shared";
+import { sectionCode, sectionColor, sectionLabel } from "@magi/shared";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { EditableText } from "../../components/EditableText";
@@ -53,7 +53,7 @@ function ServiceHeader({ service }: { service: Service }) {
   if (!me.can.arrange) {
     return (
       <div>
-        <h1 className="text-xl font-semibold">{service.title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{service.title}</h1>
         <p className="text-sm text-muted">
           {formatWhen(service.scheduledAtMs)}
           {service.leaderName && ` · led by ${service.leaderName}`}
@@ -66,7 +66,7 @@ function ServiceHeader({ service }: { service: Service }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <EditableText
-        className="min-w-0 flex-1 border-transparent bg-transparent px-0 text-xl font-semibold"
+        className="min-w-0 flex-1 basis-full border-transparent bg-transparent px-0 text-2xl font-bold tracking-tight focus:border-line focus:px-3 sm:basis-auto"
         value={service.title}
         onSave={(title) => safe(update)({ serviceId: service.id, title })}
       />
@@ -104,12 +104,12 @@ function Lyrics({ service }: { service: Service }) {
   return (
     <div className="space-y-10">
       {service.items.map((item, n) => item.kind === "header" ? (
-        <h2 key={item.id} className="border-b border-line pb-1 text-sm font-semibold tracking-wide text-muted uppercase">{item.title}</h2>
+        <h2 key={item.id} className="eyebrow border-b border-line pb-1.5 text-faint">{item.title}</h2>
       ) : item.kind !== "song" ? (
         <p key={item.id} className="text-sm text-muted">{n + 1}. {item.title}</p>
       ) : (
         <article key={item.id} className="space-y-4">
-          <header className="flex items-baseline gap-3 border-b border-line/60 pb-2">
+          <header className="flex items-baseline gap-3 border-b border-line pb-2">
             <span className="text-muted">{n + 1}.</span>
             <h2 className="text-lg font-semibold">{item.title}</h2>
             {item.key && <span className="text-sm text-muted">Key of {item.key}</span>}
@@ -120,7 +120,7 @@ function Lyrics({ service }: { service: Service }) {
           {item.notes && <p className="text-sm text-muted italic">{item.notes}</p>}
           {item.entries.map((entry) => (
             <section key={entry.entryId}>
-              <h3 className="mb-1 text-xs font-semibold tracking-wide text-accent uppercase">
+              <h3 className="mb-1 font-label text-xs font-semibold tracking-[0.12em] uppercase" style={{ color: sectionColor(entry) }}>
                 {sectionLabel(entry)}
                 {entry.isVariation && <span className="ml-2 text-variation normal-case">changed for this service</span>}
               </h3>

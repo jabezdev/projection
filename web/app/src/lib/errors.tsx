@@ -20,7 +20,7 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
       {message && (
         <div className="fixed inset-x-4 bottom-20 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-red-500/50 bg-red-950 p-3 text-sm md:bottom-4">
           <span className="flex-1">{message}</span>
-          <button className="text-muted hover:text-white" onClick={() => setMessage(null)}>
+          <button className="text-muted hover:text-fg" onClick={() => setMessage(null)}>
             ✕
           </button>
         </div>

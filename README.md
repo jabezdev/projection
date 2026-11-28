@@ -1,6 +1,6 @@
 # Magi Projection
 
-**PALTO** (`desktop/`, Rust + Tauri + wgpu + FFmpeg 9 + React) runs the service offline. The song library (`web/`, React + Convex + Clerk) is where the team prepares it. The OBS plugin (`obs/`, Rust) shows PALTO's lyrics and song credits on the livestream. Windows installer: [Releases](https://github.com/jabezdev/projection/releases/latest).
+**PALTO** (`desktop/`, Rust + Tauri + wgpu + FFmpeg 9 + React) runs the service offline. The team library (`web/`, React + Convex + Convex Auth) is where the team prepares it, and PALTO syncs with it. The OBS plugin (`obs/`, Rust) shows PALTO's lyrics and song credits on the livestream. Windows installer: [Releases](https://github.com/jabezdev/projection/releases/latest).
 
 ## Desktop
 
@@ -18,6 +18,14 @@ cd desktop/crates/app && bun install && bun install --cwd frontend && bun run de
 
 ## Web
 
-In `web/`: `bun install && bun run dev:backend`, set `CLERK_JWT_ISSUER_DOMAIN` in Convex, fill `app/.env.local` from `app/.env.example`, then `bun run dev:app`.
+In `web/`: `bun install && bun run dev:backend` (choose "Start without an account" to run Convex locally), copy the printed URL into `app/.env.local` as `VITE_CONVEX_URL`, then `bun run dev:app`. The first account becomes the admin.
+
+- Tests: `bun run test`. Sync against a running backend: `PALTO_SYNC_URL=… PALTO_SYNC_CODE=… cargo test -p app e2e -- --ignored`
+- Production: create a Convex project and a Cloudflare Pages project `palto-library`, add `CONVEX_DEPLOY_KEY`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets, then run the "Deploy web library" workflow (or `bun run deploy` with those set).
+- Pairing: on the web, Team → Projection computers gives the team address and a code; in PALTO, Settings → Cloud sync.
+
+## Site
+
+`site/` is the public page and setup guide: static HTML, no build. The download buttons read the latest release from the GitHub API. Deploy: a Cloudflare Pages project `palto-site` and the "Deploy PALTO site" workflow (also on pushes to `site/` once the repository variable `SITE_ENABLED` is `true`).
 
 MIT. Lucide icons: ISC.

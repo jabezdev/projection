@@ -3,7 +3,9 @@ import { Icon } from '../ui/Icons';
 import { invoke } from '../api/tauri';
 import { editHistory, historyKey, stepEdit, type History } from '../api/history';
 import HistoryButtons from '../ui/HistoryButtons';
-import { defaultCaptureOptions, defaultVideoOptions, isPast, type ItemContent, type MediaFile, type Service, type ServiceItem, type Song, type SongItem, type SongVersion, type VideoOptions } from '../api/models';
+import { defaultCaptureOptions, defaultVideoOptions, isPast, type ItemContent, type MediaFile, type Service, type ServiceItem, type ServiceTemplate, type Song, type SongItem, type SongVersion, type VideoOptions } from '../api/models';
+import { insertPart, sectionsOf, withoutEmptySections } from './templates';
+import { useCollapsed } from './useCollapsed';
 import { fromServiceDraft, serviceDraft, splitSlides, type SongDraft } from '../song/song';
 import { captureItem, copyItem, headerItem, mediaItem, songItem } from './serviceItems';
 import { catalog, resolveItem } from '../api/resolve';
@@ -47,6 +49,10 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
   const [history, setHistory] = useState<History>({});
   const [stepping, setStepping] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [collapsed, setCollapsed] = useCollapsed();
+  const [removing, setRemoving] = useState<{ header: ServiceItem; count: number } | null>(null);
+  const [templates, setTemplates] = useState<ServiceTemplate[]>([]);
+  useEffect(() => { void invoke<ServiceTemplate[]>('list_templates').then(setTemplates, () => {}); }, []);
   const versions = usePinnedVersions(items, songs);
   const library = useMemo(() => catalog(songs, media, versions), [songs, media, versions]);
   const body = useRef<HTMLDivElement>(null);
@@ -106,7 +112,22 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
     else if (choice.kind === 'media') place(mediaItem(choice.media), after);
     else place(captureItem(choice.source), after);
   }
-  async function remove(item: ServiceItem) {
+  async function remove(item: ServiceItem, withItems?: boolean) {
+    if (item.content.kind === 'header' && withItems === undefined) {
+      const section = sectionsOf(latest.current.items).find(s => s.header.id === item.id);
+      const count = section ? section.end - section.start - 1 : 0;
+      if (count > 0) { setRemoving({ header: item, count }); return; }
+    }
+    if (withItems) {
+      const section = sectionsOf(latest.current.items).find(s => s.header.id === item.id);
+      if (!section) return;
+      const doomed = new Set(latest.current.items.slice(section.start, section.end).map(i => i.id));
+      if (activeItemId && doomed.has(activeItemId) && confirmRemove && !(await confirmRemove(`an item in ${titleOf(item)}`))) return;
+      save({ items: latest.current.items.filter(i => !doomed.has(i.id)) }, 0);
+      setSelected(null);
+      showToast({ text: `Removed ${titleOf(item)} and its items`, undoable: true });
+      return;
+    }
     if (item.id === activeItemId && confirmRemove && !(await confirmRemove(titleOf(item)))) return;
     const before = latest.current.items;
     const index = before.findIndex(i => i.id === item.id);
@@ -126,11 +147,27 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
   function move(id: string, after: string) {
     const before = latest.current.items;
     if (id === after) return;
-    const moving = before.find(i => i.id === id);
-    if (!moving) return;
-    const rest = before.filter(i => i.id !== id);
+    const section = collapsed.has(id) ? sectionsOf(before).find(sec => sec.header.id === id) : undefined;
+    const block = section ? before.slice(section.start, section.end) : before.filter(i => i.id === id);
+    if (!block.length || block.some(i => i.id === after && i.id !== id)) return;
+    const moving = new Set(block.map(i => i.id));
+    const rest = before.filter(i => !moving.has(i.id));
     const at = after === TOP ? 0 : rest.findIndex(i => i.id === after) + 1;
-    save({ items: [...rest.slice(0, at), moving, ...rest.slice(at)] }, 0);
+    save({ items: [...rest.slice(0, at), ...block, ...rest.slice(at)] }, 0);
+  }
+  function addPart(templateId: string, partId: string) {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+    const { items: next, first } = insertPart(latest.current.items, template, partId);
+    save({ items: next }, 0);
+    if (first) setSelected(first);
+    showToast({ text: `Added ${template.parts.find(p => p.id === partId)?.title ?? 'a part'}`, undoable: true });
+  }
+  function removeEmptySections() {
+    const next = withoutEmptySections(latest.current.items);
+    const removed = latest.current.items.length - next.length;
+    save({ items: next }, 0);
+    showToast({ text: `Removed ${removed} empty section${removed === 1 ? '' : 's'}`, undoable: true });
   }
   function addSection(after: string) {
     place(headerItem('New section'), after);
@@ -147,6 +184,11 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
   const item = items.find(i => i.id === selected) ?? null;
   const resolved = items.map(i => resolveItem(i, library));
   const past = isPast({ ...service, scheduledAtMs });
+  const sections = sectionsOf(items);
+  const hiddenIds = new Set(sections.filter(sec => collapsed.has(sec.header.id)).flatMap(sec => items.slice(sec.start + 1, sec.end).map(i => i.id)));
+  const present = new Set(sections.map(sec => sec.header.title));
+  const missingParts = templates.flatMap(t => t.parts.filter(p => !present.has(p.title)).map(p => ({ template: t, part: p })));
+  const hasEmpty = sections.some(sec => sec.end === sec.start + 1);
   const gap = (after: string) => <div className={`insert-gap ${insert?.after === after ? 'is-open' : ''} ${dropAfter === after ? 'is-drop' : ''}`}
     onDragOver={e => { if (dragged === null) return; e.preventDefault(); setDropAfter(after); }}
     onDrop={e => { e.preventDefault(); if (dragged !== null) move(dragged, after); setDragged(null); setDropAfter(null); }}>
@@ -170,10 +212,17 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
     {error && <p className="ui-error" role="alert">{error}</p>}
     <div className="service-editor-body" ref={body}>
       <section className="service-items" aria-label="Items">
-        <div className="panel-heading">Items <small>{items.length} · drag to reorder</small></div>
+        <div className="panel-heading">Items <small>{items.length} · drag to reorder</small>
+          <span className="grow"/>
+          {hasEmpty && <button className="text-action" onClick={removeEmptySections}>Remove empty sections</button>}
+          {missingParts.length > 0 && <select className="add-part" aria-label="Add a part from a template" value="" onChange={e => { const [t, p] = e.target.value.split('|'); if (p) addPart(t, p); }}>
+            <option value="">Add part…</option>
+            {missingParts.map(({ template, part }) => <option key={`${template.id}|${part.id}`} value={`${template.id}|${part.id}`}>{part.title}{templates.length > 1 ? ` · ${template.name}` : ''}</option>)}
+          </select>}
+        </div>
         <div className="service-items-scroll">
           {gap(TOP)}
-          {items.map((entry, index) => { const shown = resolved[index]; return <div key={entry.id}>
+          {items.map((entry, index) => { const shown = resolved[index]; if (hiddenIds.has(entry.id)) return null; const folded = collapsed.has(entry.id); return <div key={entry.id}>
             <div className={`service-item ${entry.content.kind === 'header' ? 'is-section' : ''} ${entry.id === selected ? 'is-selected' : ''} ${dragged === entry.id ? 'is-dragging' : ''}`} draggable tabIndex={0} role="button" aria-pressed={entry.id === selected}
               onClick={() => setSelected(entry.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(entry.id); } if (e.key === 'Delete') void remove(entry); }}
               onDragStart={e => { setDragged(entry.id); e.dataTransfer.setData('text/plain', entry.id); e.dataTransfer.effectAllowed = 'move'; }}
@@ -181,14 +230,14 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
               onDragOver={e => { if (dragged === null) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setDropAfter(e.clientY < r.top + r.height / 2 ? (items[index - 1]?.id ?? TOP) : entry.id); }}
               onDrop={e => { e.preventDefault(); if (dragged !== null && dropAfter !== null) move(dragged, dropAfter); setDragged(null); setDropAfter(null); }}>
               {entry.content.kind === 'header'
-                ? <span className="service-section-name"><strong>{entry.title || 'Untitled section'}</strong><small>{sectionSize(items, index)} items</small></span>
+                ? <><button className="icon-button section-fold" aria-expanded={!folded} aria-label={folded ? `Show the items of ${entry.title || 'this section'}` : `Hide the items of ${entry.title || 'this section'}`} onClick={e => { e.stopPropagation(); setCollapsed(entry.id, !folded); }}><Icon name={folded ? 'right' : 'chevron'}/></button><span className="service-section-name"><strong>{entry.title || 'Untitled section'}</strong><small>{sectionSize(items, index) || 'no'} items{folded && sectionSize(items, index) ? ' · hidden' : ''}</small></span></>
                 : <><span className="service-item-index">{items.slice(0, index + 1).filter(i => i.content.kind !== 'header').length}</span><ItemThumb item={shown}/><span className="service-item-text"><strong>{shown.title || 'Untitled'}</strong><small>{itemSummary(shown)}{entry.content.kind === 'song' && edited(entry) ? ' · edited here' : ''}</small></span></>}
               <span className="service-item-tools">
                 <button className="icon-button" aria-label={`Duplicate ${shown.title}`} title="Duplicate" onClick={e => { e.stopPropagation(); duplicate(entry); }}><Icon name="copy"/></button>
                 <button className="icon-button" aria-label={`Remove ${shown.title}`} title="Remove (Delete)" onClick={e => { e.stopPropagation(); void remove(entry); }}><Icon name="close"/></button>
               </span>
             </div>
-            {gap(entry.id)}
+            {gap(folded ? (items[sections.find(sec => sec.header.id === entry.id)!.end - 1]?.id ?? entry.id) : entry.id)}
           </div>; })}
           {!items.length && <p className="empty-panel">This service is empty. Add the first item.</p>}
           <div className="add-row"><button className="add-item" onClick={e => openInsert(items.at(-1)?.id ?? TOP, e.currentTarget)}><Icon name="plus"/>Add item</button><button className="add-item" onClick={() => addSection(items.at(-1)?.id ?? TOP)}><Icon name="plus"/>Add section</button></div>
@@ -202,6 +251,16 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
         onImport={async () => { const imported = await invoke<MediaFile[]>('import_media_files'); if (imported.length) await onCatalogChanged(); }}
         onSlides={() => { setSlides({ after: insert.after }); setInsert(null); }}/>}
     </div>
+    {removing && <div className="modal-backdrop" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setRemoving(null); } }}>
+      <section className="compact-modal confirm-modal" role="alertdialog" aria-modal="true" aria-label="Remove section">
+        <p>Remove the section “{removing.header.title || 'Untitled section'}”? It has {removing.count} item{removing.count === 1 ? '' : 's'}.</p>
+        <div className="modal-actions">
+          <button autoFocus onClick={() => setRemoving(null)}>Cancel</button>
+          <button onClick={() => { setRemoving(null); void remove(removing.header, false); }}>Only the heading</button>
+          <button className="primary-action" onClick={() => { setRemoving(null); void remove(removing.header, true); }}>Section and items</button>
+        </div>
+      </section>
+    </div>}
     {toast && <div className="editor-toast" role="status">{toast.text}{toast.undoable && <button disabled={stepping} onClick={() => void step(false)}>Undo</button>}</div>}
   </section>
   {slides && <PresentationEditor images={media} item={'item' in slides ? slides.item : undefined} onClose={() => setSlides(null)} onSave={async saved => {

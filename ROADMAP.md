@@ -31,20 +31,27 @@ Decided: a library song is a reference that service edits never change; library 
 - [x] Move SQLite to it. Dev data was dropped instead of migrated.
 - [x] Undo and redo from a stored edit history, per service and per song. Convex logs the same edit operations.
 - [x] Song credits, all optional: authors with a role (words, music, translation), copyright, CCLI number, publisher, year. Filled by OpenLyrics import.
-- [ ] Service templates ("Sunday", "Youth night") with fixed items and empty slots.
+- [x] Service templates. A template is the usual order as parts (Sunday: Welcoming, Countdown, Praise & Worship, Tithes and Offering, Special Number, Message, Special Program, Closing; the two "Special" parts are optional). Planning a service picks this week's parts; each becomes a section. Sections collapse, can be removed with or without their items, empty ones go in one click, and a missing part can be added later in its usual place. "Save as template" turns a service into a template with its videos, slides and text, without songs.
 
 ## 3. Cloud sync, offline-first
 
-Decided: PALTO keeps a full local copy and nothing live waits on the network; while a service is live, the operator owns it; conflicts go to a "needs attention" list and never block; there is a full-offline setting; media up to 100 MB syncs by content hash.
+Decided: PALTO keeps a full local copy and nothing live waits on the network; while a service is live, the operator owns it; conflicts go to a "needs attention" list and never block; there is a full-offline setting; media up to 100 MB syncs by content hash. Sign-in is Convex Auth with username and password (email sign-in needs an email service).
 
-- [ ] Host the web app (Cloudflare Pages) and deploy Convex production.
-- [ ] Pair PALTO with the team account (`devices.ts` already issues codes).
-- [ ] Pull songs and services, push queued edits, resume after reconnect, show "last synced".
-- [ ] Live ownership, the conflict list and a side-by-side dialog.
-- [ ] Media sync through an upload queue that never competes with playback.
-- [ ] A "now showing" view for singers.
+Built and tested against a local Convex backend; not yet run against production or on the church PC.
+
+- [ ] Host the web app (Cloudflare Pages) and deploy Convex production. Ready: the "Deploy web library" workflow needs `CONVEX_DEPLOY_KEY`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+- [x] Pair PALTO with the team (Settings → Cloud sync, code from Team → Projection computers).
+- [x] Pull songs, services, templates and media; push queued edits; resume after reconnect with backoff; show "last synced" and what is waiting.
+- [x] Live ownership (the web can't edit a service PALTO runs live), the "needs attention" list and a side-by-side dialog.
+- [x] Media sync: uploads are capped at 3 MB/s and pause while anything plays; downloads land in the media folder.
+- [x] A "now showing" page for singers (web: Now).
+- [ ] Try it for real: production deployment, two computers on different networks, a 100 MB video, a dropped connection mid-service.
 
 ## 4. The operator's experience
+
+- [x] Phone remote for the operator: now and next with section colours, the whole service order with every slide (tap to show), video and audio controls, black, clear and logo. Checked in a browser with recorded engine events; not yet on a phone against PALTO.
+- [x] Web library redesign in PALTO's look: a song editor with a draggable colour-coded order, part cards with slide previews and a whole-song text mode; the same order strip in service arrangements.
+- [x] Public site and setup guide (`site/`). Not yet hosted.
 
 - [ ] Visual redesign of the control panel. **Open:** the design.
 - [ ] A library view to browse, filter and edit songs and media in one place.
