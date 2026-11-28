@@ -40,7 +40,7 @@ export function backgroundName(value: string, backgrounds: MediaFile[]) {
 export function itemSummary(item: SessionItem) {
   const kind = item.kind;
   switch (kind.kind) {
-    case 'text': return `${item.song ? 'Song' : 'Text'} · ${kind.data.steps.length} slides`;
+    case 'text': return kind.data.captions?.length ? `Bible · ${kind.data.steps.length} slides` : `${item.song ? 'Song' : 'Text'} · ${kind.data.steps.length} slides`;
     case 'presentation': return `Slides · ${(kind.data.slides || [kind.data.path]).length}`;
     case 'capture': return `${kind.data.source.kind === 'window' ? 'Window' : 'Screen'} capture · ${kind.data.source.name}`;
     case 'video': return `Video${kind.data.options?.looping ? ' · loops' : ''}${kind.data.options?.confidence ? ' · confidence' : ''}`;

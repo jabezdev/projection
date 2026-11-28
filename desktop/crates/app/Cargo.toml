@@ -11,6 +11,7 @@ core_engine = { path = "../core_engine" }
 network_server = { path = "../network_server" }
 persistence = { path = "../persistence" }
 protocol = { path = "../protocol" }
+bible = { path = "../bible" }
 render_engine = { path = "../render_engine" }
 media_engine = { path = "../media_engine" }
 tokio = { workspace = true }

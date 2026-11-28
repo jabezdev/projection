@@ -2,7 +2,7 @@ use protocol::{
     DisplayMode, LiveService, OutputConfig, PlaybackState, ProgramState, SessionItemKind,
 };
 use render_engine::{
-    css_color, ConfidenceGroup, ConfidenceScene,
+    css_color, ConfidenceGroup, ConfidenceScene, StageClock, StageOverlay,
 };
 
 use super::*;
@@ -27,15 +27,17 @@ pub fn confidence_sample_scene(config: &OutputConfig) -> ConfidenceScene {
         video_cover: false,
         transition_ms: config.confidence_transition as f32,
         style: confidence_style(config),
+        stage: StageOverlay::default(),
     }
 }
+
 
 pub fn confidence_groups(service: Option<&LiveService>) -> Vec<(String, usize, ConfidenceGroup)> {
     let mut groups = Vec::new();
     for item in service.map(|s| s.items.as_slice()).unwrap_or_default() {
         let title = item.title.clone().filter(|t| !t.is_empty());
         let (kind, steps) = match &item.kind {
-            SessionItemKind::Text { steps } => ("text", steps),
+            SessionItemKind::Text { steps, .. } => ("text", steps),
             SessionItemKind::Image { .. } => ("image", &Vec::new()),
             SessionItemKind::Video { .. } => ("video", &Vec::new()),
             SessionItemKind::Audio { .. } => ("audio", &Vec::new()),
@@ -111,5 +113,14 @@ pub fn confidence_scene(config: &OutputConfig, program: &ProgramState, service: 
         },
         transition_ms: config.confidence_transition as f32,
         style: confidence_style(config),
+        stage: stage_overlay(program),
+    }
+}
+
+pub fn stage_overlay(program: &ProgramState) -> StageOverlay {
+    let stage = &program.stage;
+    StageOverlay {
+        message: stage.message.clone(),
+        timer: stage.timer.map(|t| StageClock { remaining_ms: t.remaining_ms, ends_at_ms: t.running_since_ms.map(|since| since + t.remaining_ms) }),
     }
 }

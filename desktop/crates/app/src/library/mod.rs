@@ -1,3 +1,5 @@
+pub mod bibles;
+pub mod fit;
 pub mod storage;
 
 use std::collections::{BTreeMap, HashMap};

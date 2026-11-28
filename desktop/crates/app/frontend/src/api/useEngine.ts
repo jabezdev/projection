@@ -12,8 +12,15 @@ export type ProgramState = {
   next_item_id: string | null;
   active_step_index: number | null;
   active_text: string;
+  active_parallel?: string;
+  active_caption?: string;
   background: Background | null;
+  stage?: StageState;
 };
+export type StageTimer = { duration_ms: number; remaining_ms: number; running_since_ms: number | null };
+export type StageState = { message: string; timer: StageTimer | null };
+export type TimerAction = { type: 'start'; duration_ms: number } | { type: 'pause' } | { type: 'resume' } | { type: 'adjust'; delta_ms: number } | { type: 'clear' };
+export const timerRemaining = (timer: StageTimer, now = Date.now()) => timer.running_since_ms == null ? timer.remaining_ms : timer.remaining_ms - Math.max(0, now - timer.running_since_ms);
 type EngineSnapshot = { program_state: ProgramState; version: number; service: LiveService | null; playback?: PlaybackState | null };
 
 type EngineEvent =

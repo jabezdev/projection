@@ -23,6 +23,7 @@ pub enum FeedDisplay {
 pub enum FeedItemKind {
     Song,
     Text,
+    Scripture,
     Image,
     Video,
     Audio,
@@ -78,6 +79,10 @@ pub struct FeedState {
     pub section: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub song: Option<FeedSong>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parallel: Option<String>,
 }
 
 impl FeedState {
@@ -101,6 +106,8 @@ impl FeedState {
             item: item.map(feed_item),
             section: item.zip(step).and_then(|(item, step)| section_at(item, step)),
             song: item.and_then(feed_song),
+            reference: Some(program.active_caption.clone()).filter(|c| !c.is_empty()),
+            parallel: Some(program.active_parallel.clone()).filter(|p| !p.is_empty()),
         }
     }
 
@@ -111,7 +118,7 @@ impl FeedState {
 
 fn next_step(item: &SessionItem, step: usize) -> Option<String> {
     match &item.kind {
-        SessionItemKind::Text { steps } => steps.get(step + 1).cloned(),
+        SessionItemKind::Text { steps, .. } => steps.get(step + 1).cloned(),
         _ => None,
     }
 }
@@ -119,6 +126,7 @@ fn next_step(item: &SessionItem, step: usize) -> Option<String> {
 fn feed_item(item: &SessionItem) -> FeedItem {
     let kind = match &item.kind {
         _ if item.song.is_some() => FeedItemKind::Song,
+        SessionItemKind::Text { captions, .. } if !captions.is_empty() => FeedItemKind::Scripture,
         SessionItemKind::Text { .. } => FeedItemKind::Text,
         SessionItemKind::Image { .. } => FeedItemKind::Image,
         SessionItemKind::Video { .. } => FeedItemKind::Video,

@@ -42,6 +42,7 @@ export function cleanContent(raw: Record<string, unknown>): Content {
   if (kind === "media") return { kind, mediaId: String(raw.mediaId), options: { ...VIDEO_DEFAULTS, ...(raw.options as object) } } as Content;
   if (kind === "presentation") return strip({ kind, mediaId: raw.mediaId }) as Content;
   if (kind === "capture") return { kind, options: { ...CAPTURE_DEFAULTS, ...(raw.options as object) } } as Content;
+  if (kind === "scripture") return strip({ kind, reference: String(raw.reference ?? ""), translation: String(raw.translation ?? "kjv"), parallel: raw.parallel ? String(raw.parallel) : undefined }) as Content;
   return { kind: "header" };
 }
 

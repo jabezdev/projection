@@ -66,6 +66,7 @@ export const itemContent = v.union(
   v.object({ kind: v.literal("media"), mediaId: v.string(), options: videoOptions }),
   v.object({ kind: v.literal("presentation"), mediaId: v.optional(v.string()) }),
   v.object({ kind: v.literal("capture"), options: captureOptions }),
+  v.object({ kind: v.literal("scripture"), reference: v.string(), translation: v.string(), parallel: v.optional(v.string()) }),
   v.object({ kind: v.literal("header") }),
 );
 

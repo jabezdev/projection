@@ -5,8 +5,9 @@ import { EditableText } from "../../components/EditableText";
 import { useSafe } from "../../lib/errors";
 import type { Service, Item } from "./types";
 import { ItemCard } from "./ItemCard";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, Film, Monitor, Presentation, Radio, X } from "lucide-react";
-import { AddSong } from "./AddSong";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Radio, X } from "lucide-react";
+import { AddItem } from "./AddItem";
+import { OtherItem } from "./OtherItem";
 
 export function Arrange({ service }: { service: Service }) {
   const [collapsed, setCollapsed] = useCollapsed();
@@ -30,7 +31,7 @@ export function Arrange({ service }: { service: Service }) {
           </div>
         );
       })}
-      <AddSong serviceId={service.id} />
+      <AddItem serviceId={service.id} />
     </div>
   );
 }
@@ -114,35 +115,6 @@ function SectionTools({ service }: { service: Service }) {
       {empty && <button className="btn" onClick={() => safe(removeEmpty)({ serviceId: service.id })}>Remove empty sections</button>}
       <span className="grow" />
       <button className="btn" onClick={saveAsTemplate}>Save as template</button>
-    </div>
-  );
-}
-
-const KINDS = {
-  header: ["Section", FileText],
-  text: ["Text", FileText],
-  media: ["Media", Film],
-  presentation: ["Slides", Presentation],
-  capture: ["Screen capture", Monitor],
-  song: ["Song", FileText],
-} as const;
-
-function OtherItem({ item, isFirst, isLast }: { item: Item; isFirst: boolean; isLast: boolean }) {
-  const safe = useSafe();
-  const moveItem = useMutation(api.services.moveItem);
-  const removeItem = useMutation(api.services.removeItem);
-  const itemId = item.id;
-  const [label, Icon] = KINDS[item.kind];
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-card/60 px-3 py-2 text-sm">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-hover text-muted"><Icon size={15} /></span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{item.title}</span>
-        <span className="text-xs text-faint">{label}</span>
-      </span>
-      <button className="btn-icon" disabled={isFirst} aria-label="Move up" onClick={() => safe(moveItem)({ itemId, direction: -1 })}><ArrowUp size={15} /></button>
-      <button className="btn-icon" disabled={isLast} aria-label="Move down" onClick={() => safe(moveItem)({ itemId, direction: 1 })}><ArrowDown size={15} /></button>
-      <button className="btn-icon" aria-label="Remove from service" onClick={() => confirm(`Remove “${item.title}” from this service?`) && safe(removeItem)({ itemId })}><X size={15} /></button>
     </div>
   );
 }

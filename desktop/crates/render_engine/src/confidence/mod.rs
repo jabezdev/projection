@@ -12,6 +12,7 @@ mod metrics;
 mod palette;
 mod renderer;
 mod smooth;
+mod stage;
 
 use layout::*;
 use metrics::*;
@@ -30,6 +31,8 @@ pub struct ConfidenceRenderer {
     tape: Smooth,
     focused: Option<(u64, (u32, u32))>,
     clock: Option<(String, u32, Arc<TextLayout>)>,
+    timer: Option<(String, u32, Arc<TextLayout>)>,
+    message: Option<(String, u32, Arc<TextLayout>)>,
 }
 
 impl Default for ConfidenceRenderer {
@@ -47,6 +50,8 @@ impl Default for ConfidenceRenderer {
             tape: Smooth::at(0.0, now),
             focused: None,
             clock: None,
+            timer: None,
+            message: None,
         }
     }
 }

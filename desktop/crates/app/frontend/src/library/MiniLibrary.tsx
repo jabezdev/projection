@@ -8,7 +8,7 @@ import { MediaThumb } from './Thumbs';
 import { SlidePreview } from '../song/SlidePreview';
 import { DEMO_SOURCES } from '../demo/service';
 
-export type LibraryPick = { kind: 'song'; song: Song } | { kind: 'media'; media: MediaFile } | { kind: 'capture'; source: CaptureSource };
+export type LibraryPick = { kind: 'song'; song: Song } | { kind: 'media'; media: MediaFile } | { kind: 'capture'; source: CaptureSource } | { kind: 'text' } | { kind: 'scripture' };
 type Filter = 'all' | 'song' | 'video' | 'image' | 'audio' | 'capture';
 type Method = { name: string; system_picker: boolean };
 
@@ -51,6 +51,8 @@ export default function MiniLibrary({ top, where, songs, media, onPick, onImport
     <div className="mini-foot">
       <button disabled={busy || !isTauri()} title={isTauri() ? 'Images, videos and audio' : 'Needs the desktop app'} onClick={() => { setBusy(true); setError(''); void onImport().catch(e => setError(String(e))).finally(() => setBusy(false)); }}><Icon name="plus"/>{busy ? 'Importing…' : 'Import files…'}</button>
       <button onClick={onSlides}><Icon name="plus"/>Slides from PDF or images…</button>
+      <button onClick={() => onPick({ kind: 'scripture' })}><Icon name="bible"/>Bible passage</button>
+      <button onClick={() => onPick({ kind: 'text' })}><Icon name="text"/>Text slides</button>
     </div>
   </div>;
 }

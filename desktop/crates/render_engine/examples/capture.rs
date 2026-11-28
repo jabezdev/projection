@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use render_engine::{
     css_color, Capture, ConfidenceGroup, ConfidenceScene, Display, LyricStyle, MainScene, MediaLayer, MediaSource, OutputRole, FramePixels, PixelFrame, Scene,
-    Shadow, ShaderSpec, Stroke, TextAlign, VideoKey, Vertical,
+    Shadow, ShaderSpec, StageClock, StageOverlay, Stroke, TextAlign, VideoKey, Vertical,
 };
 
 fn gradient(width: u32, height: u32) -> Vec<u8> {
@@ -107,6 +107,35 @@ fn scene(name: &str) -> Scene {
             video_cover: false,
             transition_ms: 250.0,
             style: Default::default(),
+            stage: Default::default(),
+        }),
+        "conf-stage" => match scene("conf-default") {
+            Scene::Confidence(c) => Scene::Confidence(ConfidenceScene { stage: StageOverlay { message: "Two minutes left, please wrap up".into(), timer: Some(StageClock { remaining_ms: 95_000, ends_at_ms: None }) }, ..c }),
+            other => other,
+        },
+        "conf-overtime" => match scene("conf-default") {
+            Scene::Confidence(c) => Scene::Confidence(ConfidenceScene { stage: StageOverlay { message: String::new(), timer: Some(StageClock { remaining_ms: -75_000, ends_at_ms: None }) }, ..c }),
+            other => other,
+        },
+        "proj-scripture" => Scene::Main(MainScene {
+            text: "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.".into(),
+            caption: "John 3:16 · KJV".into(),
+            transition_ms: 0.0,
+            style: LyricStyle { vertical: Vertical::Center, ..LyricStyle::default() },
+            ..Default::default()
+        }),
+        "proj-parallel" => Scene::Main(MainScene {
+            text: "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.".into(),
+            parallel: "Sapagka't gayon na lamang ang pagsinta ng Dios sa sanglibutan, na ibinigay niya ang kaniyang bugtong na Anak, upang ang sinomang sa kaniya'y sumampalataya ay huwag mapahamak, kundi magkaroon ng buhay na walang hanggan.".into(),
+            caption: "John 3:16 · KJV · ADB1905".into(),
+            transition_ms: 0.0,
+            style: LyricStyle { vertical: Vertical::Center, ..LyricStyle::default() },
+            ..Default::default()
+        }),
+        "proj-long" => Scene::Main(MainScene {
+            text: "Line one of a long chorus\nLine two keeps on going\nLine three is here too\nLine four still sings\nLine five comes after\nLine six ends it".into(),
+            transition_ms: 0.0,
+            ..Default::default()
         }),
         "conf-waiting" => Scene::Confidence(ConfidenceScene { size: 4.0, transition_ms: 250.0, ..Default::default() }),
         other => panic!("unknown scene {other}"),

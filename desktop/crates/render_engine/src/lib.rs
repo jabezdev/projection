@@ -21,14 +21,14 @@ mod yuv;
 
 pub use capture::Capture;
 pub use frame::{FramePixels, PixelFrame, SharedFrame, VideoFrames, VideoKey};
-pub use main_scene::LyricGeometry;
+pub use main_scene::{split_to_fit, LyricGeometry, SlideText};
 pub use media::MediaTextures;
 pub use monitor::MonitorSpec;
 pub use output::{OutputRole, OutputStats, StatusSink};
 pub use paint::{css_color, Rgba, TextEffects};
 pub use preview::{PreviewTarget, Snapshot, SnapshotSink};
 pub use scene::{
-    ConfidenceGroup, ConfidenceScene, ConfidenceStyle, Direction, Display, Easing, LyricStyle, MainScene, MediaLayer, MediaSource, Scene, Shadow, Stroke,
+    ConfidenceGroup, ConfidenceScene, ConfidenceStyle, Direction, Display, Easing, LyricStyle, MainScene, MediaLayer, MediaSource, Scene, Shadow, StageClock, StageOverlay, Stroke,
     Transition, TransitionKind, Vertical,
 };
 pub use shader_bg::{ShaderSpec, SHADER_SIZE};

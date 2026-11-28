@@ -133,7 +133,7 @@ fn services_resolve_variations_media_and_device_bindings() {
     assert!(bodies.iter().all(|b| !b.contains("Main")), "capture sources stay out of the shared item");
     let live = repo.resolve_service(&loaded).unwrap();
     assert_eq!(live.items[0].title.as_deref(), Some("Amazing Grace"));
-    assert_eq!(live.items[0].kind, SessionItemKind::Text { steps: vec!["softly".into(), "again".into(), "amen".into()] });
+    assert_eq!(live.items[0].kind, SessionItemKind::text(vec!["softly".into(), "again".into(), "amen".into()]));
     assert_eq!(live.items[1].kind, SessionItemKind::Video { path: "/media/welcome.mp4".into(), options: Default::default() });
     assert_eq!(live.items[1].background.as_deref(), Some("shader:aurora"));
     assert!(matches!(&live.items[2].kind, SessionItemKind::Capture { source, .. } if source.name == "Main"));
@@ -161,4 +161,20 @@ fn an_old_database_starts_over_with_the_new_tables() {
     drop(repo);
     assert_eq!(Repository::new(&path).unwrap().list_library(true).unwrap().len(), 1, "reopening keeps the data");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn scripture_items_resolve_to_verse_slides_with_references() {
+    use protocol::model::{ItemContent, Service, ServiceItem};
+    let repo = Repository::new(":memory:").unwrap();
+    let item = |id: &str, reference: &str, translation: &str, parallel: Option<&str>| ServiceItem { id: id.into(), title: None, notes: None, background: None, content: ItemContent::Scripture { reference: reference.into(), translation: translation.into(), parallel: parallel.map(Into::into) } };
+    let service = Service { id: "s".into(), scheduled_at_ms: 0, title: "Sunday".into(), leader: None, notes: None, ended_at_ms: None, items: vec![item("a", "Ps 23:1-2", "kjv", Some("adb1905")), item("b", "Nowhere 1:1", "kjv", None)] };
+    let live = repo.resolve_service(&service).unwrap();
+    let SessionItemKind::Text { steps, parallel, captions } = &live.items[0].kind else { panic!("text slides") };
+    assert_eq!(steps.len(), 2);
+    assert!(steps[0].starts_with("The LORD is my shepherd"));
+    assert!(parallel[0].contains("Panginoon"));
+    assert_eq!(captions[1], "Psalms 23:2 · KJV · ADB1905");
+    assert_eq!(live.items[0].title.as_deref(), Some("Psalms 23:1–2 · KJV · ADB1905"));
+    assert!(live.items[1].title.as_deref().unwrap().contains("No book called"));
 }

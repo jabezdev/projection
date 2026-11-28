@@ -105,8 +105,13 @@ function Lyrics({ service }: { service: Service }) {
     <div className="space-y-10">
       {service.items.map((item, n) => item.kind === "header" ? (
         <h2 key={item.id} className="eyebrow border-b border-line pb-1.5 text-faint">{item.title}</h2>
+      ) : item.kind === "text" && item.steps.length ? (
+        <article key={item.id} className="space-y-2">
+          <h2 className="border-b border-line pb-2 text-lg font-semibold"><span className="mr-3 text-muted">{n + 1}.</span>{item.title}</h2>
+          {item.steps.map((step, i) => <p key={i} className="text-lg leading-relaxed whitespace-pre-line">{step}</p>)}
+        </article>
       ) : item.kind !== "song" ? (
-        <p key={item.id} className="text-sm text-muted">{n + 1}. {item.title}</p>
+        <p key={item.id} className={`text-sm ${item.kind === "scripture" ? "font-semibold text-[#c9a24a]" : "text-muted"}`}>{n + 1}. {item.title}</p>
       ) : (
         <article key={item.id} className="space-y-4">
           <header className="flex items-baseline gap-3 border-b border-line pb-2">

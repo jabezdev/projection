@@ -70,6 +70,10 @@ impl RenderEngine {
         }
     }
 
+    pub fn fonts(&self) -> Arc<crate::text::Fonts> {
+        self.resources.fonts.clone()
+    }
+
     pub fn gpu(&self) -> &Arc<Gpu> {
         &self.gpu
     }

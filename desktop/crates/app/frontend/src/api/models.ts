@@ -26,13 +26,14 @@ export type ItemContent =
   | { kind: 'media'; mediaId: string; options: VideoOptions }
   | { kind: 'presentation'; mediaId?: string; slides: string[] }
   | { kind: 'capture'; options: CaptureOptions; source?: CaptureSource }
+  | { kind: 'scripture'; reference: string; translation: string; parallel?: string }
   | { kind: 'header' };
 export type ServiceItem = { id: string; title?: string; notes?: string; background?: string; content: ItemContent };
 export type Service = { id: string; scheduledAtMs: number; title: string; leader?: string; notes?: string; endedAtMs?: number; items: ServiceItem[] };
 
 export type LiveSong = { song_id: string; version_id: string; sections: Section[]; title?: string; credits?: Credits };
 export type SessionItemKind =
-  | { kind: 'text'; data: { steps: string[] } }
+  | { kind: 'text'; data: { steps: string[]; parallel?: string[]; captions?: string[] } }
   | { kind: 'image'; data: { path: string } }
   | { kind: 'video' | 'audio'; data: { path: string; options?: VideoOptions } }
   | { kind: 'presentation'; data: { path: string; slides?: string[] } }
@@ -53,6 +54,11 @@ export function newId() {
 
 export const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 export const isPast = (service: Service, todayStartsAt = startOfToday()) => service.endedAtMs != null || service.scheduledAtMs < todayStartsAt;
+
+export type BibleInfo = { id: string; name: string; abbreviation: string; language: string; bundled: boolean };
+export type PassageSlide = { text: string; parallel: string; caption: string };
+export type Passage = { title: string; warning?: string | null; slides: PassageSlide[] };
+export type BibleHit = { reference: string; text: string };
 
 export type TemplatePart = { id: string; title: string; optional?: boolean; notes?: string; items: ServiceItem[] };
 export type ServiceTemplate = { id: string; name: string; title?: string; weekday?: number; startMinutes?: number; parts: TemplatePart[] };

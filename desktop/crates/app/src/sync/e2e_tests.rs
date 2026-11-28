@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 
 use persistence::Repository;
 use protocol::model::{new_id, ItemContent, Section, SectionKind, Service, ServiceItem, ServiceTemplate, Song, SongItem, SongVersion};
@@ -9,7 +8,7 @@ use super::cycle;
 use crate::Db;
 
 fn computer() -> Db {
-    Db(Arc::new(Mutex::new(Repository::new(":memory:").unwrap())))
+    Db::new(Repository::new(":memory:").unwrap())
 }
 
 fn song() -> Song {

@@ -6,7 +6,7 @@ import { assertNotLive, freeze, indexFields, itemByUid, itemsOf, logged, require
 import { defined } from "./lib/util";
 import { sectionKind } from "./schema";
 import { nextSeq, tombstone } from "./lib/clock";
-import { applyPatch, entriesOf, labelToSection, newId, resolveEntries, sectionLabel, type Entry } from "@magi/shared";
+import { applyPatch, entriesOf, labelToSection, newId, parseReference, resolveEntries, scriptureTitle, sectionLabel, type Entry } from "@magi/shared";
 
 async function requireService(ctx: QueryCtx, uid: string): Promise<Doc<"services">> {
   const service = await serviceByUid(ctx, uid);
@@ -15,18 +15,25 @@ async function requireService(ctx: QueryCtx, uid: string): Promise<Doc<"services
 }
 
 async function describe(ctx: QueryCtx, item: Doc<"serviceItems">) {
-  const base = { id: item.uid, kind: item.content.kind, title: item.title ?? null, notes: item.notes, songId: null as string | null, key: undefined as string | undefined, versionNumber: null as number | null, edited: false, entries: [] as ReturnType<typeof resolveEntries>, librarySections: [] as { id: string; label: string }[] };
-  if (item.content.kind !== "song") return { ...base, title: item.title ?? item.content.kind };
-  const song = await songByUid(ctx, item.content.songId);
-  const version = await versionFor(ctx, item.content);
+  const base = { id: item.uid, kind: item.content.kind, title: item.title ?? null, notes: item.notes, songId: null as string | null, key: undefined as string | undefined, versionNumber: null as number | null, edited: false, entries: [] as ReturnType<typeof resolveEntries>, librarySections: [] as { id: string; label: string }[], steps: [] as string[], scripture: null as { reference: string; translation: string; parallel?: string } | null, media: null as { title: string; kind: string } | null };
+  const content = item.content;
+  if (content.kind === "text") return { ...base, title: item.title ?? content.steps[0]?.split("\n")[0] ?? "Text", steps: content.steps };
+  if (content.kind === "scripture") return { ...base, title: item.title ?? scriptureTitle(content.reference, content.translation, content.parallel), scripture: { reference: content.reference, translation: content.translation, parallel: content.parallel } };
+  if (content.kind === "media") {
+    const media = await ctx.db.query("media").withIndex("by_uid", (q) => q.eq("uid", content.mediaId)).unique();
+    return { ...base, title: item.title ?? media?.title ?? "Missing media", media: media ? { title: media.title, kind: media.kind } : null };
+  }
+  if (content.kind !== "song") return { ...base, title: item.title ?? content.kind };
+  const song = await songByUid(ctx, content.songId);
+  const version = await versionFor(ctx, content);
   return {
     ...base,
     title: item.title ?? song?.title ?? "Missing song",
     songId: song ? song.uid : null,
-    key: item.content.key ?? song?.key,
-    versionNumber: item.content.versionId ? (version?.number ?? null) : null,
-    edited: !!item.content.arrangement,
-    entries: version ? resolveEntries(item.content.arrangement, version) : [],
+    key: content.key ?? song?.key,
+    versionNumber: content.versionId ? (version?.number ?? null) : null,
+    edited: !!content.arrangement,
+    entries: version ? resolveEntries(content.arrangement, version) : [],
     librarySections: version?.sections.map((s) => ({ id: s.id, label: sectionLabel(s) })) ?? [],
   };
 }
@@ -133,12 +140,61 @@ export const addHeader = mutation({
   },
 });
 
+export const addText = mutation({
+  args: { serviceId: v.string(), title: v.string(), steps: v.array(v.string()) },
+  handler: async (ctx, { serviceId, title, steps }) => {
+    await requirePermission(ctx, "arrange");
+    return append(ctx, await requireService(ctx, serviceId), { kind: "text", steps }, title.trim() || undefined);
+  },
+});
+
+const scriptureArgs = v.object({ reference: v.string(), translation: v.string(), parallel: v.optional(v.string()) });
+
+function checkedScripture({ reference, translation, parallel }: { reference: string; translation: string; parallel?: string }) {
+  const parsed = parseReference(reference);
+  if (!parsed.ok) throw new ConvexError(parsed.error);
+  const id = translation.trim().toLowerCase() || "kjv";
+  const second = parallel?.trim().toLowerCase();
+  return { kind: "scripture" as const, reference: reference.trim(), translation: id, ...(second && second !== id ? { parallel: second } : {}) };
+}
+
+export const addScripture = mutation({
+  args: { serviceId: v.string(), scripture: scriptureArgs },
+  handler: async (ctx, { serviceId, scripture }) => {
+    await requirePermission(ctx, "arrange");
+    return append(ctx, await requireService(ctx, serviceId), checkedScripture(scripture));
+  },
+});
+
+export const addMedia = mutation({
+  args: { serviceId: v.string(), mediaId: v.string() },
+  handler: async (ctx, { serviceId, mediaId }) => {
+    await requirePermission(ctx, "arrange");
+    const media = await ctx.db.query("media").withIndex("by_uid", (q) => q.eq("uid", mediaId)).unique();
+    if (!media) throw new ConvexError("That media file is not in the library");
+    if (media.kind === "presentation") throw new ConvexError("Slides are added in PALTO");
+    const options = { confidence: false, looping: false, start_ms: 0, end_ms: null, volume: 100, rate_percent: 100 };
+    return append(ctx, await requireService(ctx, serviceId), { kind: "media", mediaId, options });
+  },
+});
+
+export const mediaList = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermission(ctx, "view");
+    const media = await ctx.db.query("media").collect();
+    return media.filter((m) => m.kind !== "presentation").map((m) => ({ id: m.uid, title: m.title, kind: m.kind })).sort((a, b) => a.title.localeCompare(b.title));
+  },
+});
+
 export const updateItem = mutation({
-  args: { itemId: v.string(), key: v.optional(v.string()), notes: v.optional(v.string()), title: v.optional(v.string()) },
-  handler: async (ctx, { itemId, key, notes, title }) => {
+  args: { itemId: v.string(), key: v.optional(v.string()), notes: v.optional(v.string()), title: v.optional(v.string()), steps: v.optional(v.array(v.string())), scripture: v.optional(scriptureArgs) },
+  handler: async (ctx, { itemId, key, notes, title, steps, scripture }) => {
     await requirePermission(ctx, "arrange");
     const item = await itemByUid(ctx, itemId);
-    const content = key !== undefined && item.content.kind === "song" ? { ...item.content, key: key.trim() || undefined } : item.content;
+    let content = key !== undefined && item.content.kind === "song" ? { ...item.content, key: key.trim() || undefined } : item.content;
+    if (steps !== undefined && content.kind === "text") content = { ...content, steps };
+    if (scripture !== undefined && content.kind === "scripture") content = checkedScripture(scripture);
     await logged(ctx, "service", item.serviceUid, () => ctx.db.patch(item._id, { ...defined({ notes, title }), content }));
   },
 });

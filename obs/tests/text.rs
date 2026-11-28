@@ -41,6 +41,8 @@ fn section_and_song_info_show_only_for_songs() {
     assert_eq!(text(Kind::Section, Some(&fixture("song")), &options), "Verse 1");
     assert_eq!(text(Kind::Section, Some(&fixture("song_tag")), &options), "Ending");
     assert_eq!(text(Kind::Section, Some(&fixture("text")), &options), "");
+    assert_eq!(text(Kind::Section, Some(&fixture("scripture")), &options), "John 3:16 · KJV");
+    assert_eq!(text(Kind::SongInfo, Some(&fixture("scripture")), &options), "");
     assert_eq!(text(Kind::SongInfo, Some(&fixture("text")), &options), "");
     assert_eq!(text(Kind::SongInfo, Some(&fixture("song")), &options), "Amazing Grace\nJohn Newton\nPublic Domain · CCLI Song #22025 · CCLI License #12345");
 }

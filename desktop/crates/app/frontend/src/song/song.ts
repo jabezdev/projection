@@ -9,7 +9,8 @@ const colors: Record<SectionKind, string> = { verse: '#4f91e8', chorus: '#e76774
 const prefixes: Record<SectionKind, string> = { verse: 'V', pre_chorus: 'PC', chorus: 'C', bridge: 'BR', intro: 'I', outro: 'O', tag: 'T', other: '' };
 export const kindColor = (kind: SectionKind) => colors[kind];
 export const sectionColor = (section: Section) => section.color || colors[section.kind];
-export const sectionCode = (section: Section) => `${section.kind === 'other' ? (section.name?.trim()[0]?.toUpperCase() || 'P') : prefixes[section.kind]}${section.number ?? ''}`;
+export const verseCode = (caption?: string) => caption?.match(/(\d+(?::\d+)?) · /)?.[1];
+export const sectionCode = (section: Section) => `${section.kind === 'other' ? (verseCode(section.name) || section.name?.trim()[0]?.toUpperCase() || 'P') : prefixes[section.kind]}${section.number ?? ''}`;
 export const sectionLabel = (section: Section) => section.kind === 'other' ? (section.name?.trim() || 'Part') : `${sectionKinds.find(k => k.kind === section.kind)?.label}${section.number != null ? ` ${section.number}` : ''}${section.name ? ` · ${section.name}` : ''}`;
 export const slides = (section: Section) => splitSlides(section.lyrics);
 
@@ -90,8 +91,21 @@ export function fromServiceDraft(draft: SongDraft, version: SongVersion): Entry[
 }
 
 export type Occurrence = { key: string; section: Section; lines: string[]; start: number };
+export const SCRIPTURE_COLOR = '#c9a24a';
 export function occurrences(item: SessionItem): Occurrence[] {
   if (item.kind.kind !== 'text') return [];
+  const captions = item.kind.data.captions;
+  if (captions?.length) {
+    const steps = item.kind.data.steps;
+    const runs: Occurrence[] = [];
+    steps.forEach((line, index) => {
+      const caption = captions[index] ?? '';
+      const last = runs.at(-1);
+      if (last && last.section.name === caption) last.lines.push(line);
+      else runs.push({ key: `${item.id}-${index}`, section: { id: `${item.id}-${index}`, kind: 'other', name: caption, color: SCRIPTURE_COLOR, lyrics: '' }, lines: [line], start: index });
+    });
+    return runs;
+  }
   const sections: Section[] = item.song?.sections ?? [{ id: 'text', kind: 'other', name: 'Text', lyrics: item.kind.data.steps.join('\n\n') }];
   let offset = 0;
   return sections.map((section, index) => {

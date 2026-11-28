@@ -5,6 +5,8 @@ export const songItem = (song: Song): ServiceItem => ({ id: newId(), content: { 
 export const mediaItem = (media: MediaFile): ServiceItem => ({ id: newId(), title: media.title, content: { kind: 'media', mediaId: media.id, options: defaultVideoOptions } });
 export const captureItem = (source: CaptureSource): ServiceItem => ({ id: newId(), title: source.name, content: { kind: 'capture', source, options: defaultCaptureOptions } });
 export const headerItem = (title: string): ServiceItem => ({ id: newId(), title, content: { kind: 'header' } });
+export const textItem = (): ServiceItem => ({ id: newId(), title: 'Text', content: { kind: 'text', steps: [] } });
+export const scriptureItem = (reference: string, translation: string, parallel?: string): ServiceItem => ({ id: newId(), content: { kind: 'scripture', reference, translation, ...(parallel ? { parallel } : {}) } });
 
 export function withPartLyrics(song: SongItem, version: SongVersion, occurrence: number, lyrics: string): SongItem {
   const entries = entriesOf(song, version);

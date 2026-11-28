@@ -1,0 +1,12 @@
+[package]
+name = "bible"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+quick-xml = "0.42"
+flate2 = "1.1"
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2"] }

@@ -77,3 +77,7 @@ function trimBlankLines(lines: string[]): string[] {
   while (end > start && !lines[end - 1].trim()) end--;
   return lines.slice(start, end);
 }
+
+export function splitSlidesText(text: string): string[] {
+  return text.replace(/\r\n?/g, "\n").split(/\n[ \t]*\n(?:[ \t]*\n)*/).map((slide) => slide.split("\n").map((line) => line.trim()).join("\n").trim()).filter(Boolean);
+}

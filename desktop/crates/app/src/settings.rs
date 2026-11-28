@@ -202,6 +202,11 @@ pub fn set_output_state(state: tauri::State<OutputState>, app: tauri::AppHandle,
     if let Some(feed) = app.try_state::<scene::SceneFeed>() {
         feed.refresh();
     }
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        if state.db.fitter.set_style(scene::lyric_style(&value)) {
+            let _ = state.send(protocol::EngineCommand::RefreshService);
+        }
+    }
     let event = serde_json::json!({ "domain": domain, "value": value });
     app.emit("output:changed", event).map_err(|e| e.to_string())
 }

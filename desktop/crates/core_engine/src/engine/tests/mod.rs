@@ -9,6 +9,7 @@ use std::cell::RefCell;
 mod coalescing;
 mod cues;
 mod media;
+mod stage;
 
 #[derive(Default)]
 struct FakeAssets {
@@ -72,9 +73,7 @@ fn text_item(id: i64, steps: &[&str]) -> SessionItem {
         background: None,
         id: id.to_string(),
         title: None,
-        kind: SessionItemKind::Text {
-            steps: steps.iter().map(|s| s.to_string()).collect(),
-        },
+        kind: SessionItemKind::text(steps.iter().map(|s| s.to_string()).collect()),
     }
 }
 

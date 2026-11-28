@@ -28,4 +28,4 @@ In `web/`: `bun install && bun run dev:backend` (choose "Start without an accoun
 
 `site/` is the public page and setup guide: static HTML, no build. The download buttons read the latest release from the GitHub API. Deploy: a Cloudflare Pages project `palto-site` and the "Deploy PALTO site" workflow (also on pushes to `site/` once the repository variable `SITE_ENABLED` is `true`).
 
-MIT. Lucide icons: ISC.
+MIT. Lucide icons: ISC. Bundled Bibles (KJV, Ang Dating Biblia 1905) are public domain, from [open-bibles](https://github.com/seven1m/open-bibles); `desktop/crates/bible/data/*.tsv.gz` is made from their OSIS files with the crate's own importer.

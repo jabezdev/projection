@@ -40,10 +40,12 @@ pub fn text(kind: Kind, feed: Option<&FeedState>, options: &Options) -> String {
         return String::new();
     }
     let is_song = feed.item.as_ref().is_some_and(|i| i.kind == FeedItemKind::Song);
+    let is_scripture = feed.item.as_ref().is_some_and(|i| i.kind == FeedItemKind::Scripture);
     let text = match kind {
         Kind::Lyrics if options.songs_only && !is_song => String::new(),
         Kind::Lyrics => lyrics(&feed.lines, options),
         Kind::Section if is_song => feed.section.clone().unwrap_or_default(),
+        Kind::Section if is_scripture => feed.reference.clone().unwrap_or_default(),
         Kind::SongInfo if is_song => feed.song.as_ref().map(|song| fill(&options.template, song, feed, &options.license)).unwrap_or_default(),
         Kind::Section | Kind::SongInfo => String::new(),
     };

@@ -8,7 +8,7 @@ mod settings_files;
 
 use std::error::Error;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 use core_engine::{EngineEvent, EngineInput, EngineSnapshot, Files};
@@ -62,9 +62,12 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
 
     let mut warnings = settings_files::load_output_and_input_settings(app, &dir);
     let (config, config_path) = settings_files::load_app_config(app, &dir, &channels.engine);
-    let repo = Repository::new(dir.join(DB_FILENAME))?;
+    let mut repo = Repository::new(dir.join(DB_FILENAME))?;
     repo.seed_default_template(crate::now_ms())?;
-    let db = Db(Arc::new(Mutex::new(repo)));
+    let bibles = Arc::new(bible::Bibles::new(Some(dir.join(crate::library::bibles::BIBLE_FOLDER))));
+    repo.set_bibles(bibles.clone());
+    app.manage(crate::library::bibles::BibleStore(bibles));
+    let db = Db::new(repo);
     warnings.extend(crash_recovery::restore_last_service(app, &dir, &db, &channels)?);
 
     app.manage(StartupWarnings(warnings));
@@ -78,6 +81,7 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
     streamdeck::start(app.handle().clone())?;
 
     app.manage(AppState { engine: channels.engine.clone(), snapshot: channels.snapshot.clone(), db: db.clone() });
+    let fitter = db.fitter.clone();
     let store = Storage::start(db, channels.events.clone())?;
     app.manage(store.clone());
 
@@ -85,10 +89,21 @@ pub(crate) fn run(app: &mut tauri::App, channels: Channels) -> Result<(), Box<dy
     remote_server::start(app, &channels, &config, &dir);
     event_bridge::forward_engine_events(app.handle().clone(), &channels);
     let media = outputs::start(app, &channels, &config, &dir)?;
+    start_fitting(app, &fitter, &channels);
     start_engine_thread(channels, media, store)?;
     crate::sync::start(app.handle(), dir.clone())?;
     crate::system::check::start_if_due(app.handle(), &dir);
     Ok(())
+}
+
+fn start_fitting(app: &tauri::App, fitter: &crate::library::fit::Fitter, channels: &Channels) {
+    if let Some(fonts) = app.state::<crate::output::NativeOutputs>().fonts() {
+        fitter.set_fonts(fonts);
+    }
+    if let Ok(config) = app.state::<crate::settings::OutputState>().config.lock() {
+        fitter.set_style(crate::output::scene::lyric_style(&config));
+    }
+    let _ = channels.engine.command(core_engine::EngineCommand::RefreshService);
 }
 
 fn start_engine_thread(channels: Channels, media: Arc<NativeMedia>, store: Storage) -> std::io::Result<()> {

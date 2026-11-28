@@ -4,7 +4,7 @@ use protocol::model::{Author, AuthorRole, Change, Credits, Entry, ItemContent, M
 use protocol::sync::{Conflict, Push, RecordKind, SyncState, SyncStatus};
 use protocol::{
     CaptureFit, LiveService, LiveSong, CaptureKind, CaptureOptions, CaptureSource, EngineCommand, EngineEvent, InputBinding, InputBindings, InputTrigger, MediaAction, MediaDirective, MidiMessage, OutputConfig, PlaybackKind,
-    PlaybackPhase, PlaybackReport, PlaybackState, SessionItem, SessionItemKind, VideoOptions,
+    PlaybackPhase, PlaybackReport, PlaybackState, ProgramState, SessionItem, SessionItemKind, StageState, StageTimer, TimerAction, VideoOptions,
 };
 use serde::Serialize;
 
@@ -58,6 +58,7 @@ fn service(options: VideoOptions) -> Service {
         ItemContent::Media { media_id: "med1".into(), options },
         ItemContent::Presentation { media_id: Some("med2".into()), slides: vec!["/media/p1.png".into()] },
         ItemContent::Capture { options: CaptureOptions::default(), source: Some(CaptureSource { kind: CaptureKind::Screen, id: "screen:1".into(), name: "Main".into() }) },
+        ItemContent::Scripture { reference: "John 3:16-17".into(), translation: "kjv".into(), parallel: Some("adb1905".into()) },
         ItemContent::Header,
     ];
     let items = content.into_iter().enumerate().map(|(i, content)| ServiceItem { id: format!("item{i}"), title: Some("Item".into()), notes: Some("Note".into()), background: Some("shader:aurora".into()), content }).collect();
@@ -117,7 +118,7 @@ fn generated() -> String {
             "items",
             "SessionItem[]",
             [
-                SessionItem { song: Some(LiveSong { song_id: "song1".into(), version_id: "ver1".into(), sections: song().current.sections, title: song().title, credits: song().credits }), ..item(1, SessionItemKind::Text { steps: vec!["Line one".into()] }) },
+                SessionItem { song: Some(LiveSong { song_id: "song1".into(), version_id: "ver1".into(), sections: song().current.sections, title: song().title, credits: song().credits }), ..item(1, SessionItemKind::text(vec!["Line one".into()])) },
                 item(2, SessionItemKind::Image { path: "/media/a.png".into() }),
                 item(3, SessionItemKind::Video { path: "/media/b.mp4".into(), options: options.clone() }),
                 item(4, SessionItemKind::Audio { path: "/media/c.mp3".into(), options }),
@@ -130,7 +131,33 @@ fn generated() -> String {
                     },
                 ),
                 item(7, SessionItemKind::Section {}),
+                item(8, SessionItemKind::Text { steps: vec!["For God so loved".into()], parallel: vec!["Sapagka't".into()], captions: vec!["John 3:16 · KJV · ADB1905".into()] }),
             ],
+        ),
+        sample(
+            "stageCommands",
+            "({ type: 'stage_timer'; payload: { action: TimerAction } } | { type: 'set_stage_message'; payload: { text: string } })[]",
+            [
+                EngineCommand::StageTimer { action: TimerAction::Start { duration_ms: 1_800_000 } },
+                EngineCommand::StageTimer { action: TimerAction::Pause },
+                EngineCommand::StageTimer { action: TimerAction::Resume },
+                EngineCommand::StageTimer { action: TimerAction::Adjust { delta_ms: -60_000 } },
+                EngineCommand::StageTimer { action: TimerAction::Clear },
+                EngineCommand::SetStageMessage { text: "Wrap up".into() },
+            ],
+        ),
+        sample(
+            "program",
+            "ProgramState",
+            ProgramState {
+                active_item_id: Some("8".into()),
+                active_step_index: Some(0),
+                active_text: "For God so loved".into(),
+                active_parallel: "Sapagka't".into(),
+                active_caption: "John 3:16 · KJV · ADB1905".into(),
+                stage: StageState { message: "Wrap up".into(), timer: Some(StageTimer { duration_ms: 1_800_000, remaining_ms: 900_000, running_since_ms: Some(1_795_000_000_000) }) },
+                ..ProgramState::default()
+            },
         ),
         sample("song", "Song", song()),
         sample("media", "MediaFile[]", [
@@ -170,7 +197,8 @@ fn generated() -> String {
          import type { MediaAction, MediaDirective, PlaybackReport, PlaybackState } from './playback';\n\
          import type { Conflict, LiveService, MediaFile, Service, ServiceTemplate, SessionItem, Song, SyncStatus } from './models';\n\
          import type { OutputConfig } from '../settings/outputState';\n\
-         import type { InputBindings } from './input';\n\n",
+         import type { InputBindings } from './input';\n\
+         import type { ProgramState, TimerAction } from './useEngine';\n\n",
     );
     for sample in samples {
         text.push_str(&sample);

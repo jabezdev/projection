@@ -43,7 +43,13 @@ pub struct SessionItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum SessionItemKind {
-    Text { steps: Vec<String> },
+    Text {
+        steps: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parallel: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        captions: Vec<String>,
+    },
     Image { path: String },
     Video { path: String, #[serde(default)] options: VideoOptions },
     Audio { path: String, #[serde(default)] options: VideoOptions },
@@ -53,6 +59,10 @@ pub enum SessionItemKind {
 }
 
 impl SessionItemKind {
+    pub fn text(steps: Vec<String>) -> Self {
+        SessionItemKind::Text { steps, parallel: Vec::new(), captions: Vec::new() }
+    }
+
     pub fn is_cueable(&self) -> bool {
         !matches!(self, SessionItemKind::Section {})
     }

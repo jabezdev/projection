@@ -3,6 +3,7 @@ import type { LiveService, SessionItem } from '../api/models';
 import { catalog, resolveService } from '../api/resolve';
 import { UI_ONLY_STORAGE_KEY, loadUiOnlyStore, saveUiOnlyStore } from './store';
 import { runDemoCommand } from './commands';
+import { demoScripture } from './bible';
 import type { UnlistenFn } from '../api/tauri';
 
 export const UI_ONLY_DURATIONS: Record<string, number> = { '/demo/countdown.mp4': 10_000, '/demo/worship-loop.mp4': 8_000, '/demo/offering-music.mp3': 20_000 };
@@ -39,7 +40,8 @@ export class UiOnlyEngine {
   live(id: string | null = this.store.active_service_id): LiveService | null {
     const service = id == null ? null : this.store.services[id];
     if (!service) return null;
-    return resolveService(service, catalog(Object.values(this.store.songs), this.store.media, Object.values(this.store.versions)));
+    const live = resolveService(service, catalog(Object.values(this.store.songs), this.store.media, Object.values(this.store.versions)));
+    return { ...live, items: live.items.map((item, i) => { const content = service.items[i]?.content; return content?.kind === 'scripture' ? demoScripture(item, content) : item; }) };
   }
 
   items(): SessionItem[] {

@@ -122,3 +122,11 @@ test("a template pushed with this computer's slide list is stored without it", a
   const pulled = (await pull()).templates.find((t) => t.id === "sunday")!;
   expect(pulled.parts[3].items[0].content).toEqual({ kind: "presentation" });
 });
+
+test("Bible passages from a computer keep their reference and translations", async () => {
+  const { pull, push } = await paired();
+  const verse = { id: "v", content: { kind: "scripture", reference: "John 3:16", translation: "niv", parallel: "adb1905" } };
+  await push([{ type: "create", kind: "service", record: record("svc", "Sunday", [verse]) }]);
+  const pulled = await pull();
+  expect(pulled.services[0].service.items[0].content).toEqual(verse.content);
+});

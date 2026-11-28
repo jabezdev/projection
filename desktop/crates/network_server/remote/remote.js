@@ -80,7 +80,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 function setStatus(text, ok) {
   $('connection').textContent = text;
   $('connection').classList.toggle('ok', ok);
-  document.querySelectorAll('.controls button, .media button').forEach(b => { b.disabled = !ok; });
+  document.querySelectorAll('.controls button, .media button, .stage-view button').forEach(b => { b.disabled = !ok; });
 }
 
 function send(type, payload) {
@@ -131,6 +131,8 @@ function slidesOf(item) {
         return splitSlides(section.lyrics).map(text => ({ text, ...info }));
       });
     }
+    const captions = kind.data.captions ?? [];
+    if (captions.length) return kind.data.steps.map((text, i) => ({ text, code: captions[i]?.match(/(\d+(?::\d+)?) · /)?.[1] ?? String(i + 1), color: '#c9a24a', name: captions[i] ?? '' }));
     return kind.data.steps.map((text, i) => ({ text, code: String(i + 1), color: null, name: '' }));
   }
   if (kind.kind === 'presentation') return (kind.data.slides ?? []).map((_, i) => ({ text: `Slide ${i + 1}`, code: String(i + 1), color: null, name: '' }));
@@ -152,7 +154,37 @@ function render() {
   renderLive();
   renderOrder();
   renderMedia();
+  renderStage();
 }
+
+function remainingMs(timer) {
+  return timer.running_since_ms == null ? timer.remaining_ms : timer.remaining_ms - Math.max(0, Date.now() - timer.running_since_ms);
+}
+
+function timerText(ms) {
+  const seconds = Math.ceil(Math.abs(ms) / 1000);
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = seconds % 60;
+  const body = h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+  return ms < 0 ? `+${body}` : body;
+}
+
+function renderStage() {
+  const stage = state.program?.stage ?? { message: '', timer: null };
+  const timer = stage.timer;
+  const remaining = timer ? remainingMs(timer) : null;
+  $('stage-clock').textContent = remaining == null ? '–:––' : timerText(remaining);
+  $('stage-clock').className = `stage-clock${remaining == null ? '' : remaining <= 0 ? ' over' : remaining <= 120000 ? ' near' : ''}`;
+  $('stage-start').hidden = !!timer;
+  $('stage-running').hidden = !timer;
+  $('stage-toggle').textContent = timer?.running_since_ms != null ? 'Pause' : 'Resume';
+  $('stage-showing').hidden = !stage.message;
+  $('stage-showing').textContent = stage.message ? `Showing: ${stage.message}` : '';
+  $('stage-message-clear').hidden = !stage.message;
+}
+setInterval(() => { if (state.program?.stage?.timer && !$('view-stage').hidden) renderStage(); }, 500);
+
+const timerAction = action => send('stage_timer', { action });
+const stageMessage = text => send('set_stage_message', { text });
 
 function renderLive() {
   const list = items();
@@ -254,6 +286,7 @@ function setTab(tab) {
   document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
   $('view-live').hidden = tab !== 'live';
   $('view-order').hidden = tab !== 'order';
+  $('view-stage').hidden = tab !== 'stage';
   if (tab === 'order') requestAnimationFrame(() => document.querySelector('.item.current')?.scrollIntoView({ block: 'center' }));
 }
 
@@ -263,12 +296,19 @@ $('prev').addEventListener('click', () => send('prev'));
 $('next-button').addEventListener('click', () => send('next'));
 $('media-toggle').addEventListener('click', () => send(state.playback && !state.playback.paused ? 'pause' : 'play'));
 $('media-stop').addEventListener('click', () => send('stop'));
+document.querySelectorAll('[data-minutes]').forEach(b => b.addEventListener('click', () => timerAction({ type: 'start', duration_ms: Number(b.dataset.minutes) * 60000 })));
+document.querySelectorAll('[data-adjust]').forEach(b => b.addEventListener('click', () => timerAction({ type: 'adjust', delta_ms: Number(b.dataset.adjust) })));
+$('stage-toggle').addEventListener('click', () => timerAction({ type: state.program?.stage?.timer?.running_since_ms != null ? 'pause' : 'resume' }));
+$('stage-clear').addEventListener('click', () => timerAction({ type: 'clear' }));
+document.querySelectorAll('[data-message]').forEach(b => b.addEventListener('click', () => stageMessage(b.dataset.message)));
+$('stage-form').addEventListener('submit', event => { event.preventDefault(); const text = $('stage-text').value.trim(); if (text) { stageMessage(text); $('stage-text').value = ''; } });
+$('stage-message-clear').addEventListener('click', () => stageMessage(''));
 document.addEventListener('keydown', event => {
   if ($('remote').hidden || event.target instanceof HTMLInputElement) return;
   if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'PageDown') { event.preventDefault(); send('next'); }
   if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); send('prev'); }
 });
 
-setTab(storage.get(TAB) === 'order' ? 'order' : 'live');
+setTab(['order', 'stage'].includes(storage.get(TAB)) ? storage.get(TAB) : 'live');
 setStatus('Connecting…', false);
 check();

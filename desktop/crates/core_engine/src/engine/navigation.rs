@@ -18,7 +18,7 @@ pub(super) fn navigation_target(
         .unwrap_or(0);
     let mut step = program.active_step_index;
     let steps = match items.get(idx).map(|it| &it.kind) {
-        Some(SessionItemKind::Text { steps }) => steps.len(),
+        Some(SessionItemKind::Text { steps, .. }) => steps.len(),
         Some(SessionItemKind::Presentation { slides, .. }) => slides.len(),
         _ => 0,
     };

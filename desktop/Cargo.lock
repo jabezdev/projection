@@ -168,6 +168,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "ashpd",
+ "bible",
  "chrono",
  "core_engine",
  "crossbeam",
@@ -395,6 +396,18 @@ name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
+name = "bible"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "quick-xml",
+ "serde",
+ "serde_json",
+ "zip 9.0.5",
+]
 
 [[package]]
 name = "bindgen"
@@ -4031,6 +4044,7 @@ name = "persistence"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bible",
  "protocol",
  "rusqlite",
  "serde",

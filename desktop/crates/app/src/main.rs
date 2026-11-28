@@ -27,11 +27,18 @@ pub(crate) fn now_ms() -> i64 {
 }
 
 #[derive(Clone)]
-pub(crate) struct Db(Arc<Mutex<Repository>>);
+pub(crate) struct Db {
+    repo: Arc<Mutex<Repository>>,
+    pub(crate) fitter: Arc<library::fit::Fitter>,
+}
 
 impl Db {
+    pub(crate) fn new(repo: Repository) -> Self {
+        Self { repo: Arc::new(Mutex::new(repo)), fitter: Arc::default() }
+    }
+
     pub(crate) fn lock(&self) -> anyhow::Result<MutexGuard<'_, Repository>> {
-        self.0.lock().map_err(|_| anyhow::anyhow!("database lock poisoned"))
+        self.repo.lock().map_err(|_| anyhow::anyhow!("database lock poisoned"))
     }
 }
 
@@ -45,7 +52,9 @@ impl library::storage::ServiceWriter for Db {
     }
 
     fn resolve(&self, service: &protocol::model::Service) -> anyhow::Result<protocol::LiveService> {
-        self.lock()?.resolve_service(service)
+        let mut live = self.lock()?.resolve_service(service)?;
+        self.fitter.apply(&mut live);
+        Ok(live)
     }
 
     fn step(&self, service_id: &str, redo: bool) -> anyhow::Result<Option<protocol::model::Service>> {

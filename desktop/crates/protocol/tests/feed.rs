@@ -17,18 +17,23 @@ fn snapshot(display: DisplayMode, item: Option<&str>, step: Option<u32>) -> Engi
     let song = SessionItem {
         id: "i1".into(),
         title: None,
-        kind: SessionItemKind::Text { steps },
+        kind: SessionItemKind::text(steps),
         song: Some(LiveSong { song_id: "s1".into(), version_id: "v1".into(), sections, title: "Amazing Grace".into(), credits }),
         background: None,
     };
-    let welcome = SessionItem { id: "i2".into(), title: Some("Welcome".into()), kind: SessionItemKind::Text { steps: vec!["Welcome home".into()] }, song: None, background: None };
+    let welcome = SessionItem { id: "i2".into(), title: Some("Welcome".into()), kind: SessionItemKind::text(vec!["Welcome home".into()]), song: None, background: None };
     let service = Service { id: "svc".into(), scheduled_at_ms: 0, title: "Sunday".into(), leader: None, notes: None, ended_at_ms: None, items: Vec::new() };
-    let live = LiveService { service, items: vec![song, welcome] };
+    let verse = SessionItem { id: "i3".into(), title: Some("John 3:16 · KJV".into()), kind: SessionItemKind::Text { steps: vec!["For God so loved the world".into()], parallel: Vec::new(), captions: vec!["John 3:16 · KJV".into()] }, song: None, background: None };
+    let live = LiveService { service, items: vec![song, welcome, verse] };
     let text = item.zip(step).and_then(|(id, step)| match &live.item(id)?.kind {
-        SessionItemKind::Text { steps } => steps.get(step as usize).cloned(),
+        SessionItemKind::Text { steps, .. } => steps.get(step as usize).cloned(),
         _ => None,
     });
-    let program_state = ProgramState { display, active_item_id: item.map(Into::into), active_step_index: step, active_text: text.unwrap_or_default(), ..ProgramState::default() };
+    let caption = item.zip(step).and_then(|(id, step)| match &live.item(id)?.kind {
+        SessionItemKind::Text { captions, .. } => captions.get(step as usize).cloned(),
+        _ => None,
+    });
+    let program_state = ProgramState { display, active_item_id: item.map(Into::into), active_step_index: step, active_text: text.unwrap_or_default(), active_caption: caption.unwrap_or_default(), ..ProgramState::default() };
     EngineSnapshot { program_state, version: 1, service: Some(live), ..EngineSnapshot::default() }
 }
 
@@ -42,6 +47,7 @@ fn feed_messages_match_the_fixtures() {
         ("song", snapshot(DisplayMode::Live, Some("i1"), Some(0))),
         ("song_tag", snapshot(DisplayMode::Live, Some("i1"), Some(2))),
         ("text", snapshot(DisplayMode::Live, Some("i2"), Some(0))),
+        ("scripture", snapshot(DisplayMode::Live, Some("i3"), Some(0))),
         ("black", snapshot(DisplayMode::Black, Some("i1"), Some(1))),
         ("nothing", snapshot(DisplayMode::Clear, None, None)),
     ];

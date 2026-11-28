@@ -16,6 +16,7 @@ type Props = {
   run: (work: () => Promise<unknown>) => Promise<void>;
   persist: (service: Service) => Promise<void>;
   onOpenSettings: () => void;
+  onOpenBible: () => void;
   onLoadService: (serviceId: string) => Promise<boolean>;
   onEditService: (itemId?: string) => void;
   onOpenLibrary: () => void;
@@ -36,7 +37,7 @@ function groupItems(items: SessionItem[]): Group[] {
   return groups.filter(g => g.section || g.items.length);
 }
 
-export default function SessionPane({ live, pending, serviceRef, services, program, run, persist, onOpenSettings, onLoadService, onEditService, onOpenLibrary, onServicesChanged, confirm, onError, onEditPart, onCue }: Props) {
+export default function SessionPane({ live, pending, serviceRef, services, program, run, persist, onOpenSettings, onOpenBible, onLoadService, onEditService, onOpenLibrary, onServicesChanged, confirm, onError, onEditPart, onCue }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragged, setDragged] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; before: boolean } | null>(null);
@@ -94,7 +95,7 @@ export default function SessionPane({ live, pending, serviceRef, services, progr
         </div>;
       })}
     </div>
-    <div className="session-foot"><button onClick={onOpenSettings} aria-label="Open settings"><Icon name="settings"/>Settings</button><button onClick={onOpenLibrary}><Icon name="library"/>Library</button></div>
+    <div className="session-foot"><button onClick={onOpenSettings} aria-label="Open settings"><Icon name="settings"/>Settings</button><button onClick={onOpenLibrary}><Icon name="library"/>Library</button><button onClick={onOpenBible} title="Look up a verse and show it (Ctrl+B)"><Icon name="bible"/>Bible</button></div>
   </section>;
 }
 

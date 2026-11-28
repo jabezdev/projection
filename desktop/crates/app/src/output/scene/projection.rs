@@ -29,6 +29,8 @@ pub fn main_scene(config: &OutputConfig, program: &ProgramState, service: Option
     });
     MainScene {
         text: program.active_text.clone(),
+        parallel: program.active_parallel.clone(),
+        caption: program.active_caption.clone(),
         display: match program.display {
             DisplayMode::Live => Display::Live,
             DisplayMode::Clear => Display::Clear,

@@ -42,11 +42,15 @@ export function resolveItem(item: ServiceItem, { songs, versions, media }: Catal
     }
     case 'presentation': kind = { kind: 'presentation', data: { path: content.slides[0] ?? (content.mediaId ? media.get(content.mediaId)?.path ?? '' : ''), slides: content.slides } }; break;
     case 'capture': kind = content.source ? { kind: 'capture', data: { source: content.source, options: content.options } } : { kind: 'text', data: { steps: [] } }; break;
+    case 'scripture': kind = { kind: 'text', data: { steps: [] } }; title ??= scriptureTitle(content); break;
     case 'header': kind = { kind: 'section', data: {} }; break;
   }
   const path = backgroundPath(background, media);
   return { id: item.id, title, kind, ...(song ? { song } : {}), ...(path ? { background: path } : {}) };
 }
+
+export const scriptureTitle = (content: { reference: string; translation: string; parallel?: string }) =>
+  [content.reference.trim() || 'Bible passage', content.translation.toUpperCase(), content.parallel?.toUpperCase()].filter(Boolean).join(' · ');
 
 export function resolveService(service: Service, from: Catalog): LiveService {
   return { service, items: service.items.map(item => resolveItem(item, from)) };

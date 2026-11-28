@@ -28,6 +28,8 @@ impl Engine {
         if program.active_text != sel.text || force_media {
             program.active_text = sel.text;
         }
+        program.active_parallel = sel.parallel;
+        program.active_caption = sel.caption;
 
         self.sync_session(active_item.as_ref(), ports);
 
@@ -53,42 +55,41 @@ pub(super) struct Selection {
     next_item_id: Option<String>,
     step: Option<u32>,
     text: String,
+    parallel: String,
+    caption: String,
 }
 
 pub(super) fn resolve_selection(service: &LiveService, item_id: Option<&str>, step: Option<u32>) -> Selection {
     let items = &service.items;
     if items.is_empty() {
-        return Selection {
-            active_item_id: None,
-            next_item_id: None,
-            step: None,
-            text: String::new(),
-        };
+        return Selection::empty();
     }
 
     let requested = item_id.and_then(|id| items.iter().position(|it| it.id == id)).unwrap_or(0);
     let Some(idx) = next_cueable(items, requested).or_else(|| previous_cueable(items, requested)) else {
-        return Selection { active_item_id: None, next_item_id: None, step: None, text: String::new() };
+        return Selection::empty();
     };
     let item = &items[idx];
     let next_item_id = next_cueable(items, idx + 1).map(|i| items[i].id.clone());
 
-    let (step, text) = match &item.kind {
-        SessionItemKind::Text { steps } if !steps.is_empty() => {
+    let at = |list: &[String], i: u32| list.get(i as usize).cloned().unwrap_or_default();
+    let (step, text, parallel, caption) = match &item.kind {
+        SessionItemKind::Text { steps, parallel, captions } if !steps.is_empty() => {
             let i = step.filter(|&i| (i as usize) < steps.len()).unwrap_or(0);
-            (Some(i), steps[i as usize].clone())
+            (Some(i), at(steps, i), at(parallel, i), at(captions, i))
         }
         SessionItemKind::Presentation { slides, .. } if !slides.is_empty() => {
-            (Some(step.filter(|&i| (i as usize) < slides.len()).unwrap_or(0)), String::new())
+            (Some(step.filter(|&i| (i as usize) < slides.len()).unwrap_or(0)), String::new(), String::new(), String::new())
         }
-        _ => (None, String::new()),
+        _ => (None, String::new(), String::new(), String::new()),
     };
 
-    Selection {
-        active_item_id: Some(item.id.clone()),
-        next_item_id,
-        step,
-        text,
+    Selection { active_item_id: Some(item.id.clone()), next_item_id, step, text, parallel, caption }
+}
+
+impl Selection {
+    fn empty() -> Self {
+        Selection { active_item_id: None, next_item_id: None, step: None, text: String::new(), parallel: String::new(), caption: String::new() }
     }
 }
 

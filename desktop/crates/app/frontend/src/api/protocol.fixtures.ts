@@ -3,6 +3,7 @@ import type { MediaAction, MediaDirective, PlaybackReport, PlaybackState } from 
 import type { Conflict, LiveService, MediaFile, Service, ServiceTemplate, SessionItem, Song, SyncStatus } from './models';
 import type { OutputConfig } from '../settings/outputState';
 import type { InputBindings } from './input';
+import type { ProgramState, TimerAction } from './useEngine';
 
 export const videoPlayback = {
   "session_id": 7,
@@ -323,8 +324,95 @@ export const items = [
       "kind": "section",
       "data": {}
     }
+  },
+  {
+    "id": "8",
+    "title": "Item",
+    "kind": {
+      "kind": "text",
+      "data": {
+        "steps": [
+          "For God so loved"
+        ],
+        "parallel": [
+          "Sapagka't"
+        ],
+        "captions": [
+          "John 3:16 · KJV · ADB1905"
+        ]
+      }
+    }
   }
 ] satisfies SessionItem[];
+export const stageCommands = [
+  {
+    "type": "stage_timer",
+    "payload": {
+      "action": {
+        "type": "start",
+        "duration_ms": 1800000
+      }
+    }
+  },
+  {
+    "type": "stage_timer",
+    "payload": {
+      "action": {
+        "type": "pause"
+      }
+    }
+  },
+  {
+    "type": "stage_timer",
+    "payload": {
+      "action": {
+        "type": "resume"
+      }
+    }
+  },
+  {
+    "type": "stage_timer",
+    "payload": {
+      "action": {
+        "type": "adjust",
+        "delta_ms": -60000
+      }
+    }
+  },
+  {
+    "type": "stage_timer",
+    "payload": {
+      "action": {
+        "type": "clear"
+      }
+    }
+  },
+  {
+    "type": "set_stage_message",
+    "payload": {
+      "text": "Wrap up"
+    }
+  }
+] satisfies ({ type: 'stage_timer'; payload: { action: TimerAction } } | { type: 'set_stage_message'; payload: { text: string } })[];
+export const program = {
+  "display": "live",
+  "mode": "manual",
+  "active_item_id": "8",
+  "next_item_id": null,
+  "active_step_index": 0,
+  "active_text": "For God so loved",
+  "active_parallel": "Sapagka't",
+  "active_caption": "John 3:16 · KJV · ADB1905",
+  "background": null,
+  "stage": {
+    "message": "Wrap up",
+    "timer": {
+      "duration_ms": 1800000,
+      "remaining_ms": 900000,
+      "running_since_ms": 1795000000000
+    }
+  }
+} satisfies ProgramState;
 export const song = {
   "id": "song1",
   "title": "Amazing Grace",
@@ -497,6 +585,18 @@ export const service = {
       "notes": "Note",
       "background": "shader:aurora",
       "content": {
+        "kind": "scripture",
+        "reference": "John 3:16-17",
+        "translation": "kjv",
+        "parallel": "adb1905"
+      }
+    },
+    {
+      "id": "item6",
+      "title": "Item",
+      "notes": "Note",
+      "background": "shader:aurora",
+      "content": {
         "kind": "header"
       }
     }
@@ -613,6 +713,18 @@ export const serviceEvent = {
           },
           {
             "id": "item5",
+            "title": "Item",
+            "notes": "Note",
+            "background": "shader:aurora",
+            "content": {
+              "kind": "scripture",
+              "reference": "John 3:16-17",
+              "translation": "kjv",
+              "parallel": "adb1905"
+            }
+          },
+          {
+            "id": "item6",
             "title": "Item",
             "notes": "Note",
             "background": "shader:aurora",

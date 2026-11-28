@@ -129,3 +129,18 @@ test("edits are logged as small operations in the shared format", async () => {
   await admin.mutation(api.services.update, { serviceId, title: "Renamed later" });
   expect(await log(serviceId)).toHaveLength(before);
 });
+
+test("the web adds Bible passages, text and media, and checks references", async () => {
+  const { t, admin, serviceId } = await setup();
+  await expect(admin.mutation(api.services.addScripture, { serviceId, scripture: { reference: "Hezekiah 1:1", translation: "kjv" } })).rejects.toThrow("No book called");
+  const verseId = await admin.mutation(api.services.addScripture, { serviceId, scripture: { reference: "jn 3:16-17", translation: "KJV", parallel: "adb1905" } });
+  const textId = await admin.mutation(api.services.addText, { serviceId, title: "", steps: ["Welcome", "Coffee after"] });
+  await t.run((ctx) => ctx.db.insert("media", { uid: "loop", title: "Worship loop", kind: "video", seq: 1 }));
+  await admin.mutation(api.services.addMedia, { serviceId, mediaId: "loop" });
+  await admin.mutation(api.services.updateItem, { itemId: textId, steps: ["Welcome home"] });
+  await admin.mutation(api.services.updateItem, { itemId: verseId, scripture: { reference: "Juan 3:16", translation: "adb1905" } });
+  const items = (await admin.query(api.services.get, { serviceId }))!.items;
+  expect(items.map((i) => [i.kind, i.title])).toEqual([["song", "Amazing Grace"], ["scripture", "Juan 3:16 · ADB1905"], ["text", "Welcome home"], ["media", "Worship loop"]]);
+  expect(items[1].scripture).toEqual({ reference: "Juan 3:16", translation: "adb1905" });
+  expect(items[2].steps).toEqual(["Welcome home"]);
+});

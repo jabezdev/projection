@@ -320,7 +320,7 @@ kbd { padding: 1px 5px; border-radius: 2px; background: var(--bg-5); box-shadow:
 .service-rename input { width: 100%; padding: 7px 9px; border-radius: 3px; background: var(--bg-0); font-size: 14px; font-weight: 600; }
 .service-popover-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; border-top: 1px solid var(--seam); }
 .service-popover-foot button { justify-content: center; }
-.session-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; flex-shrink: 0; background: var(--seam); border-top: 1px solid var(--seam); }
+.session-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; flex-shrink: 0; background: var(--seam); border-top: 1px solid var(--seam); }
 .session-foot button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; background: var(--bg-3); color: var(--fg-2); font-size: 13px; font-weight: 600; box-shadow: inset 0 1px 0 var(--sheen); }
 .session-foot button:hover { background: var(--bg-4); color: var(--fg-1); }
 .session-foot button:hover .ui-icon:first-child { transform: none; }
@@ -670,3 +670,51 @@ input.lyric-part-name { padding: 2px 6px; border-radius: 3px; background: var(--
 .compare-columns > div { display: grid; gap: 8px; align-content: start; }
 .compare-value { margin: 0; padding: 10px 12px; border-radius: 3px; background: var(--bg-0); white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.5; max-height: 40vh; overflow: auto; }
 .compare-value.is-empty { color: var(--fg-3); font-style: italic; }
+
+.scripture-translations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scripture-translations label { display: grid; gap: 6px; color: var(--fg-3); font-size: 12px; font-weight: 600; }
+.scripture-translations select, .bible-dialog > input { width: 100%; padding: 8px; border-radius: 3px; background: var(--bg-0); }
+.passage-preview { display: grid; gap: 8px; }
+.passage-title { margin: 0; color: var(--fg-2); font-size: 12px; font-weight: 600; }
+.passage-warning { margin: 0; padding: 8px 10px; border-radius: 3px; background: var(--warn-wash); color: var(--warn); font-size: 12px; }
+.passage-verses { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: 340px; overflow: auto; }
+.passage-verses li { display: grid; grid-template-columns: 52px 1fr; column-gap: 10px; row-gap: 4px; padding: 8px 10px; border-radius: 3px; background: var(--bg-2); font-size: 13px; color: var(--fg-1); }
+.passage-verses small { grid-row: span 2; color: #c9a24a; font-family: var(--font-label); font-weight: 600; font-size: 13px; }
+.passage-parallel { color: var(--fg-2); }
+.bible-dialog { width: min(640px, 100%); }
+.bible-dialog-head { gap: 10px; }
+.bible-dialog-head h2 { margin: 0; flex: 1; font-size: 18px; }
+.bible-dialog-head > .ui-icon { color: #c9a24a; }
+.bible-dialog > input { font-size: 16px; padding: 10px 12px; }
+.bible-dialog-body { min-height: 120px; }
+.bible-hits { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 340px; overflow: auto; }
+.bible-hits button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border-radius: 3px; background: var(--bg-2); text-align: left; font-size: 13px; }
+.bible-hits button:hover { background: var(--bg-4); }
+.bible-hits strong { color: #c9a24a; font-family: var(--font-label); }
+.bible-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.bible-list li { display: grid; grid-template-columns: 70px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 3px; background: var(--bg-2); font-size: 13px; }
+.bible-list small { color: var(--fg-3); }
+.bible-settings h3 { margin: 8px 0 0; font-size: 13px; color: var(--fg-2); }
+.bible-settings button:not([class]) { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 3px; background: var(--bg-4); font-size: 13px; font-weight: 600; }
+
+.stage-panel { flex: 0 0 auto; }
+.stage-panel .output-bar small { margin-left: auto; color: var(--fg-3); font-size: 11px; }
+.stage-timer { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 10px 12px; }
+.stage-clock { min-width: 92px; padding: 6px 10px; border-radius: 3px; background: var(--bg-0); font-family: var(--font-label); font-size: 26px; font-weight: 600; text-align: center; }
+.stage-clock.is-near { color: var(--warn); }
+.stage-clock.is-over { color: #fff; background: #7a1c1c; }
+.stage-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.stage-buttons button:not(.primary-action), .stage-quick button, .stage-message-row button, .stage-showing button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border-radius: 3px; background: var(--bg-4); font-size: 12px; font-weight: 600; }
+.stage-buttons .primary-action { padding: 6px 10px; font-size: 12px; }
+.stage-buttons .unit-input { width: 64px; }
+.stage-buttons .unit-input input { padding: 5px; }
+.stage-buttons .ui-icon, .stage-showing .ui-icon { width: 14px; height: 14px; }
+.stage-message { display: grid; gap: 6px; padding: 0 12px 12px; }
+.stage-quick { display: flex; flex-wrap: wrap; gap: 4px; }
+.stage-message-row { display: flex; gap: 4px; }
+.stage-message-row input { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 3px; background: var(--bg-0); font-size: 13px; }
+.stage-showing { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px; border-radius: 3px; background: #ffd23f; color: #121314; font-weight: 600; font-size: 13px; }
+.stage-showing span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-showing button { background: #0002; }
+.item-field > input { padding: 8px 10px; border-radius: 3px; background: var(--bg-0); color: var(--fg-1); font-size: 15px; font-weight: 500; }
+.settings-fields.bible-settings { display: grid; grid-template-columns: minmax(0, 760px); align-content: start; gap: 12px; }

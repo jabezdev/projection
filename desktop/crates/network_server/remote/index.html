@@ -33,6 +33,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" id="tab-live" aria-selected="true" data-tab="live">Live</button>
       <button role="tab" id="tab-order" aria-selected="false" data-tab="order">Service</button>
+      <button role="tab" id="tab-stage" aria-selected="false" data-tab="stage">Stage</button>
     </nav>
     <p id="display-banner" class="banner" hidden></p>
 
@@ -57,6 +58,31 @@
 
     <section id="view-order" class="view order-view" hidden>
       <ol id="order" class="order"></ol>
+    </section>
+
+    <section id="view-stage" class="view stage-view" hidden>
+      <article class="stage-card">
+        <header><small>Timer on the confidence screen</small></header>
+        <output id="stage-clock" class="stage-clock">–:––</output>
+        <div id="stage-start" class="stage-grid">
+          <button data-minutes="5">5m</button><button data-minutes="10">10m</button><button data-minutes="20">20m</button>
+          <button data-minutes="30">30m</button><button data-minutes="45">45m</button><button data-minutes="60">60m</button>
+        </div>
+        <div id="stage-running" class="stage-grid" hidden>
+          <button id="stage-toggle">Pause</button><button data-adjust="-60000">−1m</button><button data-adjust="60000">+1m</button>
+          <button id="stage-clear" class="wide">Clear timer</button>
+        </div>
+      </article>
+      <article class="stage-card">
+        <header><small>Message on the confidence screen</small></header>
+        <p id="stage-showing" class="stage-showing" hidden></p>
+        <div class="stage-grid quick">
+          <button data-message="Wrap up">Wrap up</button><button data-message="5 minutes left">5 minutes left</button>
+          <button data-message="Please come up">Please come up</button><button data-message="Mic is off">Mic is off</button>
+        </div>
+        <form id="stage-form" class="stage-form"><input id="stage-text" maxlength="120" placeholder="Type a message"><button type="submit">Send</button></form>
+        <button id="stage-message-clear" class="wide">Clear message</button>
+      </article>
     </section>
 
     <footer class="controls">

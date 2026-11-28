@@ -25,7 +25,7 @@ form button { background: var(--live); border-color: var(--live); color: #1b0a05
 .status.ok { color: var(--fg-2); }
 .status.ok::before { background: var(--ok); }
 
-.tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
 .tabs button { border: 0; background: transparent; color: var(--fg-2); padding: 8px; border-radius: 7px; font: 600 .85rem/1 var(--label); letter-spacing: .12em; text-transform: uppercase; }
 .tabs button[aria-selected="true"] { background: var(--bg-4); color: var(--fg-1); }
 .banner { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--live-wash); border: 1px solid #ff5a3666; color: #ffb4a3; font-weight: 600; font-size: .92rem; }
@@ -96,3 +96,16 @@ form button { background: var(--live); border-color: var(--live); color: #1b0a05
   #view-live { grid-column: 1; }
   #remote .controls { grid-column: 1 / -1; }
 }
+
+.stage-view { display: flex; flex-direction: column; gap: 10px; }
+.stage-card { display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.stage-card small { color: var(--fg-2); font: 600 .78rem/1.2 var(--label); letter-spacing: .1em; text-transform: uppercase; }
+.stage-clock { display: block; text-align: center; font: 600 3.4rem/1.1 var(--label); font-variant-numeric: tabular-nums; padding: 6px; border-radius: 8px; background: var(--bg-0); }
+.stage-clock.near { color: var(--warn); }
+.stage-clock.over { color: #fff; background: #7a1c1c; }
+.stage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stage-grid.quick { grid-template-columns: 1fr 1fr; }
+.stage-grid .wide, .stage-card > .wide { grid-column: 1 / -1; }
+.stage-showing { margin: 0; padding: 10px 12px; border-radius: 8px; background: #ffd23f; color: #121314; font-weight: 650; }
+.stage-form { flex-direction: row; gap: 6px; }
+.stage-form input { flex: 1; min-width: 0; font-size: 1rem; padding: 10px; }

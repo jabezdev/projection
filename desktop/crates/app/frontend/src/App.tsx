@@ -14,6 +14,8 @@ import QuickSearch from './library/QuickSearch';
 import ControlsSettings from './settings/ControlsSettings';
 import RemoteSettings from './settings/RemoteSettings';
 import SyncSettings from './settings/SyncSettings';
+import BibleSettings from './settings/BibleSettings';
+import BibleDialog from './service/BibleDialog';
 import { useSyncStatus } from './settings/useSyncStatus';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useInputBindings, useKeyboardInput } from './api/input';
@@ -58,6 +60,7 @@ function App() {
   const [partEditor, setPartEditor] = useState<PartEdit | null>(null);
   const [serviceEditor, setServiceEditor] = useState<{ itemId?: string; service: Service } | null>(null);
   const [quickSearch, setQuickSearch] = useState(false);
+  const [bibleOpen, setBibleOpen] = useState(false);
   const display = program?.display || 'live';
   const scrollToCue = useCallback((id: string, index = 0) => {
     const stream = streamRef.current;
@@ -103,6 +106,7 @@ function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') { event.preventDefault(); void run(() => openQuickSearchRef.current()); }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'b') { event.preventDefault(); setBibleOpen(true); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -120,7 +124,7 @@ function App() {
     {error && <div role="alert" className="ui-error">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><Icon name="close"/></button></div>}
     <div ref={panesRef} className="operator-panes" style={panesStyle}>
       <SessionPane live={live} pending={outputsLoading.projection} serviceRef={serviceRef} services={services} program={program} run={run} persist={persist}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)} onOpenBible={() => setBibleOpen(true)}
         onLoadService={loadService} onEditService={itemId => void run(() => openService(itemId))} onOpenLibrary={() => void run(openLibrary)}
         onServicesChanged={refreshServices} confirm={confirm} onError={setError} onEditPart={setPartEditor}
         onCue={selectFromSchedule}/>
@@ -129,9 +133,9 @@ function App() {
         <LyricStream items={live?.items} activeId={program?.active_item_id} activeStep={program?.active_step_index} onSelect={cueItem}/>
       </div><NowPlaying items={live?.items ?? []} nextItemId={program?.next_item_id}/></section>
       {resizeDivider(1)}
-      <OutputControls display={display} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
+      <OutputControls display={display} stage={program?.stage} loading={outputsLoading} onDisplay={value => void run(() => invoke('set_display', { display: value }))} onError={setError}/>
     </div>
-    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} initialTab={settingsTab} onClose={() => { setSettingsOpen(false); setSettingsTab(undefined); }} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }, { id: 'sync', label: 'Cloud sync', content: <SyncSettings/> }]}/>}
+    {settingsOpen && <OutputSettings config={outputConfig} onChange={setOutputConfig} initialTab={settingsTab} onClose={() => { setSettingsOpen(false); setSettingsTab(undefined); }} extraTabs={[{ id: 'controls', label: 'Controls', content: <ControlsSettings bindings={bindings}/> }, { id: 'remote', label: 'Remote', content: <RemoteSettings/> }, { id: 'bible', label: 'Bible', content: <BibleSettings/> }, { id: 'sync', label: 'Cloud sync', content: <SyncSettings/> }]}/>}
     {partEditor && <PartEditor part={partEditor} onClose={() => setPartEditor(null)} onSave={part => run(async () => { await editPart(part.itemId, part.occurrence, part.lyrics); setPartEditor(null); })}/>}
     {editor && <SongEditor backgrounds={media} song={editor.song} heading={editor.song ? 'Library song' : 'New library song'} onClose={() => setEditor(null)} onStepped={refreshCatalog} onSave={async song => {
       if (editor.song) await invoke('update_song', { song });
@@ -145,6 +149,7 @@ function App() {
     {quickSearch && <QuickSearch songs={library} media={media} canAdd={!!live} onClose={() => setQuickSearch(false)} onAdd={result => result.kind === 'song' ? addSong(result.song) : addMedia(result.media)}/>}
     {libraryOpen && <LibraryModal songs={library} media={media} confirm={confirm} onClose={() => setLibraryOpen(false)} onCatalogChanged={refreshCatalog} onNewSong={() => setEditor({})} onEditSong={id => void run(() => editLibrarySong(id))}/>}
 
+    {bibleOpen && <BibleDialog service={live?.service ?? null} activeItemId={program?.active_item_id} persist={persist} onClose={() => setBibleOpen(false)}/>}
     {confirmDialog}
   </div></OutputConfigContext.Provider>;
 }

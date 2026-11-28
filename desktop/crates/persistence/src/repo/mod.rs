@@ -25,14 +25,19 @@ mod sync_tests;
 
 pub struct Repository {
     conn: Connection,
+    bibles: std::sync::Arc<bible::Bibles>,
 }
 
 impl Repository {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
         let conn = Connection::open(db_path).context("open sqlite db")?;
-        let repo = Self { conn };
+        let repo = Self { conn, bibles: std::sync::Arc::default() };
         repo.init_schema()?;
         Ok(repo)
+    }
+
+    pub fn set_bibles(&mut self, bibles: std::sync::Arc<bible::Bibles>) {
+        self.bibles = bibles;
     }
 
     fn atomic<T>(&self, work: impl FnOnce() -> Result<T>) -> Result<T> {

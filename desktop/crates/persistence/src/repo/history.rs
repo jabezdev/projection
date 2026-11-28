@@ -198,6 +198,7 @@ impl Repository {
             ItemContent::Presentation { .. } => "a presentation".into(),
             ItemContent::Capture { .. } => "a capture".into(),
             ItemContent::Text { steps } => steps.first().map(|s| s.lines().next().unwrap_or_default().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "a text item".into()),
+            ItemContent::Scripture { reference, .. } => if reference.trim().is_empty() { "a Bible passage".into() } else { reference.trim().to_string() },
             ItemContent::Header => "a header".into(),
         }
     }

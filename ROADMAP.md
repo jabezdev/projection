@@ -52,15 +52,18 @@ Built and tested against a local Convex backend; not yet run against production 
 - [x] Phone remote for the operator: now and next with section colours, the whole service order with every slide (tap to show), video and audio controls, black, clear and logo. Checked in a browser with recorded engine events; not yet on a phone against PALTO.
 - [x] Web library redesign in PALTO's look: a song editor with a draggable colour-coded order, part cards with slide previews and a whole-song text mode; the same order strip in service arrangements.
 - [x] Public site and setup guide (`site/`). Not yet hosted.
+- [x] Bible: KJV and Ang Dating Biblia (1905) built in, licensed Bibles imported from Zefania, OSIS or USFM (kept on that computer), one verse per slide with its reference, two translations side by side, a Bible lookup (Ctrl+B) to show a verse at once, and passages planned on the web by reference.
+- [x] Stage tools: a countdown timer (amber in the last two minutes, red when over) and a message banner on the confidence screen, from the control panel and the phone remote.
+- [x] Long text shrinks to fit, down to 70 %, then continues on another slide. Measured at 16:9 when the service loads.
+- [x] The web library adds text slides, Bible passages and synced media to a service, not only songs.
 
 - [ ] Visual redesign of the control panel. **Open:** the design.
 - [ ] A library view to browse, filter and edit songs and media in one place.
-- [ ] Stage tools on the confidence screen: timers and messages from the operator. **Open:** the design.
 - [ ] Small UI and display fixes, collected as they are found.
 
 ## 5. More sources and outputs
 
-- [ ] **OBS lyrics plugin.** A native Rust plugin in its own `obs/` project. It reads a read-only `/feed/v1` WebSocket with no pairing, finds PALTO through mDNS `_palto._tcp` or a subnet probe, and draws with OBS's own text sources. The feed has its own "Share lyrics with OBS" switch. Built and tested on Linux OBS 32; still to check on the church's stream PC: finding PALTO by mDNS and by the probe, the firewall, blanking, and a full service.
+- [ ] **OBS lyrics plugin.** A native Rust plugin in its own `obs/` project. It reads a read-only `/feed/v1` WebSocket with no pairing, finds PALTO through mDNS `_palto._tcp` or a subnet probe, and draws with OBS's own text sources. The feed has its own "Share lyrics with OBS" switch. Built and tested on Linux OBS 32; still to check on the church's stream PC: finding PALTO by mDNS and by the probe, the firewall, blanking, and a full service. The Section source shows the verse reference for Bible passages (unreleased; needs `obs-v0.2.0`).
 - [ ] **Screen sharing from other devices.** PALTO hosts a share page on the LAN and receives WebRTC, with audio. **Open:** HTTPS, one sender or several, which browsers can share audio.
 - [ ] **Presentations.** PowerPoint import. **Open:** convert through an installed office suite, or require a PDF export. Speaker notes and the next slide on the confidence screen.
 - [ ] **Web pages** (Canva, Google Slides) drawn off-screen as a source. **Open:** CEF or a hidden webview, chosen by cost.

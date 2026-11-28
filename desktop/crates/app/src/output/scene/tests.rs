@@ -25,7 +25,7 @@ fn song_item(id: i64) -> SessionItem {
     SessionItem {
         id: id.to_string(),
         title: Some("Song".into()),
-        kind: SessionItemKind::Text { steps: vec!["one".into(), "two".into(), "chorus".into(), "one".into(), "two".into()] },
+        kind: SessionItemKind::text(vec!["one".into(), "two".into(), "chorus".into(), "one".into(), "two".into()]),
         song: Some(song),
         background: None,
     }
@@ -82,7 +82,7 @@ fn plain_text_items_are_one_group_of_their_steps() {
     let legacy = SessionItem {
         id: "5".into(),
         title: Some("Old".into()),
-        kind: SessionItemKind::Text { steps: vec!["first".into(), "second".into()] },
+        kind: SessionItemKind::text(vec!["first".into(), "second".into()]),
         song: None,
         background: None,
     };

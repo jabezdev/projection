@@ -18,7 +18,7 @@ impl ConfidenceRenderer {
     pub fn set_scene(&mut self, scene: ConfidenceScene, media: &MediaTextures, now: Instant) {
         let video = scene.video.clone().map(|key| MediaLayer { source: MediaSource::Video(key), cover: scene.video_cover });
         self.video.set(video.as_ref(), media, now, scene.transition_ms);
-        if scene.groups != self.scene.groups || scene.size != self.scene.size || scene.active != self.scene.active || scene.style != self.scene.style {
+        if scene.groups != self.scene.groups || scene.size != self.scene.size || scene.active != self.scene.active || scene.style != self.scene.style || scene.stage.is_empty() != self.scene.stage.is_empty() {
             self.revision += 1;
         }
         self.scene = scene;
@@ -27,10 +27,11 @@ impl ConfidenceRenderer {
     pub fn activity(&self, now: Instant) -> Activity {
         let scrolling = self.scroll.running(now) || self.tape.running(now);
         let clock_changed = self.scene.style.clock && self.clock.as_ref().is_none_or(|(text, ..)| *text != clock_text());
+        let timer_changed = self.scene.stage.timer.is_some_and(|t| self.timer.as_ref().is_none_or(|(text, ..)| *text != super::stage::timer_text(&t)));
         let built = self.building.as_ref().is_some_and(|(_, done)| !done.is_empty());
         let building = self.building.is_some();
         self.video.activity(now).and(Activity {
-            redraw: scrolling || clock_changed || built,
+            redraw: scrolling || clock_changed || timer_changed || built,
             settled: !scrolling && !building,
             generation: 0,
             loading: false,
@@ -74,7 +75,7 @@ impl ConfidenceRenderer {
         self.video.update(now, self.scene.transition_ms);
         self.update_layout(fonts, size);
         let laid = self.layout.clone().expect("layout built");
-        let m = Metrics::new(size, &laid.style);
+        let m = Metrics::new(size, &laid.style).with_stage(!self.scene.stage.is_empty());
         self.focus(&m, size, now);
         let scroll = self.scroll.value(now);
         let tape = self.tape.value(now);
@@ -173,6 +174,7 @@ impl ConfidenceRenderer {
             list.fill(full, [0.0, 0.0, 0.0, video_opacity]);
             self.video.draw(&mut list, full, now);
         }
+        self.draw_stage(&mut list, fonts, &m, size);
         list
     }
 

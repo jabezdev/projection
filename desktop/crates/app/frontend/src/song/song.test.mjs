@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { splitSlides, slides, draftSteps, emptyDraft, moveArrangement, resolveSong, serviceDraft, fromServiceDraft, sectionCode, sectionColor } from './song.ts';
+import { splitSlides, slides, draftSteps, emptyDraft, moveArrangement, resolveSong, serviceDraft, fromServiceDraft, sectionCode, sectionColor, occurrences } from './song.ts';
 
 const section = (id, kind, lyrics, number) => ({ id, kind, lyrics, ...(number ? { number } : {}) });
 const version = { id: 'v1', number: 1, sections: [section('v', 'verse', 'A\nB\n\nC', 1), section('c', 'chorus', 'D')], arrangement: ['v', 'c', 'v'] };
@@ -48,4 +48,11 @@ test('the caret picks the slide it is in', async () => {
   const lyrics = 'a\nb\n\nc\nd\n\ne';
   assert.deepEqual([0, 2, 4, 5, 6, 9, 11, 12].map(caret => slideAtCaret(lyrics, caret)), [0, 0, 0, 1, 1, 1, 2, 2]);
   assert.equal(slideAtCaret('\n\nonly\n\n', 7), 0);
+});
+
+test('scripture items get one part key per verse, coded by chapter and verse', () => {
+  const item = { id: 'b', title: 'John 3:16–17', kind: { kind: 'text', data: { steps: ['For God so loved', 'the world', 'For God sent not'], captions: ['John 3:16 · KJV', 'John 3:16 · KJV', 'John 3:17 · KJV'] } } };
+  const parts = occurrences(item);
+  assert.deepEqual(parts.map(p => [sectionCode(p.section), p.start, p.lines.length]), [['3:16', 0, 2], ['3:17', 2, 1]]);
+  assert.equal(sectionCode({ id: 'x', kind: 'other', name: 'Vamp', lyrics: '' }), 'V');
 });

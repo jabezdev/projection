@@ -5,6 +5,8 @@ import { UI_ONLY_MONITORS, UiOnlyEngine } from './engine';
 import { isPast, newId, type MediaFile, type Service, type ServiceItem, type Song } from '../api/models';
 import { dropHistory, historyOf, recordService, recordSong, stepService, stepSong } from './history';
 import { runTemplateCommand } from './templates';
+import { runBibleCommand } from './bible';
+import type { TimerAction } from '../api/useEngine';
 
 function freeze(engine: UiOnlyEngine, service: Service): Service {
   dropHistory(service.id);
@@ -42,6 +44,17 @@ function itemName(engine: UiOnlyEngine, items: ServiceItem[]) {
   };
 }
 
+function stepTimer(timer: NonNullable<UiOnlyProgramState['stage']>['timer'], action: TimerAction, now: number) {
+  const remaining = timer ? (timer.running_since_ms == null ? timer.remaining_ms : timer.remaining_ms - (now - timer.running_since_ms)) : 0;
+  switch (action.type) {
+    case 'start': return { duration_ms: action.duration_ms, remaining_ms: action.duration_ms, running_since_ms: now };
+    case 'clear': return null;
+    case 'pause': return timer && { ...timer, remaining_ms: remaining, running_since_ms: null };
+    case 'resume': return timer && { ...timer, running_since_ms: timer.running_since_ms ?? now };
+    case 'adjust': return timer && { ...timer, remaining_ms: timer.remaining_ms + action.delta_ms, duration_ms: Math.max(0, timer.duration_ms + action.delta_ms) };
+  }
+}
+
 function pinned(engine: UiOnlyEngine, versionId: string) {
   return Object.values(engine.store.services).some(s => s.items.some(i => i.content.kind === 'song' && i.content.versionId === versionId));
 }
@@ -57,6 +70,8 @@ function refresh(engine: UiOnlyEngine) {
     const index = Math.min(step, item.kind.data.steps.length - 1);
     engine.store.program_state.active_step_index = index;
     engine.store.program_state.active_text = item.kind.data.steps[index];
+    engine.store.program_state.active_caption = item.kind.data.captions?.[index] ?? '';
+    engine.store.program_state.active_parallel = item.kind.data.parallel?.[index] ?? '';
   }
   engine.persistAndBroadcast();
 }
@@ -174,6 +189,15 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
       case 'engine_command': {
         const cmd = args?.command as { type: string; payload?: { action?: { type: string; payload?: Record<string, number | boolean> } } } | undefined;
         if (cmd?.type === 'media' && cmd.payload?.action) engine.mediaAction(cmd.payload.action);
+        if (cmd?.type === 'set_stage_message' || cmd?.type === 'stage_timer') {
+          const program = engine.store.program_state;
+          const stage = program.stage ?? { message: '', timer: null };
+          const payload = cmd.payload as unknown as { text?: string; action?: TimerAction };
+          if (cmd.type === 'set_stage_message') stage.message = String(payload.text ?? '').trim();
+          else if (payload.action) stage.timer = stepTimer(stage.timer, payload.action, now);
+          program.stage = stage;
+          engine.bumpVersion(); engine.persistAndBroadcast();
+        }
         return undefined as T;
       }
       case 'get_media_autoplay': return engine.autoplay as T;
@@ -191,7 +215,7 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
         engine.setActiveItem(itemId);
         const item = engine.items().find(item => item.id === itemId);
         const index = Number(args?.index ?? 0);
-        if (item?.kind.kind === 'text' && index < item.kind.data.steps.length) { engine.store.program_state.active_step_index = index; engine.store.program_state.active_text = item.kind.data.steps[index]; }
+        if (item?.kind.kind === 'text' && index < item.kind.data.steps.length) { const p = engine.store.program_state; p.active_step_index = index; p.active_text = item.kind.data.steps[index]; p.active_caption = item.kind.data.captions?.[index] ?? ''; p.active_parallel = item.kind.data.parallel?.[index] ?? ''; }
         if (item?.kind.kind === 'presentation') { const paths = item.kind.data.slides || [item.kind.data.path]; if (paths[index]) { engine.store.program_state.active_step_index = index; engine.store.program_state.background = { kind: 'image', path: paths[index] }; } }
         engine.bumpVersion(); engine.persistAndBroadcast(); return undefined as T;
       }
@@ -266,6 +290,8 @@ export async function runDemoCommand<T = unknown>(engine: UiOnlyEngine, command:
       }
 
       default: {
+        const bible = runBibleCommand(command, args);
+        if (bible.done) return bible.value as T;
         const handled = runTemplateCommand(engine.store, command, args);
         if (handled.done) { saveUiOnlyStore(engine.store); return handled.value as T; }
         console.debug('[ui-only] unhandled invoke', command, args);

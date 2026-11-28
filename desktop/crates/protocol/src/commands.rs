@@ -39,6 +39,8 @@ pub enum EngineCommand {
         text: String,
     },
     SetAutoplay { enabled: bool },
+    SetStageMessage { text: String },
+    StageTimer { action: TimerAction },
     SetDisplay {
         display: DisplayMode,
     },
@@ -60,6 +62,16 @@ pub enum EngineCommand {
         request: u64,
     },
     RefreshService,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TimerAction {
+    Start { duration_ms: u64 },
+    Pause,
+    Resume,
+    Adjust { delta_ms: i64 },
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

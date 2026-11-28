@@ -1,6 +1,6 @@
 use protocol::{
     Background, DisplayMode, EngineCommand, EngineEvent,
-    MediaAction, MediaDirective, LiveService, PlaybackKind, PlaybackPhase, SessionId,
+    MediaAction, MediaDirective, LiveService, PlaybackKind, PlaybackPhase, SessionId, StageTimer, TimerAction,
 };
 
 use super::*;
@@ -34,7 +34,11 @@ impl Engine {
             EngineCommand::SetActiveText { text } => {
                 program.active_step_index = None;
                 program.active_text = text;
+                program.active_parallel.clear();
+                program.active_caption.clear();
             }
+            EngineCommand::SetStageMessage { text } => program.stage.message = text.trim().to_string(),
+            EngineCommand::StageTimer { action } => program.stage.timer = stage_timer(program.stage.timer, action, ports.now_ms),
             EngineCommand::SetBackground { path } => {
                 let background = Background { kind: background_kind(&path), path };
                 self.show_background(Some(background), ports, errors);
@@ -175,5 +179,15 @@ impl Engine {
                 }
             }
         }
+    }
+}
+
+fn stage_timer(timer: Option<StageTimer>, action: TimerAction, now_ms: i64) -> Option<StageTimer> {
+    match action {
+        TimerAction::Start { duration_ms } => Some(StageTimer { duration_ms, remaining_ms: duration_ms as i64, running_since_ms: Some(now_ms) }),
+        TimerAction::Clear => None,
+        TimerAction::Pause => timer.map(|t| StageTimer { remaining_ms: t.remaining_at(now_ms), running_since_ms: None, ..t }),
+        TimerAction::Resume => timer.map(|t| StageTimer { running_since_ms: t.running_since_ms.or(Some(now_ms)), ..t }),
+        TimerAction::Adjust { delta_ms } => timer.map(|t| StageTimer { remaining_ms: t.remaining_ms + delta_ms, duration_ms: (t.duration_ms as i64 + delta_ms).max(0) as u64, ..t }),
     }
 }

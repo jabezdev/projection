@@ -63,6 +63,10 @@ impl NativeOutputs {
         }
     }
 
+    pub fn fonts(&self) -> Option<Arc<render_engine::Fonts>> {
+        self.0.lock().ok()?.as_ref().map(|engine| engine.fonts())
+    }
+
     pub fn preload(&self, images: &[String]) {
         if let Ok(guard) = self.0.lock() {
             if let Some(engine) = guard.as_ref() {

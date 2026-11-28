@@ -7,7 +7,9 @@ import { defaultCaptureOptions, defaultVideoOptions, isPast, type ItemContent, t
 import { insertPart, sectionsOf, withoutEmptySections } from './templates';
 import { useCollapsed } from './useCollapsed';
 import { fromServiceDraft, serviceDraft, splitSlides, type SongDraft } from '../song/song';
-import { captureItem, copyItem, headerItem, mediaItem, songItem } from './serviceItems';
+import { captureItem, copyItem, headerItem, mediaItem, scriptureItem, songItem, textItem } from './serviceItems';
+import ScriptureEditor from './ScriptureEditor';
+import { readPreference } from '../api/bible';
 import { catalog, resolveItem } from '../api/resolve';
 import SongWorkspace from '../song/SongWorkspace';
 import MiniLibrary, { type LibraryPick } from '../library/MiniLibrary';
@@ -110,6 +112,8 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
     setError('');
     if (choice.kind === 'song') place(songItem(choice.song), after);
     else if (choice.kind === 'media') place(mediaItem(choice.media), after);
+    else if (choice.kind === 'text') place(textItem(), after);
+    else if (choice.kind === 'scripture') { const preference = readPreference(); place(scriptureItem('', preference.translation, preference.parallel), after); }
     else place(captureItem(choice.source), after);
   }
   async function remove(item: ServiceItem, withItems?: boolean) {
@@ -231,7 +235,7 @@ export default function ServiceEditor({ service, persist, adopt, songs, media, i
               onDrop={e => { e.preventDefault(); if (dragged !== null && dropAfter !== null) move(dragged, dropAfter); setDragged(null); setDropAfter(null); }}>
               {entry.content.kind === 'header'
                 ? <><button className="icon-button section-fold" aria-expanded={!folded} aria-label={folded ? `Show the items of ${entry.title || 'this section'}` : `Hide the items of ${entry.title || 'this section'}`} onClick={e => { e.stopPropagation(); setCollapsed(entry.id, !folded); }}><Icon name={folded ? 'right' : 'chevron'}/></button><span className="service-section-name"><strong>{entry.title || 'Untitled section'}</strong><small>{sectionSize(items, index) || 'no'} items{folded && sectionSize(items, index) ? ' · hidden' : ''}</small></span></>
-                : <><span className="service-item-index">{items.slice(0, index + 1).filter(i => i.content.kind !== 'header').length}</span><ItemThumb item={shown}/><span className="service-item-text"><strong>{shown.title || 'Untitled'}</strong><small>{itemSummary(shown)}{entry.content.kind === 'song' && edited(entry) ? ' · edited here' : ''}</small></span></>}
+                : <><span className="service-item-index">{items.slice(0, index + 1).filter(i => i.content.kind !== 'header').length}</span>{entry.content.kind === 'scripture' ? <div className="thumb"><span className="thumb-tile"><Icon name="bible"/><small>Bible</small></span></div> : <ItemThumb item={shown}/>}<span className="service-item-text"><strong>{shown.title || 'Untitled'}</strong><small>{entry.content.kind === 'scripture' ? 'Bible passage · one verse per slide' : itemSummary(shown)}{entry.content.kind === 'song' && edited(entry) ? ' · edited here' : ''}</small></span></>}
               <span className="service-item-tools">
                 <button className="icon-button" aria-label={`Duplicate ${shown.title}`} title="Duplicate" onClick={e => { e.stopPropagation(); duplicate(entry); }}><Icon name="copy"/></button>
                 <button className="icon-button" aria-label={`Remove ${shown.title}`} title="Remove (Delete)" onClick={e => { e.stopPropagation(); void remove(entry); }}><Icon name="close"/></button>
@@ -321,6 +325,7 @@ function ItemEditor({ item, songs, versions, media, onChange, onEditSlides }: Ed
       <div><button onClick={onEditSlides}><Icon name="plus"/>Add slides from a PDF or images…</button></div>
     </ItemLayout>;
   }
+  if (content.kind === 'scripture') return <ScriptureEditor item={item} content={content} onTitle={setTitle} onContent={(next, delay) => setContent(() => next, delay)}/>;
   if (content.kind === 'header') return <div className="item-layout section-editor">
     <label className="item-field item-title">Section name<input aria-label="Section name" value={item.title || ''} placeholder="Praise & Worship" onChange={e => setTitle(e.target.value)}/></label>
     <p className="field-hint">Groups the items below it, up to the next section. In the left column the section collapses as one, and cueing passes over its name.</p>

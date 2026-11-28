@@ -61,6 +61,12 @@ pub enum ItemContent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<CaptureSource>,
     },
+    Scripture {
+        reference: String,
+        translation: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parallel: Option<String>,
+    },
     Header,
 }
 

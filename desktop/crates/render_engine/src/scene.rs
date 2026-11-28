@@ -170,6 +170,8 @@ impl Default for LyricStyle {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MainScene {
     pub text: String,
+    pub parallel: String,
+    pub caption: String,
     pub display: Display,
     pub background: Option<MediaLayer>,
     pub logo: Option<MediaSource>,
@@ -202,6 +204,30 @@ impl Default for ConfidenceStyle {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StageClock {
+    pub remaining_ms: i64,
+    pub ends_at_ms: Option<i64>,
+}
+
+impl StageClock {
+    pub fn remaining(&self, now_ms: i64) -> i64 {
+        self.ends_at_ms.map_or(self.remaining_ms, |end| end - now_ms)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StageOverlay {
+    pub message: String,
+    pub timer: Option<StageClock>,
+}
+
+impl StageOverlay {
+    pub fn is_empty(&self) -> bool {
+        self.message.is_empty() && self.timer.is_none()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConfidenceScene {
     pub groups: Vec<ConfidenceGroup>,
@@ -211,6 +237,7 @@ pub struct ConfidenceScene {
     pub video_cover: bool,
     pub transition_ms: f32,
     pub style: ConfidenceStyle,
+    pub stage: StageOverlay,
 }
 
 #[derive(Debug, Clone, PartialEq)]

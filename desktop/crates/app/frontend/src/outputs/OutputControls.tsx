@@ -4,7 +4,8 @@ import { LiveMonitor } from './NativePreview';
 import { ScreenSwitch } from './OutputScreens';
 import { useScreens } from './useScreens';
 import { useOutputSizes } from './useOutputSizes';
-import type { DisplayMode } from '../api/useEngine';
+import type { DisplayMode, StageState } from '../api/useEngine';
+import StageControls from './StageControls';
 
 type Override = Exclude<DisplayMode, 'live'>;
 const OVERRIDES: [Override, string, string][] = [
@@ -13,7 +14,7 @@ const OVERRIDES: [Override, string, string][] = [
   ['clear', 'Clear', 'Hide the text, keep the background'],
 ];
 
-export default function OutputControls({ display, loading, onDisplay, onError }: { display: DisplayMode; loading: Record<string, boolean>; onDisplay: (display: DisplayMode) => void; onError: (message: string) => void }) {
+export default function OutputControls({ display, stage, loading, onDisplay, onError }: { display: DisplayMode; stage?: StageState; loading: Record<string, boolean>; onDisplay: (display: DisplayMode) => void; onError: (message: string) => void }) {
   const outputSizes = useOutputSizes(true);
   const screens = useScreens(onError);
   return <aside className="operator-controls" aria-label="Output controls and previews">
@@ -40,5 +41,6 @@ export default function OutputControls({ display, loading, onDisplay, onError }:
       </header>
       <div className="preview-viewport"><div className="output-preview-frame confidence-preview-surface" style={{ '--output-aspect': outputSizes.confidence } as CSSProperties}><LiveMonitor target="confidence" label="Confidence output"/></div></div>
     </section>
+    <StageControls stage={stage} onError={onError}/>
   </aside>;
 }
