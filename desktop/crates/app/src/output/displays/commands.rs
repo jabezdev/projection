@@ -97,16 +97,9 @@ pub fn get_output_preview(previews: tauri::State<crate::output::PreviewStore>, t
 }
 
 #[tauri::command]
-pub async fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Option<monitor_window::Rect>) -> Result<bool, String> {
+pub fn set_output_monitor(app: tauri::AppHandle, target: String, rect: Option<monitor_window::Rect>) -> Result<bool, String> {
     let role = crate::output::role_for_label(&target).ok_or_else(|| format!("Unknown output {target}"))?;
-    let (sent, received) = tokio::sync::oneshot::channel();
-    let handle = app.clone();
-    app.run_on_main_thread(move || {
-        let shown = handle.try_state::<monitor_window::Monitors>().is_some_and(|monitors| monitors.place(&handle, role, rect));
-        let _ = sent.send(shown);
-    })
-    .map_err(|e| e.to_string())?;
-    received.await.map_err(|e| e.to_string())
+    Ok(app.try_state::<monitor_window::Monitors>().is_some_and(|monitors| monitors.place(&app, role, rect)))
 }
 
 #[tauri::command]

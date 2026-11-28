@@ -60,11 +60,11 @@ impl Monitor {
             }
             if let Some(size) = pending.surface.lock().expect("monitor poisoned").take() {
                 if size != shown {
-                    if let Some((width, height)) = size {
+                    if let Some((width, height)) = size.filter(|&size| size != (self.config.width, self.config.height)) {
                         self.config.width = width;
                         self.config.height = height;
+                        self.configured = false;
                     }
-                    self.configured = false;
                     shown = size;
                     dirty = true;
                 }

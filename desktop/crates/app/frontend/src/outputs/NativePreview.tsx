@@ -63,7 +63,7 @@ export function LiveMonitor({ target, label }: { target: 'projection' | 'confide
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
     const resize = new ResizeObserver(() => { if (frame) cancelAnimationFrame(frame); update(); });
     resize.observe(node);
-    const mutations = new MutationObserver(schedule);
+    const mutations = new MutationObserver(() => { if (document.querySelector(OVERLAYS)) send(null); schedule(); });
     mutations.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
